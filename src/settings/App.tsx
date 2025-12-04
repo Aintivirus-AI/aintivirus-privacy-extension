@@ -1,0 +1,2785 @@
+import React, { useEffect, useState } from 'react';
+import { FeatureFlags, DEFAULT_FEATURE_FLAGS, PrivacySettings, SitePrivacySettings, SitePrivacyMode, FingerprintSettings } from '@shared/types';
+import { getFeatureFlags, setFeatureFlag, FEATURE_FLAG_META, onFeatureFlagsChange, resetFeatureFlags } from '@shared/featureFlags';
+import { sendToBackground } from '@shared/messaging';
+import { DEFAULT_PRIVACY_SETTINGS } from '../privacy/types';
+import { DEFAULT_FINGERPRINT_SETTINGS } from '../fingerprinting/types';
+
+// ============================================
+// ICONS (inline SVG components)
+// ============================================
+
+interface IconProps {
+  size?: number;
+  className?: string;
+}
+
+const SettingsIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const ShieldIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+const WalletIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+  </svg>
+);
+
+const InfoIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 16v-4" />
+    <path d="M12 8h.01" />
+  </svg>
+);
+
+const BellIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+  </svg>
+);
+
+const BlockIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m4.9 4.9 14.2 14.2" />
+  </svg>
+);
+
+const CookieIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" />
+    <path d="M8.5 8.5v.01" />
+    <path d="M16 15.5v.01" />
+    <path d="M12 12v.01" />
+    <path d="M11 17v.01" />
+    <path d="M7 14v.01" />
+  </svg>
+);
+
+const LinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+const GlobeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+    <path d="M2 12h20" />
+  </svg>
+);
+
+const SearchIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+);
+
+const TargetIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
+
+const PaletteIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="13.5" cy="6.5" r=".5" />
+    <circle cx="17.5" cy="10.5" r=".5" />
+    <circle cx="8.5" cy="7.5" r=".5" />
+    <circle cx="6.5" cy="12.5" r=".5" />
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z" />
+  </svg>
+);
+
+const MonitorIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect width="20" height="14" x="2" y="3" rx="2" />
+    <line x1="8" x2="16" y1="21" y2="21" />
+    <line x1="12" x2="12" y1="17" y2="21" />
+  </svg>
+);
+
+const VolumeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </svg>
+);
+
+const RulerIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z" />
+    <path d="m14.5 12.5 2-2" />
+    <path d="m11.5 9.5 2-2" />
+    <path d="m8.5 6.5 2-2" />
+    <path d="m17.5 15.5 2-2" />
+  </svg>
+);
+
+const RefreshIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+    <path d="M8 16H3v5" />
+  </svg>
+);
+
+const CloseIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+);
+
+const AlertIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </svg>
+);
+
+const GitHubIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+    <path d="M9 18c-4.51 2-5-2-7-2" />
+  </svg>
+);
+
+const BookIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+  </svg>
+);
+
+const BugIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m8 2 1.88 1.88" />
+    <path d="M14.12 3.88 16 2" />
+    <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+    <path d="M12 20v-9" />
+    <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+    <path d="M6 13H2" />
+    <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+    <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+    <path d="M22 13h-4" />
+    <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+  </svg>
+);
+
+const TargetCookieIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
+
+const BroomIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m13 11 9-9" />
+    <path d="M14.6 12.6a2 2 0 1 0-2.12-2.12" />
+    <path d="m2 22 9.5-9.5" />
+    <path d="M4 4 2 6l8 8-2 2" />
+  </svg>
+);
+
+const HandStopIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+  </svg>
+);
+
+// ============================================
+// TYPES
+// ============================================
+
+type TabId = 'general' | 'privacy' | 'trackers' | 'scripts' | 'wallet' | 'about';
+
+interface FilterListStats {
+  listCount: number;
+  totalRules: number;
+  lastUpdate: number | null;
+  lists: { url: string; ruleCount: number; fetchedAt: number }[];
+}
+
+interface PrivacyMetrics {
+  totalBlockedRequests: number;
+  totalCookiesDeleted: number;
+  activeRuleCount: number;
+  filterListCount: number;
+  scriptsIntercepted: number;
+  requestsModified: number;
+}
+
+interface BlockedRequest {
+  tabId: number;
+  url: string;
+  domain: string;
+  initiator: string | null;
+  resourceType: string;
+  ruleId: number;
+  timestamp: number;
+}
+
+interface FilterListHealth {
+  url: string;
+  lastFetchStatus: 'success' | 'error' | 'pending';
+  lastFetchAt: number;
+  lastError?: string;
+  ruleCount: number;
+  parseErrors: number;
+  unsupportedPatterns: string[];
+  hasLastKnownGood: boolean;
+  lastSuccessAt?: number;
+}
+
+interface FilterListHealthSummary {
+  totalLists: number;
+  healthyLists: number;
+  errorLists: number;
+  totalRules: number;
+  lastRefresh: number;
+  lists: FilterListHealth[];
+}
+
+// ============================================
+// ICON HELPER
+// ============================================
+
+function getFeatureIcon(iconName: string): React.ReactNode {
+  switch (iconName) {
+    case 'shield': return <ShieldIcon size={20} />;
+    case 'wallet': return <WalletIcon size={20} />;
+    case 'bell': return <BellIcon size={20} />;
+    default: return <ShieldIcon size={20} />;
+  }
+}
+
+// ============================================
+// WALLET SECURITY SETTINGS COMPONENT
+// ============================================
+
+interface SecuritySettingsState {
+  connectionMonitoring: boolean;
+  transactionVerification: boolean;
+  phishingDetection: boolean;
+  warnOnUnknownPrograms: boolean;
+  warnOnLargeTransfers: boolean;
+  largeTransferThreshold: number;
+  warnOnAuthorityChanges: boolean;
+  warnOnUnlimitedApprovals: boolean;
+  autoBlockMalicious: boolean;
+}
+
+interface ConnectionRecordDisplay {
+  id: string;
+  domain: string;
+  timestamp: number;
+  approved: boolean;
+  revoked: boolean;
+}
+
+interface RpcEndpointHealth {
+  url: string;
+  latencyMs: number;
+  lastSuccess: number;
+  lastFailure: number | null;
+  failureCount: number;
+  successCount: number;
+  score: number;
+  isCustom: boolean;
+}
+
+interface RpcHealthSummary {
+  endpoints: RpcEndpointHealth[];
+  bestEndpoint: string;
+  healthyCount: number;
+  unhealthyCount: number;
+}
+
+type SolanaNetwork = 'mainnet-beta' | 'devnet';
+
+interface ThreatIntelSource {
+  id: string;
+  name: string;
+  url: string;
+  type: 'phishing' | 'malware' | 'scam' | 'combined';
+  format: 'text' | 'json' | 'csv';
+  enabled: boolean;
+  refreshIntervalHours: number;
+  priority: number;
+}
+
+interface ThreatIntelHealth {
+  version: string;
+  lastRefresh: number;
+  usingBootstrap: boolean;
+  legitimateDomainCount: number;
+  scamDomainCount: number;
+  lastError?: string;
+  sourcesConfigured?: number;
+  sourcesEnabled?: number;
+}
+
+const DEFAULT_SECURITY_SETTINGS: SecuritySettingsState = {
+  connectionMonitoring: true,
+  transactionVerification: true,
+  phishingDetection: true,
+  warnOnUnknownPrograms: true,
+  warnOnLargeTransfers: true,
+  largeTransferThreshold: 10,
+  warnOnAuthorityChanges: true,
+  warnOnUnlimitedApprovals: true,
+  autoBlockMalicious: true,
+};
+
+interface WalletSecuritySettingsProps {
+  walletEnabled: boolean;
+}
+
+const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletEnabled }) => {
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettingsState>(DEFAULT_SECURITY_SETTINGS);
+  const [connections, setConnections] = useState<ConnectionRecordDisplay[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // RPC Management state
+  const [rpcHealth, setRpcHealth] = useState<RpcHealthSummary | null>(null);
+  const [selectedNetwork, setSelectedNetwork] = useState<SolanaNetwork>('mainnet-beta');
+  const [newRpcUrl, setNewRpcUrl] = useState('');
+  const [addingRpc, setAddingRpc] = useState(false);
+  const [rpcError, setRpcError] = useState<string | null>(null);
+  const [testingRpc, setTestingRpc] = useState<string | null>(null);
+
+  // Threat Intel state
+  const [threatIntelHealth, setThreatIntelHealth] = useState<ThreatIntelHealth | null>(null);
+  const [threatIntelSources, setThreatIntelSources] = useState<ThreatIntelSource[]>([]);
+  const [showAddSource, setShowAddSource] = useState(false);
+  const [newSourceName, setNewSourceName] = useState('');
+  const [newSourceUrl, setNewSourceUrl] = useState('');
+  const [newSourceType, setNewSourceType] = useState<'phishing' | 'malware' | 'scam' | 'combined'>('phishing');
+  const [newSourceFormat, setNewSourceFormat] = useState<'text' | 'json' | 'csv'>('text');
+  const [addingSource, setAddingSource] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [refreshingThreatIntel, setRefreshingThreatIntel] = useState(false);
+
+  useEffect(() => {
+    loadSecurityData();
+    loadRpcHealth();
+    loadThreatIntelData();
+  }, []);
+
+  const loadSecurityData = async () => {
+    try {
+      // Load security settings
+      const settingsRes = await sendToBackground({
+        type: 'SECURITY_GET_SETTINGS',
+        payload: undefined,
+      });
+      if (settingsRes.success && settingsRes.data) {
+        setSecuritySettings(settingsRes.data as SecuritySettingsState);
+      }
+
+      // Load connections
+      const connectionsRes = await sendToBackground({
+        type: 'SECURITY_GET_CONNECTIONS',
+        payload: { limit: 50 },
+      });
+      if (connectionsRes.success && connectionsRes.data) {
+        setConnections(connectionsRes.data as ConnectionRecordDisplay[]);
+      }
+    } catch (error) {
+      console.error('Failed to load security data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadRpcHealth = async () => {
+    try {
+      const res = await sendToBackground({
+        type: 'WALLET_GET_RPC_HEALTH',
+        payload: undefined,
+      });
+      if (res.success && res.data) {
+        setRpcHealth(res.data as RpcHealthSummary);
+      }
+    } catch (error) {
+      console.error('Failed to load RPC health:', error);
+    }
+  };
+
+  const handleAddRpc = async () => {
+    if (!newRpcUrl.trim()) return;
+    
+    setAddingRpc(true);
+    setRpcError(null);
+    
+    try {
+      const res = await sendToBackground({
+        type: 'WALLET_ADD_RPC',
+        payload: { network: selectedNetwork, url: newRpcUrl.trim() },
+      });
+      
+      if (res.success && res.data) {
+        const result = res.data as { success: boolean; error?: string };
+        if (result.success) {
+          setNewRpcUrl('');
+          await loadRpcHealth();
+        } else {
+          setRpcError(result.error || 'Failed to add RPC');
+        }
+      } else {
+        setRpcError(res.error || 'Failed to add RPC');
+      }
+    } catch (error) {
+      setRpcError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setAddingRpc(false);
+    }
+  };
+
+  const handleRemoveRpc = async (url: string) => {
+    try {
+      await sendToBackground({
+        type: 'WALLET_REMOVE_RPC',
+        payload: { network: selectedNetwork, url },
+      });
+      await loadRpcHealth();
+    } catch (error) {
+      console.error('Failed to remove RPC:', error);
+    }
+  };
+
+  const handleTestRpc = async (url: string) => {
+    setTestingRpc(url);
+    try {
+      await sendToBackground({
+        type: 'WALLET_TEST_RPC',
+        payload: { url },
+      });
+      await loadRpcHealth();
+    } catch (error) {
+      console.error('Failed to test RPC:', error);
+    } finally {
+      setTestingRpc(null);
+    }
+  };
+
+  const loadThreatIntelData = async () => {
+    try {
+      const [healthRes, sourcesRes] = await Promise.all([
+        sendToBackground({ type: 'GET_THREAT_INTEL_HEALTH', payload: undefined }),
+        sendToBackground({ type: 'GET_THREAT_INTEL_SOURCES', payload: undefined }),
+      ]);
+      
+      if (healthRes.success && healthRes.data) {
+        setThreatIntelHealth(healthRes.data as ThreatIntelHealth);
+      }
+      if (sourcesRes.success && sourcesRes.data) {
+        setThreatIntelSources(sourcesRes.data as ThreatIntelSource[]);
+      }
+    } catch (error) {
+      console.error('Failed to load threat intel data:', error);
+    }
+  };
+
+  const handleRefreshThreatIntel = async () => {
+    setRefreshingThreatIntel(true);
+    try {
+      await sendToBackground({ type: 'REFRESH_THREAT_INTEL', payload: undefined });
+      await loadThreatIntelData();
+    } catch (error) {
+      console.error('Failed to refresh threat intel:', error);
+    } finally {
+      setRefreshingThreatIntel(false);
+    }
+  };
+
+  const handleToggleSource = async (sourceId: string, enabled: boolean) => {
+    try {
+      await sendToBackground({
+        type: 'TOGGLE_THREAT_INTEL_SOURCE',
+        payload: { sourceId, enabled },
+      });
+      // Update local state
+      setThreatIntelSources(prev => 
+        prev.map(s => s.id === sourceId ? { ...s, enabled } : s)
+      );
+    } catch (error) {
+      console.error('Failed to toggle source:', error);
+    }
+  };
+
+  const handleAddSource = async () => {
+    if (!newSourceName.trim() || !newSourceUrl.trim()) return;
+    
+    setAddingSource(true);
+    setSourceError(null);
+    
+    try {
+      const res = await sendToBackground({
+        type: 'ADD_THREAT_INTEL_SOURCE',
+        payload: {
+          name: newSourceName.trim(),
+          url: newSourceUrl.trim(),
+          type: newSourceType,
+          format: newSourceFormat,
+        },
+      });
+      
+      if (res.success) {
+        setNewSourceName('');
+        setNewSourceUrl('');
+        setShowAddSource(false);
+        await loadThreatIntelData();
+      } else {
+        setSourceError(res.error || 'Failed to add source');
+      }
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setAddingSource(false);
+    }
+  };
+
+  const handleRemoveSource = async (sourceId: string) => {
+    try {
+      await sendToBackground({
+        type: 'REMOVE_THREAT_INTEL_SOURCE',
+        payload: { sourceId },
+      });
+      setThreatIntelSources(prev => prev.filter(s => s.id !== sourceId));
+    } catch (error) {
+      console.error('Failed to remove source:', error);
+    }
+  };
+
+  const handleSettingChange = async (key: keyof SecuritySettingsState, value: boolean | number) => {
+    const updated = { ...securitySettings, [key]: value };
+    setSecuritySettings(updated);
+    await sendToBackground({
+      type: 'SECURITY_SET_SETTINGS',
+      payload: { [key]: value },
+    });
+  };
+
+  const handleRevokeConnection = async (domain: string) => {
+    await sendToBackground({
+      type: 'SECURITY_CONNECTION_REVOKE',
+      payload: { domain },
+    });
+    // Refresh connections
+    const connectionsRes = await sendToBackground({
+      type: 'SECURITY_GET_CONNECTIONS',
+      payload: { limit: 50 },
+    });
+    if (connectionsRes.success && connectionsRes.data) {
+      setConnections(connectionsRes.data as ConnectionRecordDisplay[]);
+    }
+  };
+
+  const formatTime = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const activeConnections = connections.filter(c => c.approved && !c.revoked);
+
+  if (loading) {
+    return (
+      <section className="settings-section">
+        <div className="loading">
+          <div className="spinner" />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="settings-section">
+      <h2>Wallet Security</h2>
+      <p className="settings-section-desc">Configure security monitoring for wallet interactions</p>
+
+      {/* Security Stats */}
+      <div className="settings-stats-grid">
+        <div className="settings-stat-card">
+          <span className="settings-stat-value">{activeConnections.length}</span>
+          <span className="settings-stat-label"> Active Connections</span>
+        </div>
+        <div className="settings-stat-card">
+          <span className="settings-stat-value">{connections.filter(c => c.approved).length}</span>
+          <span className="settings-stat-label"> Total Approved</span>
+        </div>
+        <div className="settings-stat-card">
+          <span className="settings-stat-value">{connections.filter(c => !c.approved).length}</span>
+          <span className="settings-stat-label"> Denied</span>
+        </div>
+      </div>
+
+      {/* Security Monitoring Toggles */}
+      <div className="settings-subsection">
+        <h3>Security Monitoring</h3>
+        <p className="settings-subsection-desc">
+          These features monitor wallet activity and warn about potential risks.
+          They are informational only and cannot guarantee safety.
+        </p>
+
+        <div className="settings-group" role="list">
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <LinkIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Connection Monitoring</span>
+                <span className="settings-item-desc">Track dApp wallet connection requests</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.connectionMonitoring}
+                onChange={() => handleSettingChange('connectionMonitoring', !securitySettings.connectionMonitoring)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <ShieldIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Transaction Verification</span>
+                <span className="settings-item-desc">Analyze transactions before signing</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.transactionVerification}
+                onChange={() => handleSettingChange('transactionVerification', !securitySettings.transactionVerification)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <AlertIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Phishing Detection</span>
+                <span className="settings-item-desc">Warn on suspicious domains</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.phishingDetection}
+                onChange={() => handleSettingChange('phishingDetection', !securitySettings.phishingDetection)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <BlockIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Auto-Block Malicious</span>
+                <span className="settings-item-desc">Automatically block known scam domains</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.autoBlockMalicious}
+                onChange={() => handleSettingChange('autoBlockMalicious', !securitySettings.autoBlockMalicious)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Transaction Warnings */}
+      <div className="settings-subsection">
+        <h3>Transaction Warnings</h3>
+        <p className="settings-subsection-desc">
+          Configure which transaction types trigger warnings
+        </p>
+
+        <div className="settings-group" role="list">
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <SearchIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Warn on Unknown Programs</span>
+                <span className="settings-item-desc">Show warning for unrecognized program interactions</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.warnOnUnknownPrograms}
+                onChange={() => handleSettingChange('warnOnUnknownPrograms', !securitySettings.warnOnUnknownPrograms)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <WalletIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Warn on Large Transfers</span>
+                <span className="settings-item-desc">Show warning for transfers exceeding threshold</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.warnOnLargeTransfers}
+                onChange={() => handleSettingChange('warnOnLargeTransfers', !securitySettings.warnOnLargeTransfers)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+
+          {securitySettings.warnOnLargeTransfers && (
+            <div className="settings-item" role="listitem" style={{ paddingLeft: '52px' }}>
+              <div className="settings-item-info">
+                <div className="settings-item-text">
+                  <span className="settings-item-name">Large Transfer Threshold (SOL)</span>
+                  <span className="settings-item-desc">Transfers above this amount trigger warnings</span>
+                </div>
+              </div>
+              <input
+                type="number"
+                className="form-input"
+                style={{ width: '100px', textAlign: 'right' }}
+                value={securitySettings.largeTransferThreshold}
+                onChange={(e) => handleSettingChange('largeTransferThreshold', parseFloat(e.target.value) || 10)}
+                min={0.1}
+                step={0.1}
+                disabled={!walletEnabled}
+              />
+            </div>
+          )}
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <SettingsIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Warn on Authority Changes</span>
+                <span className="settings-item-desc">Alert when transactions change token authorities</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.warnOnAuthorityChanges}
+                onChange={() => handleSettingChange('warnOnAuthorityChanges', !securitySettings.warnOnAuthorityChanges)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <AlertIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Warn on Unlimited Approvals</span>
+                <span className="settings-item-desc">Alert for token approvals with no spending limit</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.warnOnUnlimitedApprovals}
+                onChange={() => handleSettingChange('warnOnUnlimitedApprovals', !securitySettings.warnOnUnlimitedApprovals)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Connected Sites */}
+      <div className="settings-subsection">
+        <h3>Connected Sites</h3>
+        <p className="settings-subsection-desc">
+          Sites that have been granted wallet access. Revoking here removes our tracking record;
+          the site may still request access again.
+        </p>
+
+        {activeConnections.length === 0 ? (
+          <div className="empty-state">
+            <LinkIcon size={32} />
+            <p>No active connections</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
+              dApp connections will appear here when you approve them
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {activeConnections.map((conn) => (
+              <div
+                key={conn.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '8px',
+                }}
+              >
+                <div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                  }}>
+                    {conn.domain}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Connected {formatTime(conn.timestamp)}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleRevokeConnection(conn.domain)}
+                  disabled={!walletEnabled}
+                >
+                  Revoke
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* RPC Endpoints Management */}
+      <div className="settings-subsection">
+        <h3>RPC Endpoints</h3>
+        <p className="settings-subsection-desc">
+          Manage Solana RPC endpoints for network connections
+        </p>
+
+        {/* Network Selector */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            Network
+          </label>
+          <select
+            value={selectedNetwork}
+            onChange={(e) => setSelectedNetwork(e.target.value as SolanaNetwork)}
+            disabled={!walletEnabled}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              fontSize: '14px',
+              minWidth: '150px',
+            }}
+          >
+            <option value="mainnet-beta">Mainnet Beta</option>
+            <option value="devnet">Devnet</option>
+          </select>
+        </div>
+
+        {/* RPC Health Summary */}
+        {rpcHealth && (
+          <>
+            <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
+              <div className="settings-stat-card">
+                <span className="settings-stat-value" style={{ color: 'var(--success)' }}>{rpcHealth.healthyCount}</span>
+                <span className="settings-stat-label">Healthy</span>
+              </div>
+              <div className="settings-stat-card">
+                <span className="settings-stat-value" style={{ color: rpcHealth.unhealthyCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{rpcHealth.unhealthyCount}</span>
+                <span className="settings-stat-label">Unhealthy</span>
+              </div>
+              <div className="settings-stat-card">
+                <span className="settings-stat-value">{rpcHealth.endpoints.length}</span>
+                <span className="settings-stat-label">Total Endpoints</span>
+              </div>
+            </div>
+
+            {/* Endpoint List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+              {rpcHealth.endpoints.map((endpoint) => (
+                <div
+                  key={endpoint.url}
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: endpoint.url === rpcHealth.bestEndpoint ? '2px solid var(--accent-primary)' : '1px solid var(--border-subtle)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          background: endpoint.score >= 50 ? 'var(--success)' : 'var(--danger)',
+                        }}
+                      />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                        {endpoint.url}
+                      </span>
+                      {endpoint.isCustom && (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--accent-muted)',
+                            color: 'var(--accent-primary)',
+                          }}
+                        >
+                          Custom
+                        </span>
+                      )}
+                      {endpoint.url === rpcHealth.bestEndpoint && (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--success-muted)',
+                            color: 'var(--success)',
+                          }}
+                        >
+                          Best
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: endpoint.score >= 70 ? 'var(--success-muted)' :
+                                     endpoint.score >= 50 ? 'var(--warning-muted)' : 'var(--danger-muted)',
+                          color: endpoint.score >= 70 ? 'var(--success)' :
+                                 endpoint.score >= 50 ? 'var(--warning)' : 'var(--danger)',
+                        }}
+                      >
+                        Score: {endpoint.score}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {endpoint.latencyMs > 0 && (
+                        <span>Latency: {endpoint.latencyMs}ms</span>
+                      )}
+                      <span style={{ color: 'var(--success)' }}>✓ {endpoint.successCount}</span>
+                      {endpoint.failureCount > 0 && (
+                        <span style={{ color: 'var(--danger)' }}>✗ {endpoint.failureCount}</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => handleTestRpc(endpoint.url)}
+                        disabled={testingRpc === endpoint.url || !walletEnabled}
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                      >
+                        {testingRpc === endpoint.url ? 'Testing...' : 'Test'}
+                      </button>
+                      {endpoint.isCustom && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleRemoveRpc(endpoint.url)}
+                          disabled={!walletEnabled}
+                          style={{ fontSize: '11px', padding: '4px 8px' }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Add Custom RPC */}
+        <div style={{ marginTop: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            Add Custom RPC Endpoint
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="url"
+              className="form-input"
+              placeholder="https://your-rpc-endpoint.com"
+              value={newRpcUrl}
+              onChange={(e) => setNewRpcUrl(e.target.value)}
+              disabled={!walletEnabled || addingRpc}
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={handleAddRpc}
+              disabled={!newRpcUrl.trim() || !walletEnabled || addingRpc}
+            >
+              {addingRpc ? 'Adding...' : 'Add'}
+            </button>
+          </div>
+          {rpcError && (
+            <div style={{
+              marginTop: '8px',
+              padding: '8px 12px',
+              background: 'var(--danger-muted)',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: 'var(--danger)',
+            }}>
+              {rpcError}
+            </div>
+          )}
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
+            Only HTTPS endpoints are allowed for security. The endpoint will be tested before adding.
+          </p>
+        </div>
+      </div>
+
+      {/* Threat Intel Sources */}
+      <div className="settings-subsection">
+        <h3>Threat Intelligence Sources</h3>
+        <p className="settings-subsection-desc">
+          Configure remote threat data feeds for phishing detection
+        </p>
+
+        {/* Health Summary */}
+        {threatIntelHealth && (
+          <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
+            <div className="settings-stat-card">
+              <span className="settings-stat-value">{threatIntelHealth.scamDomainCount}</span>
+              <span className="settings-stat-label">Scam Domains</span>
+            </div>
+            <div className="settings-stat-card">
+              <span className="settings-stat-value">{threatIntelHealth.legitimateDomainCount}</span>
+              <span className="settings-stat-label">Legitimate Domains</span>
+            </div>
+            <div className="settings-stat-card">
+              <span className="settings-stat-value">{threatIntelHealth.sourcesEnabled || 0}/{threatIntelHealth.sourcesConfigured || 0}</span>
+              <span className="settings-stat-label">Sources Active</span>
+            </div>
+            <div className="settings-stat-card">
+              <span className="settings-stat-value" style={{ fontSize: '14px' }}>
+                {threatIntelHealth.lastRefresh > 0 ? formatTime(threatIntelHealth.lastRefresh) : 'Never'}
+              </span>
+              <span className="settings-stat-label">Last Refresh</span>
+            </div>
+          </div>
+        )}
+
+        {/* Bootstrap indicator */}
+        {threatIntelHealth?.usingBootstrap && (
+          <div style={{
+            marginBottom: '16px',
+            padding: '12px 16px',
+            background: 'var(--warning-muted)',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <AlertIcon size={16} />
+            <span style={{ fontSize: '13px', color: 'var(--warning)' }}>
+              Using bootstrap data. Remote sources have not been fetched yet.
+            </span>
+          </div>
+        )}
+
+        {/* Refresh button */}
+        <div style={{ marginBottom: '16px' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleRefreshThreatIntel}
+            disabled={refreshingThreatIntel || !walletEnabled}
+          >
+            <RefreshIcon size={14} />
+            <span>{refreshingThreatIntel ? 'Refreshing...' : 'Refresh Threat Data'}</span>
+          </button>
+        </div>
+
+        {/* Source List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+          {threatIntelSources.map((source) => (
+            <div
+              key={source.id}
+              style={{
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                opacity: source.enabled ? 1 : 0.6,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{source.name}</span>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: source.type === 'phishing' ? 'var(--danger-muted)' :
+                                 source.type === 'malware' ? 'var(--warning-muted)' :
+                                 source.type === 'scam' ? 'var(--danger-muted)' : 'var(--accent-muted)',
+                      color: source.type === 'phishing' ? 'var(--danger)' :
+                             source.type === 'malware' ? 'var(--warning)' :
+                             source.type === 'scam' ? 'var(--danger)' : 'var(--accent-primary)',
+                    }}
+                  >
+                    {source.type}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 'var(--bg-tertiary)',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    {source.format}
+                  </span>
+                  {source.id.startsWith('custom-') && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        background: 'var(--accent-muted)',
+                        color: 'var(--accent-primary)',
+                      }}
+                    >
+                      Custom
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label className="toggle" style={{ marginRight: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={source.enabled}
+                      onChange={() => handleToggleSource(source.id, !source.enabled)}
+                      disabled={!walletEnabled}
+                    />
+                    <span className="toggle-track" aria-hidden="true" />
+                  </label>
+                  {source.id.startsWith('custom-') && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleRemoveSource(source.id)}
+                      disabled={!walletEnabled}
+                      style={{ fontSize: '11px', padding: '4px 8px' }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                {source.url}
+              </div>
+              <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                <span>Refresh: every {source.refreshIntervalHours}h</span>
+                <span>Priority: {source.priority}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add Custom Source */}
+        {!showAddSource ? (
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowAddSource(true)}
+            disabled={!walletEnabled}
+          >
+            Add Custom Source
+          </button>
+        ) : (
+          <div style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: '8px',
+            padding: '16px',
+          }}>
+            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'var(--text-primary)' }}>
+              Add Custom Threat Intel Source
+            </h4>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  Source Name
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="My Custom Feed"
+                  value={newSourceName}
+                  onChange={(e) => setNewSourceName(e.target.value)}
+                  disabled={addingSource}
+                />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  Feed URL (HTTPS only)
+                </label>
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder="https://example.com/threat-feed.txt"
+                  value={newSourceUrl}
+                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                  disabled={addingSource}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Threat Type
+                  </label>
+                  <select
+                    value={newSourceType}
+                    onChange={(e) => setNewSourceType(e.target.value as 'phishing' | 'malware' | 'scam' | 'combined')}
+                    disabled={addingSource}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <option value="phishing">Phishing</option>
+                    <option value="malware">Malware</option>
+                    <option value="scam">Scam</option>
+                    <option value="combined">Combined</option>
+                  </select>
+                </div>
+                
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Format
+                  </label>
+                  <select
+                    value={newSourceFormat}
+                    onChange={(e) => setNewSourceFormat(e.target.value as 'text' | 'json' | 'csv')}
+                    disabled={addingSource}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <option value="text">Text (one URL per line)</option>
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </div>
+              </div>
+              
+              {sourceError && (
+                <div style={{
+                  padding: '8px 12px',
+                  background: 'var(--danger-muted)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: 'var(--danger)',
+                }}>
+                  {sourceError}
+                </div>
+              )}
+              
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleAddSource}
+                  disabled={!newSourceName.trim() || !newSourceUrl.trim() || addingSource}
+                >
+                  {addingSource ? 'Adding...' : 'Add Source'}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowAddSource(false);
+                    setNewSourceName('');
+                    setNewSourceUrl('');
+                    setSourceError(null);
+                  }}
+                  disabled={addingSource}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Disclaimer */}
+      <div style={{
+        marginTop: '24px',
+        padding: '16px 20px',
+        background: 'var(--warning-muted)',
+        border: '1px solid var(--warning)',
+        borderRadius: '12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{ flexShrink: 0, marginTop: '2px', color: 'var(--warning)' }}>
+            <AlertIcon size={20} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '4px' }}>Security Limitations</div>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+              This security analysis is informational only and cannot guarantee safety.
+              Program lists may be incomplete. Unknown programs are not necessarily malicious.
+              Always verify transaction details independently before signing.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {!walletEnabled && (
+        <div className="notice" style={{ marginTop: '24px' }}>
+          <AlertIcon size={20} />
+          <p>Wallet feature is disabled. Enable it in the General tab to configure security settings.</p>
+        </div>
+      )}
+    </section>
+  );
+};
+
+// ============================================
+// MAIN APP COMPONENT
+// ============================================
+
+const App: React.FC = () => {
+  // Check URL hash for initial tab
+  const getInitialTab = (): TabId => {
+    const hash = window.location.hash.replace('#', '');
+    if (['general', 'privacy', 'trackers', 'scripts', 'wallet', 'about'].includes(hash)) {
+      return hash as TabId;
+    }
+    return 'general';
+  };
+
+  const [flags, setFlags] = useState<FeatureFlags>(DEFAULT_FEATURE_FLAGS);
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab());
+  const [loading, setLoading] = useState(true);
+
+  // Privacy state
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(DEFAULT_PRIVACY_SETTINGS);
+  const [siteSettings, setSiteSettings] = useState<SitePrivacySettings>({});
+  const [filterStats, setFilterStats] = useState<FilterListStats | null>(null);
+  const [metrics, setMetrics] = useState<PrivacyMetrics | null>(null);
+  const [newFilterUrl, setNewFilterUrl] = useState('');
+  const [siteSearch, setSiteSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fingerprint protection state
+  const [fingerprintSettings, setFingerprintSettings] = useState<FingerprintSettings>(DEFAULT_FINGERPRINT_SETTINGS);
+
+  // Blocked trackers state
+  const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([]);
+  const [trackerSearch, setTrackerSearch] = useState('');
+
+  // Filter list health state
+  const [filterListHealth, setFilterListHealth] = useState<FilterListHealthSummary | null>(null);
+  const [retryingList, setRetryingList] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadInitialData();
+
+    const unsubscribe = onFeatureFlagsChange((newFlags) => {
+      setFlags(newFlags);
+    });
+
+    // Listen for hash changes
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (['general', 'privacy', 'trackers', 'scripts', 'wallet', 'about'].includes(hash)) {
+        setActiveTab(hash as TabId);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      const [loadedFlags, privSettings, siteSets, filterStatsData, metricsData, fpSettings, blocked, filterHealth] = await Promise.all([
+        getFeatureFlags(),
+        fetchPrivacySettings(),
+        fetchSiteSettings(),
+        fetchFilterStats(),
+        fetchMetrics(),
+        fetchFingerprintSettings(),
+        fetchBlockedRequests(),
+        fetchFilterListHealth(),
+      ]);
+
+      setFlags(loadedFlags);
+      if (privSettings) setPrivacySettings(privSettings);
+      if (siteSets) setSiteSettings(siteSets);
+      if (filterStatsData) setFilterStats(filterStatsData);
+      if (metricsData) setMetrics(metricsData);
+      if (fpSettings) setFingerprintSettings(fpSettings);
+      if (blocked) setBlockedRequests(blocked);
+      if (filterHealth) setFilterListHealth(filterHealth);
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBlockedRequests = async (): Promise<BlockedRequest[] | null> => {
+    const response = await sendToBackground({ type: 'GET_BLOCKED_REQUESTS', payload: undefined });
+    return response.success ? response.data as BlockedRequest[] : null;
+  };
+
+  const fetchPrivacySettings = async (): Promise<PrivacySettings | null> => {
+    const response = await sendToBackground({ type: 'GET_PRIVACY_SETTINGS', payload: undefined });
+    return response.success ? response.data as PrivacySettings : null;
+  };
+
+  const fetchSiteSettings = async (): Promise<SitePrivacySettings | null> => {
+    const response = await sendToBackground({ type: 'GET_ALL_SITE_SETTINGS', payload: undefined });
+    return response.success ? response.data as SitePrivacySettings : null;
+  };
+
+  const fetchFilterStats = async (): Promise<FilterListStats | null> => {
+    return null;
+  };
+
+  const fetchFilterListHealth = async (): Promise<FilterListHealthSummary | null> => {
+    const response = await sendToBackground({ type: 'GET_FILTER_LIST_HEALTH', payload: undefined });
+    return response.success ? response.data as FilterListHealthSummary : null;
+  };
+
+  const handleRetryFilterList = async (url: string) => {
+    setRetryingList(url);
+    try {
+      await sendToBackground({ type: 'RESET_FILTER_LIST', payload: { url } });
+      await sendToBackground({ type: 'REFRESH_FILTER_LISTS', payload: undefined });
+      // Reload filter list health data
+      const newHealth = await fetchFilterListHealth();
+      if (newHealth) setFilterListHealth(newHealth);
+    } catch (error) {
+      console.error('Failed to retry filter list:', error);
+    } finally {
+      setRetryingList(null);
+    }
+  };
+
+  const fetchMetrics = async (): Promise<PrivacyMetrics | null> => {
+    const response = await sendToBackground({ type: 'GET_PRIVACY_METRICS', payload: undefined });
+    return response.success ? response.data as PrivacyMetrics : null;
+  };
+
+  const fetchFingerprintSettings = async (): Promise<FingerprintSettings | null> => {
+    const response = await sendToBackground({ type: 'GET_FINGERPRINT_SETTINGS', payload: undefined });
+    return response.success ? response.data as FingerprintSettings : null;
+  };
+
+  const handleToggle = async (id: keyof FeatureFlags) => {
+    const newValue = !flags[id];
+    setFlags((prev) => ({ ...prev, [id]: newValue }));
+    await setFeatureFlag(id, newValue);
+  };
+
+  const handleReset = async () => {
+    if (confirm('Reset all settings to defaults?')) {
+      await resetFeatureFlags();
+    }
+  };
+
+  const handlePrivacySettingChange = async (key: keyof PrivacySettings, value: boolean) => {
+    const updated = { ...privacySettings, [key]: value };
+    setPrivacySettings(updated);
+    await sendToBackground({
+      type: 'SET_PRIVACY_SETTINGS',
+      payload: { [key]: value },
+    });
+  };
+
+  const handleFingerprintSettingChange = async (key: keyof FingerprintSettings, value: boolean) => {
+    const updated = { ...fingerprintSettings, [key]: value };
+    setFingerprintSettings(updated);
+    await sendToBackground({
+      type: 'SET_FINGERPRINT_SETTINGS',
+      payload: { [key]: value },
+    });
+  };
+
+  const handleRefreshFilterLists = async () => {
+    setRefreshing(true);
+    try {
+      await sendToBackground({ type: 'REFRESH_FILTER_LISTS', payload: undefined });
+      const newMetrics = await fetchMetrics();
+      if (newMetrics) setMetrics(newMetrics);
+    } catch (error) {
+      console.error('Failed to refresh filter lists:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleAddFilterList = async () => {
+    if (!newFilterUrl.trim()) return;
+
+    try {
+      await sendToBackground({
+        type: 'ADD_FILTER_LIST',
+        payload: { url: newFilterUrl.trim() },
+      });
+      setNewFilterUrl('');
+      const newMetrics = await fetchMetrics();
+      if (newMetrics) setMetrics(newMetrics);
+    } catch (error) {
+      console.error('Failed to add filter list:', error);
+    }
+  };
+
+  const handleRemoveFilterList = async (url: string) => {
+    try {
+      await sendToBackground({
+        type: 'REMOVE_FILTER_LIST',
+        payload: { url },
+      });
+      setPrivacySettings(prev => ({
+        ...prev,
+        filterListUrls: prev.filterListUrls.filter(u => u !== url),
+      }));
+    } catch (error) {
+      console.error('Failed to remove filter list:', error);
+    }
+  };
+
+  const handleSiteModeChange = async (domain: string, mode: SitePrivacyMode) => {
+    try {
+      await sendToBackground({
+        type: 'SET_SITE_PRIVACY_MODE',
+        payload: { domain, mode },
+      });
+      setSiteSettings(prev => ({ ...prev, [domain]: mode }));
+    } catch (error) {
+      console.error('Failed to update site mode:', error);
+    }
+  };
+
+  const formatDate = (timestamp: number | null): string => {
+    if (!timestamp) return 'Never';
+    return new Date(timestamp).toLocaleString();
+  };
+
+  // Format large numbers to be shorter (e.g., 25785 -> "25.8K")
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return num.toString();
+  };
+
+  const filteredSites = Object.entries(siteSettings)
+    .filter(([domain]) => domain.toLowerCase().includes(siteSearch.toLowerCase()));
+
+  if (loading) {
+    return (
+      <div className="settings-container">
+        <div className="loading">
+          <div className="spinner" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-container">
+      <header className="settings-header">
+        <div className="settings-header-content">
+          <div className="settings-brand">
+            <img src="icons/binary_john.jpg" alt="AINTIVIRUS" className="logo-icon" />
+            <h1>Aintivirus Privacy Settings</h1>
+          </div>
+          <p className="settings-tagline">Configure your browser privacy protection.</p>
+        </div>
+      </header>
+
+      <div className="settings-layout">
+        <nav className="settings-nav">
+          <button
+            className={`nav-item ${activeTab === 'general' ? 'active' : ''}`}
+            onClick={() => setActiveTab('general')}
+          >
+            <SettingsIcon size={16} />
+            <span>General</span>
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'privacy' ? 'active' : ''}`}
+            onClick={() => setActiveTab('privacy')}
+          >
+            <ShieldIcon size={16} />
+            <span>Privacy</span>
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'trackers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('trackers')}
+          >
+            <BlockIcon size={16} />
+            <span>Trackers</span>
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'scripts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('scripts')}
+          >
+            <TargetIcon size={16} />
+            <span>Scripts</span>
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'wallet' ? 'active' : ''}`}
+            onClick={() => setActiveTab('wallet')}
+          >
+            <WalletIcon size={16} />
+            <span>Wallet</span>
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'about' ? 'active' : ''}`}
+            onClick={() => setActiveTab('about')}
+          >
+            <InfoIcon size={16} />
+            <span>About</span>
+          </button>
+        </nav>
+
+        <main className="settings-main">
+          {activeTab === 'general' && (
+            <section className="settings-section">
+              <h2>Feature Toggles</h2>
+              <p className="settings-section-desc">Enable or disable protection features</p>
+
+              <div className="settings-group" role="list">
+                {FEATURE_FLAG_META.map((feature) => (
+                  <div key={feature.id} className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        {getFeatureIcon(feature.icon)}
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name" id={`setting-${feature.id}-label`}>
+                          {feature.name}
+                        </span>
+                        <span className="settings-item-desc" id={`setting-${feature.id}-desc`}>
+                          {feature.description}
+                        </span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={flags[feature.id]}
+                        onChange={() => handleToggle(feature.id)}
+                        aria-labelledby={`setting-${feature.id}-label`}
+                        aria-describedby={`setting-${feature.id}-desc`}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 'var(--space-xl)', paddingTop: 'var(--space-xl)', borderTop: '1px solid var(--border-subtle)' }}>
+                <button className="btn btn-secondary" onClick={handleReset}>
+                  Reset to Defaults
+                </button>
+              </div>
+            </section>
+          )}
+
+          {activeTab === 'privacy' && (
+            <section className="settings-section">
+              <h2>Privacy Protection</h2>
+              <p className="settings-section-desc">Configure privacy and anti-tracking settings</p>
+
+              {/* Privacy Stats */}
+              {metrics && (
+                <div className="settings-stats-grid">
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.totalBlockedRequests)}</span>
+                    <span className="settings-stat-label"> Trackers Blocked</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.scriptsIntercepted || 0)}</span>
+                    <span className="settings-stat-label"> Scripts Intercepted</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.requestsModified || 0)}</span>
+                    <span className="settings-stat-label"> Requests Modified</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.totalCookiesDeleted)}</span>
+                    <span className="settings-stat-label"> Cookies Deleted</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.activeRuleCount)}</span>
+                    <span className="settings-stat-label"> Active Rules</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Protection Toggles */}
+              <div className="settings-subsection">
+                <h3>Protection Features</h3>
+
+                <div className="settings-group" role="list">
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <BlockIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Block Ads & Trackers</span>
+                        <span className="settings-item-desc">Block ads, trackers, and analytics requests</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.blockTrackers}
+                        onChange={() => handlePrivacySettingChange('blockTrackers', !privacySettings.blockTrackers)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <CookieIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Cookie Auto-Delete</span>
+                        <span className="settings-item-desc">Delete tracking cookies when tabs are closed</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.cookieCleanup}
+                        onChange={() => handlePrivacySettingChange('cookieCleanup', !privacySettings.cookieCleanup)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <LinkIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Strip Referer Headers</span>
+                        <span className="settings-item-desc">Remove referrer information on cross-origin requests</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.headerMinimization}
+                        onChange={() => handlePrivacySettingChange('headerMinimization', !privacySettings.headerMinimization)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <GlobeIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Global Privacy Control</span>
+                        <span className="settings-item-desc">Send Sec-GPC header to opt-out of data sharing</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.sendGPC}
+                        onChange={() => handlePrivacySettingChange('sendGPC', !privacySettings.sendGPC)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <SearchIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Strip Tracking Parameters</span>
+                        <span className="settings-item-desc">Remove utm_*, fbclid, gclid from URLs</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.stripTrackingParams}
+                        onChange={() => handlePrivacySettingChange('stripTrackingParams', !privacySettings.stripTrackingParams)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fingerprint Protection */}
+              <div className="settings-subsection">
+                <h3>Fingerprint Protection</h3>
+                <p className="settings-subsection-desc">
+                  Prevent websites from uniquely identifying your browser
+                </p>
+
+                <div className="settings-group" role="list">
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <TargetIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Enable Fingerprint Protection</span>
+                        <span className="settings-item-desc">Master toggle for all fingerprint resistance</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={fingerprintSettings.enabled}
+                        onChange={() => handleFingerprintSettingChange('enabled', !fingerprintSettings.enabled)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <PaletteIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Canvas Noise</span>
+                        <span className="settings-item-desc">Add subtle noise to canvas data extraction</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={fingerprintSettings.canvasNoise}
+                        onChange={() => handleFingerprintSettingChange('canvasNoise', !fingerprintSettings.canvasNoise)}
+                        disabled={!flags.privacy || !fingerprintSettings.enabled}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <MonitorIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">WebGL Masking</span>
+                        <span className="settings-item-desc">Hide graphics card info from websites</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={fingerprintSettings.webglMask}
+                        onChange={() => handleFingerprintSettingChange('webglMask', !fingerprintSettings.webglMask)}
+                        disabled={!flags.privacy || !fingerprintSettings.enabled}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <RulerIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Screen Resolution Masking</span>
+                        <span className="settings-item-desc">Report common resolution (may affect some layouts)</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={fingerprintSettings.screenMask}
+                        onChange={() => handleFingerprintSettingChange('screenMask', !fingerprintSettings.screenMask)}
+                        disabled={!flags.privacy || !fingerprintSettings.enabled}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <VolumeIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Audio Fingerprint Noise</span>
+                        <span className="settings-item-desc">Add imperceptible noise to audio context</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={fingerprintSettings.audioNoise}
+                        onChange={() => handleFingerprintSettingChange('audioNoise', !fingerprintSettings.audioNoise)}
+                        disabled={!flags.privacy || !fingerprintSettings.enabled}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <GlobeIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Client Hints Masking</span>
+                        <span className="settings-item-desc">Mask high-entropy browser hints (platform, arch)</span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={fingerprintSettings.clientHintsMask}
+                        onChange={() => handleFingerprintSettingChange('clientHintsMask', !fingerprintSettings.clientHintsMask)}
+                        disabled={!flags.privacy || !fingerprintSettings.enabled}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cookie Cleanup Mode */}
+              <div className="settings-subsection">
+                <h3>Default Cookie Cleanup Mode</h3>
+                <p className="settings-subsection-desc">How to handle cookies when tabs are closed</p>
+
+                <div className="settings-mode-selector">
+                  <button
+                    className={`settings-mode-btn ${privacySettings.defaultCookieMode === 'third-party' ? 'active' : ''}`}
+                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'third-party' as unknown as boolean)}
+                    disabled={!flags.privacy}
+                  >
+                    <TargetCookieIcon size={24} />
+                    <span className="settings-mode-name">Third-Party Only</span>
+                    <span className="settings-mode-desc">Delete tracking cookies, keep sessions</span>
+                  </button>
+                  <button
+                    className={`settings-mode-btn ${privacySettings.defaultCookieMode === 'all' ? 'active' : ''}`}
+                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'all' as unknown as boolean)}
+                    disabled={!flags.privacy}
+                  >
+                    <BroomIcon size={24} />
+                    <span className="settings-mode-name">All Cookies</span>
+                    <span className="settings-mode-desc">Delete all cookies for the site</span>
+                  </button>
+                  <button
+                    className={`settings-mode-btn ${privacySettings.defaultCookieMode === 'none' ? 'active' : ''}`}
+                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'none' as unknown as boolean)}
+                    disabled={!flags.privacy}
+                  >
+                    <HandStopIcon size={24} />
+                    <span className="settings-mode-name">None</span>
+                    <span className="settings-mode-desc">Don't auto-delete cookies</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter Lists */}
+              <div className="settings-subsection">
+                <h3>Filter Lists</h3>
+                <p className="settings-subsection-desc">
+                  Manage tracker blocking filter lists
+                  {privacySettings.lastFilterUpdate && (
+                    <span style={{ marginLeft: 'var(--space-sm)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '0.75rem' }}>
+                      Last updated: {formatDate(privacySettings.lastFilterUpdate)}
+                    </span>
+                  )}
+                </p>
+
+                <div className="filter-list-header">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleRefreshFilterLists}
+                    disabled={refreshing || !flags.privacy}
+                  >
+                    <RefreshIcon size={14} />
+                    <span>{refreshing ? 'Refreshing...' : 'Refresh Lists'}</span>
+                  </button>
+                </div>
+
+                <div className="filter-list-items">
+                  {privacySettings.filterListUrls.map((url) => (
+                    <div key={url} className="filter-list-item">
+                      <span className="filter-list-url">{url}</span>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleRemoveFilterList(url)}
+                        disabled={!flags.privacy}
+                      >
+                        <CloseIcon size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="add-filter-form">
+                  <input
+                    type="url"
+                    className="form-input"
+                    placeholder="Enter filter list URL..."
+                    value={newFilterUrl}
+                    onChange={(e) => setNewFilterUrl(e.target.value)}
+                    disabled={!flags.privacy}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleAddFilterList}
+                    disabled={!newFilterUrl.trim() || !flags.privacy}
+                  >
+                    Add List
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter List Health Dashboard */}
+              {filterListHealth && (
+                <div className="settings-subsection">
+                  <h3>Filter List Health</h3>
+                  <p className="settings-subsection-desc">
+                    Monitor the status of your filter lists
+                  </p>
+
+                  {/* Health Stats Grid */}
+                  <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value" style={{ color: 'var(--success)' }}>{filterListHealth.healthyLists}</span>
+                      <span className="settings-stat-label">Healthy</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value" style={{ color: filterListHealth.errorLists > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{filterListHealth.errorLists}</span>
+                      <span className="settings-stat-label">Errors</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value">{formatNumber(filterListHealth.totalRules)}</span>
+                      <span className="settings-stat-label">Total Rules</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value">{filterListHealth.lastRefresh > 0 ? formatDate(filterListHealth.lastRefresh) : 'Never'}</span>
+                      <span className="settings-stat-label">Last Refresh</span>
+                    </div>
+                  </div>
+
+                  {/* Per-list status */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {filterListHealth.lists.map((list) => {
+                      // Extract short name from URL
+                      const shortName = (() => {
+                        try {
+                          const url = new URL(list.url);
+                          const pathParts = url.pathname.split('/').filter(Boolean);
+                          return pathParts[pathParts.length - 1] || url.hostname;
+                        } catch {
+                          return list.url.slice(0, 30) + '...';
+                        }
+                      })();
+
+                      return (
+                        <div
+                          key={list.url}
+                          style={{
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '8px',
+                            padding: '12px 16px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span
+                                style={{
+                                  width: '8px',
+                                  height: '8px',
+                                  borderRadius: '50%',
+                                  background: list.lastFetchStatus === 'success' ? 'var(--success)' :
+                                             list.lastFetchStatus === 'error' ? 'var(--danger)' : 'var(--warning)',
+                                }}
+                              />
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{shortName}</span>
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  background: list.lastFetchStatus === 'success' ? 'var(--success-muted)' :
+                                             list.lastFetchStatus === 'error' ? 'var(--danger-muted)' : 'var(--warning-muted)',
+                                  color: list.lastFetchStatus === 'success' ? 'var(--success)' :
+                                         list.lastFetchStatus === 'error' ? 'var(--danger)' : 'var(--warning)',
+                                }}
+                              >
+                                {list.lastFetchStatus}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {list.lastFetchStatus === 'error' && (
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => handleRetryFilterList(list.url)}
+                                  disabled={retryingList === list.url || !flags.privacy}
+                                  style={{
+                                    fontSize: '11px',
+                                    padding: '4px 8px',
+                                  }}
+                                >
+                                  {retryingList === list.url ? 'Retrying...' : 'Retry'}
+                                </button>
+                              )}
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--accent-primary)' }}>
+                                {formatNumber(list.ruleCount)} rules
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                            {list.url}
+                          </div>
+                          {list.lastError && (
+                            <div style={{
+                              marginTop: '8px',
+                              padding: '8px',
+                              background: 'var(--danger-muted)',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              color: 'var(--danger)',
+                            }}>
+                              {list.lastError}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {list.lastFetchAt > 0 && (
+                              <span>Last fetch: {formatDate(list.lastFetchAt)}</span>
+                            )}
+                            {list.parseErrors > 0 && (
+                              <span style={{ color: 'var(--warning)' }}>{list.parseErrors} parse errors</span>
+                            )}
+                            {list.unsupportedPatterns.length > 0 && (
+                              <span>{list.unsupportedPatterns.length} unsupported patterns</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Per-Site Settings */}
+              <div className="settings-subsection">
+                <h3>Per-Site Settings</h3>
+                <p className="settings-subsection-desc">Configure privacy mode for specific websites</p>
+
+                <input
+                  type="text"
+                  className="form-input site-search-input"
+                  placeholder="Search sites..."
+                  value={siteSearch}
+                  onChange={(e) => setSiteSearch(e.target.value)}
+                />
+
+                {filteredSites.length > 0 ? (
+                  <div className="site-list">
+                    {filteredSites.map(([domain, mode]) => (
+                      <div key={domain} className="site-list-item">
+                        <span className="site-list-domain">{domain}</span>
+                        <select
+                          className="site-list-select"
+                          value={mode}
+                          onChange={(e) => handleSiteModeChange(domain, e.target.value as SitePrivacyMode)}
+                          disabled={!flags.privacy}
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="strict">Strict</option>
+                          <option value="disabled">Disabled</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>No per-site settings configured yet.</p>
+                    <p style={{ marginTop: 'var(--space-sm)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Sites will appear here when you customize their privacy settings.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {!flags.privacy && (
+                <div className="notice">
+                  <AlertIcon size={20} />
+                  <p>Privacy protection is disabled. Enable it in the General tab to configure these settings.</p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'trackers' && (
+            <section className="settings-section">
+              <h2>Blocked Trackers</h2>
+              <p className="settings-section-desc">View all trackers and requests that have been blocked</p>
+
+              {/* Stats Summary */}
+              {metrics && (
+                <div className="settings-stats-grid" style={{ marginBottom: '24px' }}>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.totalBlockedRequests)}</span>
+                    <span className="settings-stat-label"> Total Blocked</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(blockedRequests.length)}</span>
+                    <span className="settings-stat-label"> Recent Requests</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">
+                      {formatNumber(new Set(blockedRequests.map(r => r.domain)).size)}
+                    </span>
+                    <span className="settings-stat-label"> Unique Domains</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Search */}
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Search trackers by domain or URL..."
+                value={trackerSearch}
+                onChange={(e) => setTrackerSearch(e.target.value)}
+                style={{ marginBottom: '16px' }}
+              />
+
+              {/* Blocked Trackers List */}
+              {(() => {
+                // Group by domain
+                const groupedByDomain = blockedRequests.reduce((acc, req) => {
+                  if (!acc[req.domain]) {
+                    acc[req.domain] = [];
+                  }
+                  acc[req.domain].push(req);
+                  return acc;
+                }, {} as Record<string, BlockedRequest[]>);
+
+                // Sort domains by count and filter by search
+                const sortedDomains = Object.entries(groupedByDomain)
+                  .filter(([domain]) => 
+                    !trackerSearch || 
+                    domain.toLowerCase().includes(trackerSearch.toLowerCase())
+                  )
+                  .sort((a, b) => b[1].length - a[1].length);
+
+                const formatTime = (timestamp: number) => {
+                  const date = new Date(timestamp);
+                  const now = new Date();
+                  const diff = now.getTime() - date.getTime();
+                  if (diff < 60000) return 'Just now';
+                  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                  return date.toLocaleString();
+                };
+
+                if (sortedDomains.length === 0) {
+                  return (
+                    <div className="empty-state" style={{ padding: '48px', textAlign: 'center' }}>
+                      <BlockIcon size={48} />
+                      <h3 style={{ marginTop: '16px', marginBottom: '8px' }}>No Trackers Blocked Yet</h3>
+                      <p style={{ color: 'var(--text-muted)' }}>
+                        Blocked trackers will appear here as you browse the web.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {sortedDomains.map(([domain, requests]) => (
+                      <details 
+                        key={domain} 
+                        className="tracker-domain-group"
+                        style={{
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <summary
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '16px 20px',
+                            cursor: 'pointer',
+                            listStyle: 'none',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <BlockIcon size={20} />
+                            <span style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '14px',
+                              fontWeight: 600,
+                              color: 'var(--text-primary)',
+                            }}>
+                              {domain}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '14px',
+                              fontWeight: 700,
+                              color: 'var(--accent-primary)',
+                              background: 'var(--accent-muted)',
+                              padding: '4px 12px',
+                              borderRadius: '6px',
+                            }}>
+                              {requests.length} blocked
+                            </span>
+                            <span style={{ color: 'var(--text-muted)' }}>▾</span>
+                          </div>
+                        </summary>
+                        <div style={{ 
+                          borderTop: '1px solid var(--border-subtle)',
+                          maxHeight: '300px',
+                          overflowY: 'auto',
+                        }}>
+                          {requests.map((req, idx) => (
+                            <div 
+                              key={`${req.url}-${idx}`}
+                              style={{
+                                padding: '12px 20px',
+                                borderBottom: '1px solid var(--border-subtle)',
+                              }}
+                            >
+                              <div style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '12px',
+                                color: 'var(--text-secondary)',
+                                wordBreak: 'break-all',
+                                lineHeight: 1.5,
+                                marginBottom: '8px',
+                              }}>
+                                {req.url}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  color: 'var(--text-muted)',
+                                  background: 'var(--bg-tertiary)',
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
+                                }}>
+                                  {req.resourceType || 'unknown'}
+                                </span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  {formatTime(req.timestamp)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {!flags.privacy && (
+                <div className="notice" style={{ marginTop: '24px' }}>
+                  <AlertIcon size={20} />
+                  <p>Privacy protection is disabled. Enable it in the General tab to start blocking trackers.</p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'scripts' && (
+            <section className="settings-section">
+              <h2>Intercepted Scripts</h2>
+              <p className="settings-section-desc">View scripts that have been intercepted by fingerprint protection</p>
+
+              {/* Stats Summary */}
+              {metrics && (
+                <div className="settings-stats-grid" style={{ marginBottom: '24px' }}>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.scriptsIntercepted || 0)}</span>
+                    <span className="settings-stat-label"> Scripts Intercepted</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.requestsModified || 0)}</span>
+                    <span className="settings-stat-label"> Requests Modified</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.activeRuleCount)}</span>
+                    <span className="settings-stat-label"> Active Rules</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Fingerprint Protection Status */}
+              <div className="settings-subsection" style={{ marginTop: 0 }}>
+                <h3>Fingerprint Protection</h3>
+                <p className="settings-subsection-desc">
+                  These protections prevent websites from uniquely identifying your browser through JavaScript APIs
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+                  {/* Canvas Protection */}
+                  <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <PaletteIcon size={20} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Canvas Fingerprinting</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Adds noise to canvas data extraction</div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: fingerprintSettings.canvasNoise && fingerprintSettings.enabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                      color: fingerprintSettings.canvasNoise && fingerprintSettings.enabled ? 'var(--success)' : 'var(--text-muted)',
+                    }}>
+                      {fingerprintSettings.canvasNoise && fingerprintSettings.enabled ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  {/* WebGL Protection */}
+                  <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <MonitorIcon size={20} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>WebGL Fingerprinting</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Masks graphics card information</div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: fingerprintSettings.webglMask && fingerprintSettings.enabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                      color: fingerprintSettings.webglMask && fingerprintSettings.enabled ? 'var(--success)' : 'var(--text-muted)',
+                    }}>
+                      {fingerprintSettings.webglMask && fingerprintSettings.enabled ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  {/* Audio Protection */}
+                  <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <VolumeIcon size={20} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Audio Fingerprinting</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Adds imperceptible noise to audio context</div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: fingerprintSettings.audioNoise && fingerprintSettings.enabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                      color: fingerprintSettings.audioNoise && fingerprintSettings.enabled ? 'var(--success)' : 'var(--text-muted)',
+                    }}>
+                      {fingerprintSettings.audioNoise && fingerprintSettings.enabled ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  {/* Screen Protection */}
+                  <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <RulerIcon size={20} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Screen Resolution</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Reports common resolution values</div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: fingerprintSettings.screenMask && fingerprintSettings.enabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                      color: fingerprintSettings.screenMask && fingerprintSettings.enabled ? 'var(--success)' : 'var(--text-muted)',
+                    }}>
+                      {fingerprintSettings.screenMask && fingerprintSettings.enabled ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  {/* Client Hints Protection */}
+                  <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <GlobeIcon size={20} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Client Hints</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Masks browser platform and architecture hints</div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: fingerprintSettings.clientHintsMask && fingerprintSettings.enabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                      color: fingerprintSettings.clientHintsMask && fingerprintSettings.enabled ? 'var(--success)' : 'var(--text-muted)',
+                    }}>
+                      {fingerprintSettings.clientHintsMask && fingerprintSettings.enabled ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Box */}
+              <div style={{
+                marginTop: '24px',
+                padding: '16px 20px',
+                background: 'var(--accent-muted)',
+                border: '1px solid var(--accent-primary)',
+                borderRadius: '12px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <div style={{ flexShrink: 0, marginTop: '2px' }}>
+                    <InfoIcon size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>How Script Interception Works</div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                      When enabled, fingerprint protection injects code that intercepts JavaScript API calls commonly used for browser fingerprinting. 
+                      This includes Canvas, WebGL, AudioContext, and Navigator APIs. The intercepted calls return slightly randomized or normalized 
+                      values to prevent unique identification while maintaining website functionality.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {!flags.privacy && (
+                <div className="notice" style={{ marginTop: '24px' }}>
+                  <AlertIcon size={20} />
+                  <p>Privacy protection is disabled. Enable it in the General tab to start intercepting fingerprinting scripts.</p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'wallet' && (
+            <WalletSecuritySettings walletEnabled={flags.wallet} />
+          )}
+
+          {activeTab === 'about' && (
+            <section className="settings-section">
+              <h2>About Aintivirus</h2>
+
+              <div className="about-content">
+                <div className="about-logo">
+                  <img src="icons/binary_john.jpg" alt="AINTIVIRUS" className="logo-icon" />
+                  <h3>Aintivirus</h3>
+                  <span className="version-badge">Version 0.1.0</span>
+                </div>
+
+                <p className="about-desc">
+                  Aintivirus browser security extension that protects your privacy
+                  and crypto assets while browsing the web.
+                </p>
+
+                <div className="about-links">
+                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="about-link">
+                    <GitHubIcon size={16} />
+                    <span>GitHub Repository</span>
+                  </a>
+                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="about-link">
+                    <BookIcon size={16} />
+                    <span>Documentation</span>
+                  </a>
+                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="about-link">
+                    <BugIcon size={16} />
+                    <span>Report an Issue</span>
+                  </a>
+                </div>
+
+                <div className="about-footer">
+                  <p>$AINTI. All rights reserved.</p>
+                </div>
+              </div>
+            </section>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default App;
