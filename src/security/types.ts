@@ -332,7 +332,7 @@ export interface SecuritySettings {
   warnOnUnknownPrograms: boolean;
   /** Show warnings for large transfers */
   warnOnLargeTransfers: boolean;
-  /** Threshold for "large" transfer warning (in SOL) */
+  /** Threshold for "large" transfer warning (in USD) */
   largeTransferThreshold: number;
   /** Show warnings for authority changes */
   warnOnAuthorityChanges: boolean;
@@ -353,7 +353,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   phishingDetection: true,
   warnOnUnknownPrograms: true,
   warnOnLargeTransfers: true,
-  largeTransferThreshold: 10, // 10 SOL
+  largeTransferThreshold: 100, // $100 USD
   warnOnAuthorityChanges: true,
   warnOnUnlimitedApprovals: true,
   autoBlockMalicious: true,

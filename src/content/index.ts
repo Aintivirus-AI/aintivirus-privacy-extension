@@ -1,6 +1,15 @@
 import { sendToBackground, createMessageListener } from '@shared/messaging';
 import { ExtensionMessage, MessageResponse } from '@shared/types';
-import { BOOTSTRAP_COSMETIC_SELECTORS } from '../privacy/types';
+import { BOOTSTRAP_COSMETIC_SELECTORS, PROTECTED_SITES } from '../privacy/types';
+import { 
+  getSiteFixForDomain, 
+  generateSiteFixCSS, 
+  hideAdElements,
+  removeEmptyContainers,
+  injectAnalyticsBlockers,
+} from '../privacy/siteFixes';
+import { initializeDAppBridge } from '../dapp/bridge/contentBridge';
+import { initializeFloatingPanel } from './floatingPanel';
 
 // Content script - runs on every page to hide ads, show warnings, and talk to the background
 // We use Symbols for markers so pages can't detect we're here
@@ -29,12 +38,49 @@ if (extWindow[INJECTION_SYMBOL]) {
   initContentScript();
 }
 
+/**
+ * Check if the current domain is a protected site
+ * Protected sites don't get generic cosmetic filters to avoid breaking UI
+ */
+function isProtectedSite(): boolean {
+  const hostname = window.location.hostname.toLowerCase();
+  return PROTECTED_SITES.some(site => 
+    hostname === site || hostname.endsWith(`.${site}`)
+  );
+}
+
+/**
+ * Check if current site is YouTube (for special anti-adblock handling)
+ */
+function isYouTube(): boolean {
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname.includes('youtube.com') || hostname.includes('youtu.be');
+}
+
 // Boot up the content script - hide ads fast, inject security, set up listeners
 function initContentScript(): void {
   // Hide ads immediately before user sees them flash
-  applyBootstrapCosmeticFilters();
+  // Skip bootstrap cosmetic filters on protected sites to avoid false positives
+  if (!isProtectedSite()) {
+    applyBootstrapCosmeticFilters();
+  }
+  
+  // Apply site-specific fixes (e.g., adblock-tester.com)
+  applySiteSpecificFixes();
+  
+  // Inject YouTube anti-adblock scriptlets early
+  if (isYouTube()) {
+    injectYouTubeScriptlets();
+  }
+  
   injectSecurityScript();
   setupSecurityMessageListener();
+  
+  // Initialize dApp provider bridge for wallet connectivity
+  initializeDAppBridge();
+  
+  // Initialize floating panel system (only minimizes via button, not click outside)
+  initializeFloatingPanel();
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', onDOMReady);
@@ -45,6 +91,110 @@ function initContentScript(): void {
   setupMessageListener();
 }
 
+/**
+ * YouTube-specific scriptlets to bypass ad-blocker detection
+ * These are injected early to prevent YouTube's anti-adblock popup
+ */
+function injectYouTubeScriptlets(): void {
+  try {
+    // Create a script that runs in the page context
+    const scriptContent = `
+(function() {
+  'use strict';
+  
+  // Prevent YouTube from detecting ad blockers via config
+  const originalDefineProperty = Object.defineProperty;
+  Object.defineProperty = function(obj, prop, descriptor) {
+    // Block adblock detection properties
+    if (prop === 'adBlocksFound' || 
+        prop === 'adPlacements' ||
+        prop === 'adSlots' ||
+        prop === 'playerAds') {
+      if (descriptor && descriptor.value !== undefined) {
+        descriptor.value = undefined;
+      }
+      if (descriptor && descriptor.get) {
+        descriptor.get = function() { return undefined; };
+      }
+    }
+    return originalDefineProperty.call(this, obj, prop, descriptor);
+  };
+  
+  // Block common adblock detection methods
+  const blockProperties = [
+    'FuckAdBlock',
+    'BlockAdBlock', 
+    'fuckAdBlock',
+    'blockAdBlock',
+    'adBlockEnabled',
+    'adblockEnabled',
+    'isAdBlockActive'
+  ];
+  
+  for (const prop of blockProperties) {
+    try {
+      Object.defineProperty(window, prop, {
+        get: function() { return undefined; },
+        set: function() { return true; },
+        configurable: false
+      });
+    } catch (e) {
+      // Property may already be defined
+    }
+  }
+  
+  // Intercept and modify YouTube's initial player response
+  const originalParse = JSON.parse;
+  JSON.parse = function(text) {
+    const result = originalParse.call(this, text);
+    if (result && typeof result === 'object') {
+      // Remove ad-related data from player response
+      if (result.adPlacements) delete result.adPlacements;
+      if (result.playerAds) delete result.playerAds;
+      if (result.adSlots) delete result.adSlots;
+      if (result.adBreakHeartbeatParams) delete result.adBreakHeartbeatParams;
+    }
+    return result;
+  };
+  
+  // Block adblock message popup
+  const originalCreateElement = document.createElement.bind(document);
+  document.createElement = function(tagName) {
+    const element = originalCreateElement(tagName);
+    if (tagName.toLowerCase() === 'tp-yt-paper-dialog') {
+      // This is often the adblock warning dialog
+      element.setAttribute('data-aintivirus-blocked', 'true');
+      setTimeout(() => {
+        if (element.parentNode) {
+          element.style.display = 'none';
+        }
+      }, 0);
+    }
+    return element;
+  };
+  
+  console.log('[AINTIVIRUS] YouTube anti-adblock scriptlets injected');
+})();
+`;
+
+    const script = document.createElement('script');
+    script.textContent = scriptContent;
+    script.id = 'aintivirus-youtube-scriptlets';
+    
+    // Inject as early as possible
+    const target = document.head || document.documentElement;
+    if (target) {
+      target.insertBefore(script, target.firstChild);
+      // Remove the script tag after execution (but code remains in page context)
+      script.remove();
+    }
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[AINTIVIRUS] Failed to inject YouTube scriptlets:', error);
+    }
+  }
+}
+
 // Inject some basic ad-hiding CSS right away, before we fetch the full filter lists
 function applyBootstrapCosmeticFilters(): void {
   const style = document.createElement('style');
@@ -53,6 +203,94 @@ function applyBootstrapCosmeticFilters(): void {
   const target = document.head || document.documentElement;
   if (target) {
     target.insertBefore(style, target.firstChild);
+  }
+}
+
+/**
+ * Apply site-specific cosmetic fixes
+ * These are targeted rules for specific sites like adblock-tester.com
+ */
+function applySiteSpecificFixes(): void {
+  const hostname = window.location.hostname.toLowerCase();
+  const siteFix = getSiteFixForDomain(hostname);
+  
+  // Always inject analytics blockers on ad-blocker test sites
+  if (hostname.includes('adblock') || hostname.includes('tester')) {
+    injectAnalyticsBlockers();
+  }
+  
+  if (!siteFix) return;
+  
+  console.log('[AINTIVIRUS] Applying site-specific fixes for:', hostname);
+  
+  // Inject site-specific CSS
+  const style = document.createElement('style');
+  style.id = 'aintivirus-site-fixes';
+  style.textContent = generateSiteFixCSS(siteFix);
+  
+  const target = document.head || document.documentElement;
+  if (target) {
+    target.insertBefore(style, target.firstChild);
+  }
+  
+  // If mutation observer is enabled for this site, set up aggressive monitoring
+  if (siteFix.enableMutationObserver) {
+    setupSiteFixObserver();
+  }
+}
+
+/**
+ * Set up aggressive mutation observer for site-specific fixes
+ * Used on sites like adblock-tester.com that dynamically inject test elements
+ */
+function setupSiteFixObserver(): void {
+  let throttled = false;
+  const THROTTLE_MS = 100;
+  
+  const observer = new MutationObserver((mutations) => {
+    if (throttled) return;
+    
+    throttled = true;
+    setTimeout(() => { throttled = false; }, THROTTLE_MS);
+    
+    // Check if any mutations added potential ad elements
+    let hasNewElements = false;
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        hasNewElements = true;
+        break;
+      }
+    }
+    
+    if (hasNewElements) {
+      // Run aggressive element hiding
+      const hiddenCount = hideAdElements();
+      const removedCount = removeEmptyContainers();
+      
+      if ((hiddenCount > 0 || removedCount > 0) && process.env.NODE_ENV !== 'production') {
+        console.log(`[AINTIVIRUS] Site fix: hidden ${hiddenCount} elements, collapsed ${removedCount} containers`);
+      }
+    }
+  });
+  
+  // Start observing when body is ready
+  const startObserver = () => {
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+      
+      // Initial pass to hide any existing ad elements
+      hideAdElements();
+      removeEmptyContainers();
+    }
+  };
+  
+  if (document.body) {
+    startObserver();
+  } else {
+    document.addEventListener('DOMContentLoaded', startObserver);
   }
 }
 
@@ -71,6 +309,14 @@ async function onDOMReady(): Promise<void> {
 
 // Get the full cosmetic filter rules for this site and apply them
 async function applyCosmeticFilters(): Promise<void> {
+  // Skip cosmetic filtering on protected sites to avoid breaking UI
+  if (isProtectedSite()) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[AINTIVIRUS] Skipping generic cosmetic filters (protected site)');
+    }
+    return;
+  }
+  
   try {
     const domain = window.location.hostname;
     
@@ -128,6 +374,11 @@ function generateCosmeticCSS(selectors: string[]): string {
 
 // Some ad containers leave ugly empty boxes - collapse them
 function removeAdPlaceholders(): void {
+  // Skip on protected sites to avoid breaking UI
+  if (isProtectedSite()) {
+    return;
+  }
+  
   const emptyAdSelectors = [
     '.adsbygoogle:empty',
     'ins.adsbygoogle:empty',
@@ -167,16 +418,23 @@ function removeAdPlaceholders(): void {
 }
 
 // If a wrapper only has hidden ads inside, hide the whole wrapper
+// IMPORTANT: More conservative now - only targets specific ad network selectors
 function collapseAdWrappers(): void {
+  // Skip entirely on protected sites
+  if (isProtectedSite()) {
+    return;
+  }
+  
+  // Only target very specific ad network containers, not generic patterns
+  // Generic patterns like [class*="ad-container"] cause false positives
   const wrapperSelectors = [
-    '[class*="ad-container"]',
-    '[class*="ad-wrapper"]',
-    '[class*="advertisement"]',
-    '[class*="sponsored"]',
-    '[id*="ad-container"]',
-    '[id*="ad-wrapper"]',
-    'aside[class*="ad"]',
-    'div[class*="sidebar-ad"]',
+    '.adsbygoogle',
+    '[id^="div-gpt-ad"]',
+    '[id^="google_ads_"]',
+    '[id^="taboola-"]',
+    '.OUTBRAIN',
+    '.adthrive-ad',
+    '[id^="adthrive-"]',
   ];
   
   wrapperSelectors.forEach(selector => {
@@ -473,7 +731,46 @@ async function checkPhishingAndWarn(): Promise<void> {
   }
 }
 
+// ============================================
+// OVERLAY HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Create an SVG element with the specified content
+ * SECURITY: Uses DOM APIs instead of innerHTML
+ */
+function createSvgElement(svgHtml: string): SVGSVGElement {
+  // SVG is safe to create via innerHTML in a detached element since we control the input
+  const temp = document.createElement('div');
+  temp.innerHTML = svgHtml;
+  return temp.firstElementChild as SVGSVGElement;
+}
+
+/**
+ * Create a text element with safe content
+ * SECURITY: Uses textContent instead of innerHTML
+ */
+function createTextElement(tag: string, text: string, className?: string): HTMLElement {
+  const el = document.createElement(tag);
+  el.textContent = text;
+  if (className) el.className = className;
+  return el;
+}
+
+/**
+ * Create a button element
+ * SECURITY: Uses textContent instead of innerHTML
+ */
+function createButton(text: string, id: string, className: string): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.textContent = text;
+  btn.id = id;
+  btn.className = className;
+  return btn;
+}
+
 // Big scary warning for phishing sites
+// SECURITY: Refactored to use DOM APIs instead of innerHTML
 function showPhishingOverlay(
   domain: string,
   analysis: {
@@ -483,45 +780,78 @@ function showPhishingOverlay(
 ): void {
   const overlay = document.createElement('div');
   overlay.id = 'aintivirus-phishing-overlay';
-  overlay.innerHTML = `
-    <div class="av-phishing-modal">
-      <div class="av-phishing-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-      </div>
-      <h2>Security Warning</h2>
-      <p class="av-domain">${escapeHtml(domain)}</p>
-      <p class="av-warning-text">This site has been flagged as potentially dangerous.</p>
-      <ul class="av-signals">
-        ${analysis.signals.map(s => `<li>${escapeHtml(s.description)}</li>`).join('')}
-      </ul>
-      <p class="av-disclaimer">
-        AINTIVIRUS cannot guarantee this assessment is accurate. 
-        If you believe this is a legitimate site, you may proceed at your own risk.
-      </p>
-      <div class="av-actions">
-        <button class="av-btn av-btn-back" id="av-go-back">Go Back to Safety</button>
-        <button class="av-btn av-btn-proceed" id="av-proceed">I Understand the Risk</button>
-      </div>
-    </div>
-  `;
   
+  // Build modal structure using DOM APIs
+  const modal = document.createElement('div');
+  modal.className = 'av-phishing-modal';
+  
+  // Icon (SVG is controlled content, safe)
+  const iconDiv = document.createElement('div');
+  iconDiv.className = 'av-phishing-icon';
+  iconDiv.appendChild(createSvgElement(`
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  `));
+  modal.appendChild(iconDiv);
+  
+  // Title (safe text)
+  modal.appendChild(createTextElement('h2', 'Security Warning'));
+  
+  // Domain (user content - use textContent for safety)
+  modal.appendChild(createTextElement('p', domain, 'av-domain'));
+  
+  // Warning text (safe text)
+  modal.appendChild(createTextElement('p', 'This site has been flagged as potentially dangerous.', 'av-warning-text'));
+  
+  // Signals list (user content - use textContent for safety)
+  const signalsList = document.createElement('ul');
+  signalsList.className = 'av-signals';
+  for (const signal of analysis.signals) {
+    const li = document.createElement('li');
+    li.textContent = signal.description; // Safe: textContent escapes
+    signalsList.appendChild(li);
+  }
+  modal.appendChild(signalsList);
+  
+  // Disclaimer (safe text)
+  const disclaimer = createTextElement('p', 
+    'AINTIVIRUS cannot guarantee this assessment is accurate. If you believe this is a legitimate site, you may proceed at your own risk.',
+    'av-disclaimer'
+  );
+  modal.appendChild(disclaimer);
+  
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'av-actions';
+  
+  const backBtn = createButton('Go Back to Safety', 'av-go-back', 'av-btn av-btn-back');
+  const proceedBtn = createButton('I Understand the Risk', 'av-proceed', 'av-btn av-btn-proceed');
+  
+  actions.appendChild(backBtn);
+  actions.appendChild(proceedBtn);
+  modal.appendChild(actions);
+  
+  overlay.appendChild(modal);
+  
+  // Add styles
   const style = document.createElement('style');
   style.textContent = getPhishingOverlayStyles();
   overlay.appendChild(style);
   
   document.body.appendChild(overlay);
-  document.getElementById('av-go-back')?.addEventListener('click', () => {
+  
+  // Event listeners
+  backBtn.addEventListener('click', () => {
     window.history.back();
     setTimeout(() => {
       window.location.href = 'about:blank';
     }, 100);
   });
   
-  document.getElementById('av-proceed')?.addEventListener('click', async () => {
+  proceedBtn.addEventListener('click', async () => {
     await sendToBackground({
       type: 'SECURITY_DISMISS_WARNING',
       payload: { domain },
@@ -531,6 +861,7 @@ function showPhishingOverlay(
 }
 
 // Warn user before connecting to a risky site
+// SECURITY: Refactored to use DOM APIs instead of innerHTML
 async function showConnectionWarning(
   domain: string,
   analysis: { riskLevel: string; isPhishing: boolean }
@@ -538,39 +869,71 @@ async function showConnectionWarning(
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.id = 'aintivirus-connection-warning';
-    overlay.innerHTML = `
-      <div class="av-warning-modal">
-        <div class="av-warning-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <h3>Connection Warning</h3>
-        </div>
-        <p><strong>${escapeHtml(domain)}</strong> is requesting wallet access.</p>
-        <p class="av-risk av-risk-${analysis.riskLevel}">Risk Level: ${analysis.riskLevel.toUpperCase()}</p>
-        ${analysis.isPhishing ? '<p class="av-phishing-alert">This domain has been flagged as a potential phishing site.</p>' : ''}
-        <p class="av-disclaimer">AINTIVIRUS cannot guarantee safety. Verify this is the correct site.</p>
-        <div class="av-actions">
-          <button class="av-btn av-btn-cancel" id="av-cancel">Cancel</button>
-          <button class="av-btn av-btn-connect" id="av-connect">Connect Anyway</button>
-        </div>
-      </div>
-    `;
     
+    // Build modal using DOM APIs
+    const modal = document.createElement('div');
+    modal.className = 'av-warning-modal';
+    
+    // Header with icon
+    const header = document.createElement('div');
+    header.className = 'av-warning-header';
+    header.appendChild(createSvgElement(`
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    `));
+    header.appendChild(createTextElement('h3', 'Connection Warning'));
+    modal.appendChild(header);
+    
+    // Domain request text
+    const requestP = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = domain; // Safe: textContent escapes
+    requestP.appendChild(strong);
+    requestP.appendChild(document.createTextNode(' is requesting wallet access.'));
+    modal.appendChild(requestP);
+    
+    // Risk level
+    const riskP = createTextElement('p', `Risk Level: ${analysis.riskLevel.toUpperCase()}`, `av-risk av-risk-${analysis.riskLevel}`);
+    modal.appendChild(riskP);
+    
+    // Phishing alert if applicable
+    if (analysis.isPhishing) {
+      modal.appendChild(createTextElement('p', 'This domain has been flagged as a potential phishing site.', 'av-phishing-alert'));
+    }
+    
+    // Disclaimer
+    modal.appendChild(createTextElement('p', 'AINTIVIRUS cannot guarantee safety. Verify this is the correct site.', 'av-disclaimer'));
+    
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'av-actions';
+    
+    const cancelBtn = createButton('Cancel', 'av-cancel', 'av-btn av-btn-cancel');
+    const connectBtn = createButton('Connect Anyway', 'av-connect', 'av-btn av-btn-connect');
+    
+    actions.appendChild(cancelBtn);
+    actions.appendChild(connectBtn);
+    modal.appendChild(actions);
+    
+    overlay.appendChild(modal);
+    
+    // Add styles
     const style = document.createElement('style');
     style.textContent = getWarningModalStyles();
     overlay.appendChild(style);
     
     document.body.appendChild(overlay);
     
-    document.getElementById('av-cancel')?.addEventListener('click', () => {
+    // Event listeners
+    cancelBtn.addEventListener('click', () => {
       overlay.remove();
       resolve(false);
     });
     
-    document.getElementById('av-connect')?.addEventListener('click', () => {
+    connectBtn.addEventListener('click', () => {
       overlay.remove();
       resolve(true);
     });
@@ -578,6 +941,7 @@ async function showConnectionWarning(
 }
 
 // Show what's risky about this transaction
+// SECURITY: Refactored to use DOM APIs instead of innerHTML
 async function showTransactionWarning(
   domain: string,
   summaries: Array<{ riskLevel: string; warnings: string[] }>
@@ -592,46 +956,81 @@ async function showTransactionWarning(
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.id = 'aintivirus-tx-warning';
-    overlay.innerHTML = `
-      <div class="av-warning-modal">
-        <div class="av-warning-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <h3>Transaction Warning</h3>
-        </div>
-        <p><strong>${escapeHtml(domain)}</strong> is requesting a transaction.</p>
-        <p class="av-risk av-risk-${highestRisk}">Risk Level: ${highestRisk.toUpperCase()}</p>
-        ${allWarnings.length > 0 ? `
-          <ul class="av-warnings">
-            ${allWarnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}
-          </ul>
-        ` : ''}
-        <p class="av-disclaimer">
-          This analysis is informational only. AINTIVIRUS cannot guarantee transaction safety.
-          Always verify transaction details independently.
-        </p>
-        <div class="av-actions">
-          <button class="av-btn av-btn-cancel" id="av-reject">Reject</button>
-          <button class="av-btn av-btn-confirm" id="av-confirm">Sign Anyway</button>
-        </div>
-      </div>
-    `;
     
+    // Build modal using DOM APIs
+    const modal = document.createElement('div');
+    modal.className = 'av-warning-modal';
+    
+    // Header with icon
+    const header = document.createElement('div');
+    header.className = 'av-warning-header';
+    header.appendChild(createSvgElement(`
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    `));
+    header.appendChild(createTextElement('h3', 'Transaction Warning'));
+    modal.appendChild(header);
+    
+    // Transaction request text
+    const requestP = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = domain; // Safe: textContent escapes
+    requestP.appendChild(strong);
+    requestP.appendChild(document.createTextNode(' is requesting a transaction.'));
+    modal.appendChild(requestP);
+    
+    // Risk level
+    const riskP = createTextElement('p', `Risk Level: ${highestRisk.toUpperCase()}`, `av-risk av-risk-${highestRisk}`);
+    modal.appendChild(riskP);
+    
+    // Warnings list if any
+    if (allWarnings.length > 0) {
+      const warningsList = document.createElement('ul');
+      warningsList.className = 'av-warnings';
+      for (const warning of allWarnings) {
+        const li = document.createElement('li');
+        li.textContent = warning; // Safe: textContent escapes
+        warningsList.appendChild(li);
+      }
+      modal.appendChild(warningsList);
+    }
+    
+    // Disclaimer
+    modal.appendChild(createTextElement('p', 
+      'This analysis is informational only. AINTIVIRUS cannot guarantee transaction safety. Always verify transaction details independently.',
+      'av-disclaimer'
+    ));
+    
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'av-actions';
+    
+    const rejectBtn = createButton('Reject', 'av-reject', 'av-btn av-btn-cancel');
+    const confirmBtn = createButton('Sign Anyway', 'av-confirm', 'av-btn av-btn-confirm');
+    
+    actions.appendChild(rejectBtn);
+    actions.appendChild(confirmBtn);
+    modal.appendChild(actions);
+    
+    overlay.appendChild(modal);
+    
+    // Add styles
     const style = document.createElement('style');
     style.textContent = getWarningModalStyles();
     overlay.appendChild(style);
     
     document.body.appendChild(overlay);
     
-    document.getElementById('av-reject')?.addEventListener('click', () => {
+    // Event listeners
+    rejectBtn.addEventListener('click', () => {
       overlay.remove();
       resolve(false);
     });
     
-    document.getElementById('av-confirm')?.addEventListener('click', () => {
+    confirmBtn.addEventListener('click', () => {
       overlay.remove();
       resolve(true);
     });

@@ -3,6 +3,7 @@ const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = (env, argv) => {
   const isFirefox = env?.target === 'firefox';
@@ -18,6 +19,10 @@ module.exports = (env, argv) => {
       fingerprintInjected: './src/fingerprinting/injectedScript.ts',
       // Security monitoring script - injected into MAIN world for wallet interception
       securityInjected: './src/security/injected.ts',
+      // dApp provider script - injected into MAIN world for EIP-1193/Solana providers
+      dappInpage: './src/dapp/providers/inpage.ts',
+      // dApp approval window
+      approval: './src/approval/index.tsx',
     },
     output: {
       path: path.resolve(__dirname, 'dist'),
@@ -29,11 +34,11 @@ module.exports = (env, argv) => {
         {
           test: /\.tsx?$/,
           use: 'ts-loader',
-          exclude: /node_modules/,
+          exclude: [/node_modules/, /\.test\.ts$/, /\.test\.tsx$/],
         },
         {
           test: /\.css$/,
-          use: ['style-loader', 'css-loader'],
+          use: [MiniCssExtractPlugin.loader, 'css-loader'],
         },
       ],
     },
@@ -41,6 +46,7 @@ module.exports = (env, argv) => {
       extensions: ['.tsx', '.ts', '.js'],
       alias: {
         '@shared': path.resolve(__dirname, 'src/shared'),
+        '@wallet': path.resolve(__dirname, 'src/wallet'),
       },
       fallback: {
         // Node.js polyfills for Solana/crypto libraries
@@ -49,6 +55,10 @@ module.exports = (env, argv) => {
       },
     },
     plugins: [
+      // Extract CSS to separate files (required for Chrome extension CSP)
+      new MiniCssExtractPlugin({
+        filename: '[name].css',
+      }),
       // Provide Node.js globals for browser compatibility
       new webpack.ProvidePlugin({
         process: 'process/browser',
@@ -62,11 +72,22 @@ module.exports = (env, argv) => {
         template: './src/popup/popup.html',
         filename: 'popup.html',
         chunks: ['popup'],
+        inject: 'body',
+        scriptLoading: 'blocking',
       }),
       new HtmlWebpackPlugin({
         template: './src/settings/settings.html',
         filename: 'settings.html',
         chunks: ['settings'],
+        inject: 'body',
+        scriptLoading: 'blocking',
+      }),
+      new HtmlWebpackPlugin({
+        template: './src/approval/approval.html',
+        filename: 'approval.html',
+        chunks: ['approval'],
+        inject: 'body',
+        scriptLoading: 'blocking',
       }),
       new CopyWebpackPlugin({
         patterns: [
@@ -77,6 +98,10 @@ module.exports = (env, argv) => {
           {
             from: 'public',
             to: '.',
+          },
+          {
+            from: 'rules',
+            to: 'rules',
           },
         ],
       }),

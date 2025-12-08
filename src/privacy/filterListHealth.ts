@@ -189,26 +189,53 @@ export async function getLastKnownGood(url: string): Promise<LastKnownGoodFilter
 }
 
 /**
+ * Maximum rules to store per filter list in last-known-good cache
+ * Chrome storage has a 5MB limit - storing full lists would exceed this
+ * We store a representative subset that provides basic protection if fetch fails
+ */
+const MAX_LKG_RULES_PER_LIST = 500;
+
+/**
  * Save last-known-good rules for a filter list
+ * NOTE: We only store a subset of rules to avoid exceeding storage quota
  */
 export async function saveLastKnownGood(
   url: string,
   rules: string[]
 ): Promise<void> {
+  // Only store a subset of rules to stay within storage limits
+  // Prioritize rules that start with || (domain blocks) as they're most valuable
+  const domainRules = rules.filter(r => r.startsWith('||')).slice(0, MAX_LKG_RULES_PER_LIST * 0.7);
+  const otherRules = rules.filter(r => !r.startsWith('||')).slice(0, MAX_LKG_RULES_PER_LIST * 0.3);
+  const truncatedRules = [...domainRules, ...otherRules].slice(0, MAX_LKG_RULES_PER_LIST);
+  
   const all = await getAllLastKnownGood();
   
   all[url] = {
     url,
-    rules,
+    rules: truncatedRules,
     fetchedAt: Date.now(),
-    ruleCount: rules.length,
+    ruleCount: rules.length, // Store original count for reference
   };
   
   try {
     await chrome.storage.local.set({ [STORAGE_KEY_LAST_KNOWN_GOOD]: all });
-    console.log(`[FilterListHealth] Saved last-known-good for ${url} (${rules.length} rules)`);
+    console.log(`[FilterListHealth] Saved last-known-good for ${url} (${truncatedRules.length}/${rules.length} rules cached)`);
   } catch (error) {
-    console.error('[FilterListHealth] Failed to save last-known-good:', error);
+    // If still too large, clear old entries and try again
+    if (error instanceof Error && error.message.includes('quota')) {
+      console.warn('[FilterListHealth] Storage quota exceeded, clearing old LKG entries');
+      try {
+        // Only keep this list's LKG
+        await chrome.storage.local.set({ 
+          [STORAGE_KEY_LAST_KNOWN_GOOD]: { [url]: all[url] } 
+        });
+      } catch (retryError) {
+        console.error('[FilterListHealth] Failed to save last-known-good even after cleanup:', retryError);
+      }
+    } else {
+      console.error('[FilterListHealth] Failed to save last-known-good:', error);
+    }
   }
 }
 
@@ -332,4 +359,8 @@ export async function getErrorFilterLists(): Promise<FilterListHealth[]> {
 export async function resetFilterListHealth(url: string): Promise<void> {
   await updateFilterListHealth(url, createDefaultFilterListHealth(url));
 }
+
+
+
+
 

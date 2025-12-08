@@ -1,0 +1,417 @@
+[
+  {
+    "id": 1,
+    "priority": 10,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "extensionPath": "/noop-sentry.js"
+      }
+    },
+    "condition": {
+      "urlFilter": "||browser.sentry-cdn.com^",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 10,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "extensionPath": "/noop-sentry.js"
+      }
+    },
+    "condition": {
+      "urlFilter": "||sentry.io^",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 10,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "extensionPath": "/noop-sentry.js"
+      }
+    },
+    "condition": {
+      "regexFilter": ".*\\.sentry-cdn\\.com.*bundle.*\\.js",
+      "resourceTypes": [
+        "script"
+      ],
+      "isUrlFilterCaseSensitive": false
+    }
+  },
+  {
+    "id": 4,
+    "priority": 10,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "extensionPath": "/noop-bugsnag.js"
+      }
+    },
+    "condition": {
+      "urlFilter": "||bugsnag.com^",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 10,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "extensionPath": "/noop-bugsnag.js"
+      }
+    },
+    "condition": {
+      "urlFilter": "||d2wy8f7a9ursnm.cloudfront.net^",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 5,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sentry.io/api/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 5,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sessions.bugsnag.com^",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 5,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||notify.bugsnag.com^",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/ads/*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/adv/*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/banner*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "*/ad/*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "*_ad.*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "*-ad.*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "*/advertisement/*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "*/sponsor/*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/flash/*",
+      "resourceTypes": [
+        "image",
+        "media",
+        "object"
+      ],
+      "initiatorDomains": [
+        "adblock-tester.com",
+        "www.adblock-tester.com"
+      ]
+    }
+  },
+  {
+    "id": 18,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "*.swf",
+      "resourceTypes": [
+        "object",
+        "other",
+        "media"
+      ]
+    }
+  },
+  {
+    "id": 19,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": ".*ad.*\\.gif$",
+      "resourceTypes": [
+        "image"
+      ],
+      "isUrlFilterCaseSensitive": false
+    }
+  },
+  {
+    "id": 20,
+    "priority": 3,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||d3pkae9owd2lcf.cloudfront.net^",
+      "resourceTypes": [
+        "script",
+        "image",
+        "stylesheet",
+        "object",
+        "xmlhttprequest",
+        "sub_frame",
+        "ping",
+        "media",
+        "font",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 21,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": ".*/pixel\\.gif|.*/1x1\\.gif|.*/clear\\.gif|.*/spacer\\.gif",
+      "resourceTypes": [
+        "image"
+      ],
+      "isUrlFilterCaseSensitive": false
+    }
+  },
+  {
+    "id": 22,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||google-analytics.com/analytics.js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 23,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||google-analytics.com/ga.js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 24,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||googletagmanager.com/gtag/js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 25,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||googletagmanager.com/gtm.js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  }
+]

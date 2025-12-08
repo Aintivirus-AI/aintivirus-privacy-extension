@@ -138,7 +138,8 @@ export function generateIV(): string {
  */
 export async function deriveKeyFromPassword(
   password: string,
-  saltBase64: string
+  saltBase64: string,
+  iterations: number = PBKDF2_ITERATIONS
 ): Promise<CryptoKey> {
   // SECURITY: Convert password to key material
   // The password string is converted to bytes for PBKDF2
@@ -155,12 +156,12 @@ export async function deriveKeyFromPassword(
   );
 
   // Derive AES-256-GCM key using PBKDF2
-  // SECURITY: 100,000 iterations with SHA-256 provides strong protection
+  // SECURITY: Higher iterations = stronger protection against brute-force
   const derivedKey = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: salt,
-      iterations: PBKDF2_ITERATIONS,
+      iterations: iterations,
       hash: 'SHA-256',
     },
     keyMaterial,
@@ -307,6 +308,64 @@ export function clearSensitiveString(sensitiveData: string): string {
 export function zeroOutArray(array: Uint8Array): void {
   // SECURITY: Fill with zeros to remove sensitive data from memory
   array.fill(0);
+}
+
+// ============================================
+// CONSTANT-TIME COMPARISON
+// ============================================
+
+/**
+ * Compare two Uint8Array buffers in constant time
+ * 
+ * SECURITY: This function prevents timing side-channel attacks when
+ * comparing sensitive values like password hashes or verifiers.
+ * 
+ * Regular comparison (===) or byte-by-byte comparison with early exit
+ * can leak information about which bytes match through timing differences.
+ * 
+ * This function always compares all bytes regardless of mismatches,
+ * making timing attacks infeasible.
+ * 
+ * @param a - First buffer to compare
+ * @param b - Second buffer to compare
+ * @returns True if buffers are equal, false otherwise
+ */
+export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  // Different lengths cannot be equal
+  // Note: Length comparison itself may leak length info, but this is
+  // acceptable as password hashes should have fixed length
+  if (a.length !== b.length) {
+    return false;
+  }
+  
+  // XOR all bytes together - if any differ, result will be non-zero
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i];
+  }
+  
+  // Only return true if all bytes matched (result is 0)
+  return result === 0;
+}
+
+/**
+ * Compare two base64-encoded strings in constant time
+ * 
+ * SECURITY: Wrapper for constantTimeEqual that works with base64 strings.
+ * 
+ * @param a - First base64 string
+ * @param b - Second base64 string
+ * @returns True if strings represent equal data
+ */
+export function constantTimeEqualBase64(a: string, b: string): boolean {
+  try {
+    const aBytes = new Uint8Array(base64ToArrayBuffer(a));
+    const bBytes = new Uint8Array(base64ToArrayBuffer(b));
+    return constantTimeEqual(aBytes, bBytes);
+  } catch {
+    // If decoding fails, they're not equal
+    return false;
+  }
 }
 
 // ============================================

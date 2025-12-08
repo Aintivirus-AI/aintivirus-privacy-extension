@@ -70,10 +70,32 @@ export function parseFilterRule(rule: string): ParsedFilterRule | null {
     return null;
   }
   
+  // Skip cosmetic/element hiding rules - these are handled separately
+  if (trimmed.includes('##') || trimmed.includes('#@#') ||
+      trimmed.includes('#$#') || trimmed.includes('#@$#') ||
+      trimmed.includes('##+js') || trimmed.includes('#@#+js')) {
+    return null;
+  }
+  
   // Determine if it's an allowlist rule
   const isAllow = trimmed.startsWith('@@');
   if (isAllow) {
     trimmed = trimmed.slice(2);
+  }
+  
+  // Handle wildcard URL patterns (e.g., */ads/*, *banner.gif)
+  // These are simpler patterns that work on any domain
+  if (trimmed.startsWith('*') && !trimmed.startsWith('||')) {
+    // This is a wildcard pattern, convert to DNR urlFilter format
+    return {
+      raw: rule,
+      type: isAllow ? 'allow' : 'block',
+      pattern: trimmed, // Keep the pattern with wildcards
+      isDomainAnchored: false,
+      resourceTypes: ALL_RESOURCE_TYPES as ResourceType[],
+      domains: undefined,
+      excludedDomains: undefined,
+    };
   }
   
   // Split rule and modifiers
@@ -192,6 +214,13 @@ export function convertToDNRRule(
     if (parsed.isDomainAnchored) {
       urlFilter = '||' + urlFilter;
     }
+    
+    // For wildcard patterns, Chrome DNR expects * as the wildcard
+    // Our patterns already use *, so they should work directly
+    // But we need to handle some edge cases
+    
+    // If pattern starts with *, it matches any URL containing the rest
+    // Chrome DNR supports * as a wildcard that matches any string
     
     // Ensure pattern ends with proper separator if it ends with ^
     // The ^ in ABP means "separator character" (/, :, ?, etc.)
@@ -371,4 +400,3 @@ export function getRuleStats(rules: PrivacyDNRRule[]): {
   
   return stats;
 }
-

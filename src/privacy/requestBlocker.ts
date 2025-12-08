@@ -3,16 +3,19 @@
  * 
  * Manages Chrome's Declarative Net Request (DNR) API for blocking tracker requests.
  * 
- * MV3 Design Notes:
- * - Uses dynamic rules (updateDynamicRules) for runtime updates
- * - Static rules would require manifest changes and extension reload
- * - Dynamic rules limit is 5000, we reserve some for site exceptions
- * - Rules are persisted across browser restarts by Chrome
+ * MV3 Architecture (uBOL-style):
+ * - Static rulesets: Pre-compiled rules loaded from manifest.json (up to 330,000 rules)
+ * - Dynamic rules: Runtime rules for site exceptions and user customizations (5000 limit)
  * 
  * Priority system:
- * - 1: Standard block rules from filter lists
+ * - 1: Standard block rules from filter lists (static rulesets)
  * - 2: Allow rules from filter lists (@@)
+ * - 10: Site-specific redirect rules (noop stubs)
  * - 100: Site exception rules (user allowlisted domains)
+ * 
+ * Static rulesets (loaded from manifest):
+ * - ruleset_custom: Bootstrap tracker domains
+ * - ruleset_fixes: Site-specific fixes (Sentry/Bugsnag redirects, etc.)
  */
 
 import { PrivacyDNRRule, MAX_DYNAMIC_RULES } from './types';
@@ -23,7 +26,8 @@ import {
   getRuleStats,
 } from './ruleConverter';
 import { fetchAllFilterLists } from './filterListManager';
-import { logBlockedRequest } from './metrics';
+import { logBlockedRequest, updateActiveRuleCount } from './metrics';
+import { initializeRulesetManager, getRulesetStats, disableAllStaticRulesets, enableAllStaticRulesets } from './rulesetManager';
 
 /** Rule ID ranges for organization */
 const RULE_ID_RANGES = {
@@ -46,30 +50,66 @@ let nextSiteExceptionId = RULE_ID_RANGES.SITE_EXCEPTIONS_START;
 
 /**
  * Initialize the request blocker
- * Loads filter lists and applies DNR rules
+ * 
+ * New architecture (uBOL-style):
+ * 1. Initialize static rulesets (loaded from manifest.json)
+ * 2. Optionally load additional dynamic rules from filter lists
+ * 
+ * Static rulesets provide base protection and are always active.
+ * Dynamic rules supplement with additional blocking from filter lists.
  */
 export async function initializeBlocker(): Promise<void> {
   console.log('[Privacy] Initializing request blocker...');
   
   try {
-    // Clear any existing dynamic rules first
+    // Initialize static ruleset manager first
+    await initializeRulesetManager();
+    
+    // Clear any existing dynamic rules
     await clearAllDynamicRules();
     
-    // Fetch and convert filter lists
-    const filterRules = await fetchAllFilterLists();
-    const dnrRules = convertFilterRulesToDNR(
-      filterRules, 
-      RULE_ID_RANGES.FILTER_RULES_START
-    );
+    // Log static ruleset status
+    const rulesetStats = await getRulesetStats();
+    console.log('[Privacy] Static rulesets:', rulesetStats.staticRulesets);
     
-    // Validate and apply rules
-    const validRules = filterValidRules(dnrRules);
-    await applyDynamicRules(validRules);
+    // Fetch and convert filter lists to dynamic rules
+    // These supplement the static rulesets
+    let filterRules: string[] = [];
+    try {
+      filterRules = await fetchAllFilterLists();
+    } catch (fetchError) {
+      // If filter list fetch fails, continue with just static rulesets
+      console.warn('[Privacy] Filter list fetch failed, using static rulesets only:', fetchError);
+    }
     
-    activeRuleCount = validRules.length;
+    if (filterRules.length > 0) {
+      const dnrRules = convertFilterRulesToDNR(
+        filterRules, 
+        RULE_ID_RANGES.FILTER_RULES_START
+      );
+      
+      // Validate and apply rules
+      const validRules = filterValidRules(dnrRules);
+      
+      try {
+        await applyDynamicRules(validRules);
+        activeRuleCount = validRules.length;
+        const stats = getRuleStats(validRules);
+        console.log('[Privacy] Dynamic rules applied:', stats);
+      } catch (applyError) {
+        console.warn('[Privacy] Failed to apply dynamic rules:', applyError);
+        activeRuleCount = 0;
+      }
+    }
     
-    const stats = getRuleStats(validRules);
-    console.log('[Privacy] Request blocker initialized:', stats);
+    console.log('[Privacy] Request blocker initialized:');
+    console.log('  Static rulesets:', rulesetStats.staticRulesets.filter(r => r.enabled).map(r => r.id).join(', '));
+    console.log('  Dynamic rule count:', activeRuleCount);
+    
+    // Update metrics with total rule count (including static rulesets)
+    const totalCount = await getTotalActiveRuleCount();
+    updateActiveRuleCount(totalCount);
+    console.log('  Total active rules:', totalCount);
     
     // Set up rule match listener for metrics
     setupRuleMatchListener();
@@ -284,46 +324,82 @@ function setupRuleMatchListener(): void {
 
 /**
  * Get current blocker status
+ * Includes both static rulesets and dynamic rules
  */
 export async function getBlockerStatus(): Promise<{
   isActive: boolean;
   activeRuleCount: number;
   siteExceptionCount: number;
   maxRules: number;
+  staticRulesets: {
+    id: string;
+    enabled: boolean;
+    ruleCount: number;
+  }[];
 }> {
   const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+  const rulesetStats = await getRulesetStats();
+  
+  // Count total active rules (static + dynamic)
+  const staticRuleCount = rulesetStats.staticRulesets
+    .filter(r => r.enabled)
+    .reduce((sum, r) => sum + r.ruleCount, 0);
   
   return {
-    isActive: existingRules.length > 0,
-    activeRuleCount: existingRules.length,
+    isActive: existingRules.length > 0 || staticRuleCount > 0,
+    activeRuleCount: existingRules.length + staticRuleCount,
     siteExceptionCount: activeSiteExceptions.size,
     maxRules: MAX_DYNAMIC_RULES,
+    staticRulesets: rulesetStats.staticRulesets,
   };
 }
 
 /**
- * Disable the blocker (remove all rules)
+ * Disable the blocker (remove all rules including static rulesets)
  */
 export async function disableBlocker(): Promise<void> {
   console.log('[Privacy] Disabling request blocker...');
+  
+  // Clear dynamic rules
   await clearAllDynamicRules();
-  console.log('[Privacy] Request blocker disabled');
+  
+  // Disable static rulesets - THIS IS CRITICAL for the toggle to work!
+  await disableAllStaticRulesets();
+  
+  // Update metrics to show 0 rules
+  updateActiveRuleCount(0);
+  
+  console.log('[Privacy] Request blocker disabled (including static rulesets)');
 }
 
 /**
- * Re-enable the blocker (reload rules)
+ * Re-enable the blocker (reload rules and enable static rulesets)
  */
 export async function enableBlocker(): Promise<void> {
   console.log('[Privacy] Enabling request blocker...');
+  
+  // Enable static rulesets first
+  await enableAllStaticRulesets();
+  
+  // Then initialize dynamic rules (this will also update metrics)
   await initializeBlocker();
-  console.log('[Privacy] Request blocker enabled');
+  
+  console.log('[Privacy] Request blocker enabled (including static rulesets)');
 }
 
 /**
- * Get the active rule count
+ * Get the active rule count (dynamic rules only - for internal use)
  */
 export function getActiveRuleCount(): number {
   return activeRuleCount;
+}
+
+/**
+ * Get total active rule count including static rulesets
+ */
+export async function getTotalActiveRuleCount(): Promise<number> {
+  const status = await getBlockerStatus();
+  return status.activeRuleCount;
 }
 
 

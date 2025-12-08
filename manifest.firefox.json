@@ -29,7 +29,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["fingerprintInjected.js"],
+      "resources": ["fingerprintInjected.js", "securityInjected.js", "dappInpage.js", "popup.html", "icons/binary_john.jpg"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -44,7 +44,6 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/binary_john.jpg",
       "48": "icons/binary_john.jpg",

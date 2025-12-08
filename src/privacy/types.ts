@@ -16,8 +16,10 @@ export type SitePrivacyMode = 'normal' | 'strict' | 'disabled';
  * Global privacy settings
  */
 export interface PrivacySettings {
-  /** Master privacy protection toggle */
+  /** Master privacy protection toggle (controls cookie cleanup, headers, fingerprinting) */
   enabled: boolean;
+  /** Ad blocker toggle (separate from privacy - controls static rulesets) */
+  adBlockerEnabled: boolean;
   /** Block tracking requests */
   blockTrackers: boolean;
   /** Auto-delete cookies on tab close */
@@ -41,6 +43,7 @@ export interface PrivacySettings {
  */
 export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   enabled: true,
+  adBlockerEnabled: true,
   blockTrackers: true,
   cookieCleanup: true,
   defaultCookieMode: 'third-party',
@@ -48,16 +51,17 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   stripTrackingParams: true,
   sendGPC: true,
   filterListUrls: [
-    // EasyList - primary ad-blocking filter list
+    // EasyList - primary ad-blocking filter list (most widely used)
     'https://easylist.to/easylist/easylist.txt',
     // EasyPrivacy - primary privacy/tracker filter list
     'https://easylist.to/easylist/easyprivacy.txt',
-    // uBlock Origin filters - ads
+    // uBlock Origin filters - ads (curated, high quality)
     'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt',
-    // uBlock Privacy filters
-    'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/privacy.txt',
-    // Peter Lowe's ad/tracking server list
-    'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=1&mimetype=plaintext',
+    // NOTE: Additional lists can be added by users in settings
+    // Removed redundant lists to reduce storage usage and improve performance:
+    // - AdGuard Base (overlaps heavily with EasyList)
+    // - AdGuard Tracking (overlaps with EasyPrivacy)
+    // - Multiple uBlock lists (filters.txt covers the essentials)
   ],
   lastFilterUpdate: null,
 };
@@ -213,6 +217,40 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'firstpartysimulator.org',
   'firstpartysimulator.net',
   
+  // Ad-blocker test domains
+  'adblock-tester.com',
+  'd3pkae9owd2lcf.cloudfront.net', // Common ad test CDN
+  
+  // Error monitoring / Analytics services (often used for tracking)
+  'sentry.io',
+  'browser.sentry-cdn.com',
+  'sentry-cdn.com',
+  'ingest.sentry.io',
+  'o0.ingest.sentry.io',
+  'bugsnag.com',
+  'd2wy8f7a9ursnm.cloudfront.net', // Bugsnag CDN
+  'sessions.bugsnag.com',
+  'notify.bugsnag.com',
+  'app.bugsnag.com',
+  'api.bugsnag.com',
+  'rollbar.com',
+  'raygun.com',
+  'trackjs.com',
+  'logrocket.com',
+  'logrocket.io',
+  'lr-ingest.io',
+  'lr-in.com',
+  
+  // Yandex tracking/analytics
+  'mc.yandex.ru',
+  'mc.yandex.com',
+  'yandex.ru/metrika',
+  'metrika.yandex.ru',
+  'metrica.yandex.com',
+  'watch.yandex.ru',
+  'informer.yandex.ru',
+  'webvisor.com',
+  
   // Google Analytics & Ads
   'google-analytics.com',
   'googleadservices.com',
@@ -223,6 +261,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'pagead2.googlesyndication.com',
   'adservice.google.com',
   'tpc.googlesyndication.com',
+  'imasdk.googleapis.com', // Google IMA SDK (video ads)
   // Facebook
   'facebook.net',
   'facebook.com/tr',
@@ -300,6 +339,12 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'liveramp.com',
   'adsymptotic.com',
   'adgrx.com',
+  // Common ad/banner file patterns (served from various CDNs)
+  'serving-sys.com',
+  'adserver.com',
+  'adtechus.com',
+  'atwola.com',
+  'atdmt.com',
 ];
 
 /**
@@ -354,19 +399,112 @@ export const TRACKING_PARAMS: string[] = [
 export const FILTER_LIST_TTL = 24 * 60 * 60 * 1000;
 
 /**
+ * Bootstrap URL patterns to block (works on first-party and third-party)
+ * These catch ad resources that are served from the same domain
+ */
+export const BOOTSTRAP_URL_PATTERNS: string[] = [
+  // Ad paths
+  '*/ads/*',
+  '*/adv/*',
+  '*/advert/*',
+  '*/advertisement/*',
+  '*/banner/*',
+  '*/banners/*',
+  '*/sponsor/*',
+  '*/sponsored/*',
+  
+  // Ad file patterns (various extensions)
+  '*ad.gif',
+  '*ad.jpg',
+  '*ad.png',
+  '*ad.webp',
+  '*ads.gif',
+  '*ads.jpg', 
+  '*ads.png',
+  '*banner.gif',
+  '*banner.jpg',
+  '*banner.png',
+  '*_ad_*',
+  '*-ad-*',
+  '*/ad_*',
+  '*/ad-*',
+  '*_ads_*',
+  '*-ads-*',
+  '*_ad.*',
+  '*-ad.*',
+  
+  // Flash/SWF/media ads
+  '*.swf',
+  '*flash*.swf',
+  '*flash*.gif',
+  '*flash*banner*',
+  '*banner*.swf',
+  
+  // Common ad server paths
+  '*/adserver/*',
+  '*/adserve/*',
+  '*/ad-server/*',
+  '*/doubleclick/*',
+  '*/pagead/*',
+  '*/googleads/*',
+  
+  // Tracking pixels
+  '*/pixel/*',
+  '*/tracking/*',
+  '*/tracker/*',
+  '*/beacon/*',
+  '*pixel.gif',
+  '*pixel.png',
+  '*spacer.gif',
+  '*1x1.gif',
+  '*clear.gif',
+  
+  // Analytics and tracking scripts
+  '*/analytics.js',
+  '*/ga.js',
+  '*/gtag/*',
+  '*/gtm.js',
+  '*/ads.js',
+  '*/tag.js',
+  '*noop-sentry*',
+  '*noop-bugsnag*',
+  '*noop*.js',
+  
+  // Yandex Metrica specific
+  '*/metrika/*',
+  '*/watch/*',
+  '*mc.yandex*',
+  '*metrica*',
+  '*metrika*',
+  '*tag.js*yandex*',
+  
+  // Ad-blocker test site patterns
+  '*/test/ad*',
+  '*/test/banner*',
+  '*/test/flash*',
+  '*/test/gif*',
+  '*/test/static*',
+  '*/test/image*',
+  '*adblock*test*ad*',
+  '*tester*ad*',
+  '*tester*banner*',
+];
+
+/**
  * Maximum number of dynamic DNR rules (Chrome limit is 5000)
  */
 export const MAX_DYNAMIC_RULES = 4500; // Leave some headroom
 
 /**
  * Maximum recent blocked requests to keep in memory
+ * Reduced to prevent storage quota issues
  */
-export const MAX_RECENT_BLOCKED = 100;
+export const MAX_RECENT_BLOCKED = 50;
 
 /**
  * Maximum recent cookie cleanups to keep in memory
  */
-export const MAX_RECENT_CLEANUPS = 50;
+export const MAX_RECENT_CLEANUPS = 20;
 
 /**
  * Cosmetic filter rule types
@@ -516,44 +654,94 @@ export const MAX_UNSUPPORTED_PATTERNS = 50;
 
 /**
  * Bootstrap cosmetic selectors - common ad containers blocked before filter lists load
+ * 
+ * IMPORTANT: These selectors are carefully chosen to avoid false positives.
+ * Overly broad selectors like [class*="ad-container"] were removed because they
+ * can match legitimate UI elements (e.g., Twitter's "add" buttons, "upload" containers).
+ * 
+ * For sites with known issues (Twitter, YouTube, etc.), generic cosmetic filters
+ * are disabled entirely - see PROTECTED_SITES in adguardEngine.ts
  */
 export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
-  // Google Ads
+  // Google Ads - very specific, low false positive rate
   '.adsbygoogle',
   'ins.adsbygoogle',
-  '[id^="google_ads_"]',
+  '[id^="google_ads_iframe"]',
   '[id^="div-gpt-ad"]',
   '[data-ad-slot]',
   '[data-ad-client]',
-  // Generic ad containers
-  '[class*="ad-container"]',
-  '[class*="ad-wrapper"]',
-  '[class*="ad-banner"]',
-  '[class*="ad-slot"]',
-  '[class*="advertisement"]',
-  '[class*="sponsored-"]',
-  '[id*="ad-container"]',
-  '[id*="ad-wrapper"]',
-  '[id*="ad-banner"]',
-  '[id*="advertisement"]',
-  // Common ad placeholders
-  '[aria-label="Advertisement"]',
-  '[aria-label="Ads"]',
-  '[data-ad]',
-  '[data-ads]',
-  '[data-advertisement]',
-  // Taboola/Outbrain widgets
+  '[data-google-query-id]',
+  
+  // Major ad networks - specific class names
   '.taboola-widget',
   '[id^="taboola-"]',
   '.OUTBRAIN',
-  '[data-widget-id*="outbrain"]',
-  // Other common ad networks
+  '[data-widget-id^="outbrain"]',
   '.adthrive-ad',
-  '.adngin-ad',
-  '[class*="mediavine"]',
-  '[id*="ezoic"]',
-  // Empty ad containers
-  'div[style*="min-height"][class*="ad"]',
-  'aside[class*="ad"]',
+  '[id^="adthrive-"]',
+  
+  // Common ad iframes
+  'iframe[src*="googlesyndication.com"]',
+  'iframe[src*="doubleclick.net"]',
+  'iframe[id^="google_ads_"]',
+  
+  // Specific ad placeholder attributes (not wildcards)
+  '[aria-label="Advertisement"]',
+  '[data-testid="ad"]',
+  '[data-ad-unit]',
+  
+  // Ad images and banners (specific patterns)
+  'img[src*="/ads/"]',
+  'img[src*="/adv/"]',
+  'img[src*="/banner"]',
+  'img[src*="banner."]',
+  'img[src*="/adserver"]',
+  'a[href*="doubleclick.net"] img',
+  'a[href*="googleadservices.com"] img',
+  
+  // Flash/object ads (legacy)
+  'object[data*="ads"]',
+  'embed[src*="ads"]',
+  
+  // Common ad test site elements
+  '.ad-img',
+  '.ad-banner',
+  '.banner-ad',
+  '.ad-image',
+  '#ad-image',
+  '#ad-banner',
+  '.advertisement-image',
+  '.sponsored-banner',
+  
+  // Error monitoring widgets (often tracking)
+  '#sentry-feedback',
+  '.sentry-error-embed',
+];
+
+/**
+ * Protected sites where generic cosmetic filters are disabled
+ * These sites have UI elements that can be incorrectly hidden by broad selectors
+ */
+export const PROTECTED_SITES: string[] = [
+  'twitter.com',
+  'x.com',
+  'youtube.com',
+  'github.com',
+  'google.com',
+  'mail.google.com',
+  'drive.google.com',
+  'docs.google.com',
+  'linkedin.com',
+  'facebook.com',
+  'instagram.com',
+  'reddit.com',
+  'amazon.com',
+  'ebay.com',
+  'netflix.com',
+  'twitch.tv',
+  'discord.com',
+  'slack.com',
+  'notion.so',
+  'figma.com',
 ];
 

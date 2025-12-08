@@ -37,6 +37,20 @@ const ERROR_MESSAGES: Record<WalletErrorCode, string> = {
   [WalletErrorCode.SIMULATION_FAILED]: 'Transaction simulation failed. The transaction may fail.',
   [WalletErrorCode.INVALID_AMOUNT]: 'Invalid amount. Please enter a valid number.',
   [WalletErrorCode.TOKEN_NOT_FOUND]: 'Token not found. Please check the mint address.',
+  // Multi-wallet error messages
+  [WalletErrorCode.MAX_WALLETS_REACHED]: 'Maximum number of wallets reached (100). Please delete a wallet first.',
+  [WalletErrorCode.WALLET_NOT_FOUND]: 'Wallet not found. It may have been deleted.',
+  [WalletErrorCode.INVALID_WALLET_LABEL]: 'Invalid wallet label. Please enter a valid name.',
+  [WalletErrorCode.CANNOT_DELETE_LAST_WALLET]: 'Cannot delete the last wallet. Use "Delete All" instead.',
+  [WalletErrorCode.MIGRATION_FAILED]: 'Failed to migrate wallet data. Please try again.',
+  [WalletErrorCode.STORAGE_ERROR]: 'Failed to save wallet data. Please try again.',
+  // HD wallet / account error messages
+  [WalletErrorCode.ACCOUNT_NOT_FOUND]: 'Account not found. It may have been deleted.',
+  [WalletErrorCode.INVALID_ADDRESS]: 'Invalid address format. Please check and try again.',
+  [WalletErrorCode.ADDRESS_ALREADY_EXISTS]: 'This address already exists in your wallet.',
+  [WalletErrorCode.CANNOT_DELETE_LAST_ACCOUNT]: 'Cannot delete the last account. Delete the wallet instead.',
+  [WalletErrorCode.MAX_ACCOUNTS_REACHED]: 'Maximum number of accounts reached for this wallet.',
+  [WalletErrorCode.INVALID_ACCOUNT_NAME]: 'Invalid account name. Please enter a valid name.',
 };
 
 /**
@@ -103,6 +117,11 @@ export function getErrorCategory(error: unknown): ErrorCategory {
       case WalletErrorCode.WALLET_NOT_INITIALIZED:
       case WalletErrorCode.WALLET_ALREADY_EXISTS:
       case WalletErrorCode.WALLET_LOCKED:
+      case WalletErrorCode.WALLET_NOT_FOUND:
+      case WalletErrorCode.MAX_WALLETS_REACHED:
+      case WalletErrorCode.CANNOT_DELETE_LAST_WALLET:
+      case WalletErrorCode.MIGRATION_FAILED:
+      case WalletErrorCode.STORAGE_ERROR:
         return 'wallet';
         
       case WalletErrorCode.INVALID_PASSWORD:
@@ -125,7 +144,14 @@ export function getErrorCategory(error: unknown): ErrorCategory {
       case WalletErrorCode.INVALID_AMOUNT:
       case WalletErrorCode.INSUFFICIENT_FUNDS:
       case WalletErrorCode.TOKEN_NOT_FOUND:
+      case WalletErrorCode.INVALID_WALLET_LABEL:
+      case WalletErrorCode.INVALID_ADDRESS:
+      case WalletErrorCode.ADDRESS_ALREADY_EXISTS:
         return 'validation';
+        
+      case WalletErrorCode.ACCOUNT_NOT_FOUND:
+      case WalletErrorCode.CANNOT_DELETE_LAST_ACCOUNT:
+        return 'wallet';
         
       default:
         return 'unknown';

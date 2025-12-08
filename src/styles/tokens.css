@@ -1,0 +1,335 @@
+/**
+ * AINTIVIRUS - Design Tokens
+ * Premium UI/UX Polish System
+ * 
+ * This file defines the complete design token system for consistent,
+ * premium-feeling UI across all components.
+ */
+
+:root {
+  /* =============================================
+     SPACING - 8px Grid System
+     ============================================= */
+  --space-0: 0px;
+  --space-1: 4px;   /* 0.5 unit */
+  --space-2: 8px;   /* 1 unit - base */
+  --space-3: 12px;  /* 1.5 units */
+  --space-4: 16px;  /* 2 units */
+  --space-5: 20px;  /* 2.5 units */
+  --space-6: 24px;  /* 3 units */
+  --space-8: 32px;  /* 4 units */
+  --space-10: 40px; /* 5 units */
+  --space-12: 48px; /* 6 units */
+  --space-16: 64px; /* 8 units */
+
+  /* =============================================
+     BORDER RADIUS - Consistent Corners
+     ============================================= */
+  --radius-none: 0px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  
+  /* Semantic radius */
+  --radius-button: var(--radius-md);
+  --radius-card: var(--radius-lg);
+  --radius-chip: var(--radius-full);
+  --radius-modal: var(--radius-xl);
+  --radius-input: var(--radius-md);
+
+  /* =============================================
+     SHADOWS - Layered Elevation
+     ============================================= */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.5);
+  
+  /* Semantic shadows */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-glow-accent: 0 0 20px rgba(91, 95, 199, 0.3);
+  --shadow-glow-success: 0 0 20px rgba(61, 153, 112, 0.3);
+  --shadow-glow-error: 0 0 20px rgba(196, 76, 76, 0.3);
+
+  /* =============================================
+     TYPOGRAPHY - Premium Type Scale
+     ============================================= */
+  
+  /* Font families - Modern Crypto Wallet Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+  
+  /* Font sizes - Major Third scale (1.25) */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 34px;
+  
+  /* Semantic typography */
+  --text-balance-large: 34px;  /* Big balance display */
+  --text-balance-small: 16px;  /* Secondary fiat value */
+  --text-label: 11px;          /* Small labels */
+  --text-body: 14px;           /* Default body text */
+  
+  /* Font weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  
+  /* Line heights */
+  --leading-none: 1;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  
+  /* Letter spacing */
+  --tracking-tighter: -0.03em;
+  --tracking-tight: -0.015em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-widest: 0.1em;
+  
+  /* Font feature settings for Inter */
+  --font-feature-tabular: 'tnum' on, 'lnum' on;
+  --font-feature-modern: 'cv02', 'cv03', 'cv04', 'cv11'; /* Inter stylistic alternates */
+  --font-feature-currency: 'tnum' on, 'lnum' on, 'cv02', 'cv03';
+
+  /* =============================================
+     MOTION - Reduced Motion Aware
+     ============================================= */
+  --duration-instant: 50ms;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+  
+  /* Easing curves */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* Semantic motion */
+  --transition-fast: var(--duration-fast) var(--ease-out);
+  --transition-normal: var(--duration-normal) var(--ease-out);
+  --transition-slow: var(--duration-slow) var(--ease-out);
+  --transition-bounce: var(--duration-normal) var(--ease-spring);
+  
+  /* Copy feedback duration */
+  --duration-copy-feedback: 800ms;
+
+  /* =============================================
+     ICON SYSTEM - Consistent Sizing
+     ============================================= */
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+  --icon-xl: 24px;
+  --icon-2xl: 32px;
+  
+  /* Icon stroke widths */
+  --icon-stroke: 2px;
+  --icon-stroke-thin: 1.5px;
+
+  /* =============================================
+     Z-INDEX LAYERS
+     ============================================= */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* =============================================
+     CHAIN COLORS - Multi-chain Support
+     ============================================= */
+  --chain-ethereum: #627EEA;
+  --chain-polygon: #8247E5;
+  --chain-arbitrum: #28A0F0;
+  --chain-optimism: #FF0420;
+  --chain-base: #0052FF;
+  --chain-bnb: #F0B90B;
+  --chain-solana: #9945FF;
+  --chain-solana-gradient: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+
+  /* =============================================
+     STATUS COLORS - Semantic States
+     ============================================= */
+  --status-pending-color: #d4a534;
+  --status-pending-bg: rgba(212, 165, 52, 0.12);
+  --status-confirming-color: #5b9fd4;
+  --status-confirming-bg: rgba(91, 159, 212, 0.12);
+  --status-confirmed-color: #3d9970;
+  --status-confirmed-bg: rgba(61, 153, 112, 0.12);
+  --status-failed-color: #c44c4c;
+  --status-failed-bg: rgba(196, 76, 76, 0.12);
+  --status-unknown-color: #9898a8;
+  --status-unknown-bg: rgba(152, 152, 168, 0.12);
+
+  /* =============================================
+     COMPONENT-SPECIFIC TOKENS
+     ============================================= */
+  
+  /* AddressChip */
+  --chip-height: 32px;
+  --chip-padding: var(--space-2) var(--space-3);
+  --chip-gap: var(--space-2);
+  --chip-identicon-size: 20px;
+  
+  /* Balance card */
+  --balance-padding: var(--space-6);
+  
+  /* Sticky footer */
+  --sticky-footer-height: 72px;
+  --sticky-footer-padding: var(--space-4);
+  
+  /* Activity row */
+  --activity-row-height: 64px;
+  --activity-icon-size: 36px;
+}
+
+/* =============================================
+   REDUCED MOTION PREFERENCES
+   ============================================= */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}
+
+/* =============================================
+   UTILITY CLASSES
+   ============================================= */
+
+/* Tabular numerals for amounts - prevents layout shift */
+.tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: var(--font-feature-tabular);
+}
+
+/* Monospace for addresses/hashes */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Text truncation */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Focus ring for accessibility */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Smooth transition for all interactive elements */
+.interactive {
+  transition: 
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+/* Clickable surface hover effect */
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  background-color: var(--bg-hover);
+}
+
+.clickable:active {
+  transform: scale(0.98);
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Pulse animation for pending states */
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Spin animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Slide up animation */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scale in animation */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

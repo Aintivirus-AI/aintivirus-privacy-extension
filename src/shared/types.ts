@@ -10,6 +10,8 @@ import type {
   LastKnownGoodStorage,
 } from '../privacy/types';
 
+import type { RulesetState, StaticRulesetId } from '../privacy/rulesetManager';
+
 import type { CachedThreatIntel } from '../threatIntel/types';
 import type { RpcEndpointHealth } from '../wallet/types';
 import type { CachedProgramRegistry } from '../security/programRegistryRemote';
@@ -25,7 +27,36 @@ import type {
   WalletSettings,
   SignedTransaction,
   SolanaNetwork,
+  // Multi-chain types
+  ChainType,
+  EVMChainId,
+  NetworkEnvironment,
+  EVMBalance,
+  EVMTokenBalance,
+  EVMFeeEstimate,
+  EVMTransactionResult,
+  EVMSendParams,
+  EVMTokenSendParams,
+  ChainDisplayInfo,
 } from '../wallet/types';
+
+// Import value (not type) for SUPPORTED_CHAINS
+import { SUPPORTED_CHAINS } from '../wallet/types';
+
+// Re-export multi-chain types for popup
+export type {
+  ChainType,
+  EVMChainId,
+  NetworkEnvironment,
+  EVMBalance,
+  EVMTokenBalance,
+  EVMFeeEstimate,
+  EVMTransactionResult,
+  EVMSendParams,
+  EVMTokenSendParams,
+  ChainDisplayInfo,
+};
+export { SUPPORTED_CHAINS };
 
 import type {
   SecurityMessageType,
@@ -72,6 +103,8 @@ export interface StorageSchema {
   programRegistryCache: CachedProgramRegistry;
   // Anchor IDL Cache (Phase: Hardening)
   anchorIdlCache: Record<string, CachedIdl>;
+  // Static Ruleset Management
+  rulesetState: RulesetState;
 }
 
 export type MessageType =
@@ -81,9 +114,12 @@ export type MessageType =
   | 'SET_STORAGE'
   | 'CONTENT_SCRIPT_READY'
   | 'PING'
+  | 'OPEN_SETTINGS'
   // Privacy
   | 'GET_PRIVACY_SETTINGS'
   | 'SET_PRIVACY_SETTINGS'
+  | 'GET_AD_BLOCKER_STATUS'
+  | 'SET_AD_BLOCKER_STATUS'
   | 'GET_SITE_PRIVACY_MODE'
   | 'SET_SITE_PRIVACY_MODE'
   | 'GET_ALL_SITE_SETTINGS'
@@ -98,6 +134,11 @@ export type MessageType =
   // Filter List Health
   | 'GET_FILTER_LIST_HEALTH'
   | 'RESET_FILTER_LIST'
+  // Ruleset Management
+  | 'GET_RULESET_STATS'
+  | 'ENABLE_RULESET'
+  | 'DISABLE_RULESET'
+  | 'TOGGLE_RULESET'
   // Threat Intelligence
   | 'GET_THREAT_INTEL_HEALTH'
   | 'REFRESH_THREAT_INTEL'
@@ -111,8 +152,24 @@ export type MessageType =
   | 'GET_FINGERPRINT_STATUS'
   // Wallet
   | WalletMessageType
+  // Price
+  | 'GET_SOL_PRICE'
+  | 'GET_ETH_PRICE'
+  | 'GET_TOKEN_PRICES'
   // Security
-  | SecurityMessageType;
+  | SecurityMessageType
+  // dApp Connectivity
+  | 'DAPP_REQUEST'
+  | 'DAPP_APPROVE'
+  | 'DAPP_REJECT'
+  | 'DAPP_GET_PERMISSIONS'
+  | 'DAPP_REVOKE_PERMISSION'
+  | 'DAPP_REVOKE_ALL_PERMISSIONS'
+  | 'DAPP_GET_PENDING_REQUESTS'
+  | 'DAPP_CANCEL_REQUEST'
+  | 'DAPP_GET_PROVIDER_STATE'
+  | 'DAPP_PAGE_UNLOAD'
+  | 'GET_TAB_ID';
 
 export interface BaseMessage<T extends MessageType, P = undefined> {
   type: T;
@@ -123,9 +180,12 @@ export type GetFeatureFlagsMessage = BaseMessage<'GET_FEATURE_FLAGS'>;
 export type SetFeatureFlagMessage = BaseMessage<'SET_FEATURE_FLAG', { id: FeatureFlagId; enabled: boolean }>;
 export type ContentScriptReadyMessage = BaseMessage<'CONTENT_SCRIPT_READY', { url: string }>;
 export type PingMessage = BaseMessage<'PING'>;
+export type OpenSettingsMessage = BaseMessage<'OPEN_SETTINGS'>;
 
 export type GetPrivacySettingsMessage = BaseMessage<'GET_PRIVACY_SETTINGS'>;
 export type SetPrivacySettingsMessage = BaseMessage<'SET_PRIVACY_SETTINGS', Partial<PrivacySettings>>;
+export type GetAdBlockerStatusMessage = BaseMessage<'GET_AD_BLOCKER_STATUS'>;
+export type SetAdBlockerStatusMessage = BaseMessage<'SET_AD_BLOCKER_STATUS', { enabled: boolean }>;
 export type GetSitePrivacyModeMessage = BaseMessage<'GET_SITE_PRIVACY_MODE', { domain: string }>;
 export type SetSitePrivacyModeMessage = BaseMessage<'SET_SITE_PRIVACY_MODE', { domain: string; mode: SitePrivacyMode }>;
 export type GetAllSiteSettingsMessage = BaseMessage<'GET_ALL_SITE_SETTINGS'>;
@@ -141,6 +201,12 @@ export type GetCosmeticRulesMessage = BaseMessage<'GET_COSMETIC_RULES', { domain
 // Filter List Health messages
 export type GetFilterListHealthMessage = BaseMessage<'GET_FILTER_LIST_HEALTH'>;
 export type ResetFilterListMessage = BaseMessage<'RESET_FILTER_LIST', { url: string }>;
+
+// Ruleset Management messages
+export type GetRulesetStatsMessage = BaseMessage<'GET_RULESET_STATS'>;
+export type EnableRulesetMessage = BaseMessage<'ENABLE_RULESET', { rulesetId: StaticRulesetId }>;
+export type DisableRulesetMessage = BaseMessage<'DISABLE_RULESET', { rulesetId: StaticRulesetId }>;
+export type ToggleRulesetMessage = BaseMessage<'TOGGLE_RULESET', { rulesetId: StaticRulesetId }>;
 
 // Threat Intelligence messages
 export type GetThreatIntelHealthMessage = BaseMessage<'GET_THREAT_INTEL_HEALTH'>;
@@ -182,15 +248,50 @@ export type WalletSignMessageMessage = BaseMessage<'WALLET_SIGN_MESSAGE', Wallet
 export type WalletGetSettingsMessage = BaseMessage<'WALLET_GET_SETTINGS'>;
 export type WalletSetSettingsMessage = BaseMessage<'WALLET_SET_SETTINGS', WalletMessagePayloads['WALLET_SET_SETTINGS']>;
 export type WalletSendSolMessage = BaseMessage<'WALLET_SEND_SOL', WalletMessagePayloads['WALLET_SEND_SOL']>;
+export type WalletSendSPLTokenMessage = BaseMessage<'WALLET_SEND_SPL_TOKEN', WalletMessagePayloads['WALLET_SEND_SPL_TOKEN']>;
 export type WalletEstimateFeeMessage = BaseMessage<'WALLET_ESTIMATE_FEE', WalletMessagePayloads['WALLET_ESTIMATE_FEE']>;
 export type WalletGetHistoryMessage = BaseMessage<'WALLET_GET_HISTORY', WalletMessagePayloads['WALLET_GET_HISTORY']>;
 export type WalletGetTokensMessage = BaseMessage<'WALLET_GET_TOKENS'>;
 export type WalletAddTokenMessage = BaseMessage<'WALLET_ADD_TOKEN', WalletMessagePayloads['WALLET_ADD_TOKEN']>;
 export type WalletRemoveTokenMessage = BaseMessage<'WALLET_REMOVE_TOKEN', WalletMessagePayloads['WALLET_REMOVE_TOKEN']>;
+export type WalletGetPopularTokensMessage = BaseMessage<'WALLET_GET_POPULAR_TOKENS', WalletMessagePayloads['WALLET_GET_POPULAR_TOKENS']>;
+export type WalletGetTokenMetadataMessage = BaseMessage<'WALLET_GET_TOKEN_METADATA', WalletMessagePayloads['WALLET_GET_TOKEN_METADATA']>;
 export type WalletGetRpcHealthMessage = BaseMessage<'WALLET_GET_RPC_HEALTH'>;
 export type WalletAddRpcMessage = BaseMessage<'WALLET_ADD_RPC', WalletMessagePayloads['WALLET_ADD_RPC']>;
 export type WalletRemoveRpcMessage = BaseMessage<'WALLET_REMOVE_RPC', WalletMessagePayloads['WALLET_REMOVE_RPC']>;
 export type WalletTestRpcMessage = BaseMessage<'WALLET_TEST_RPC', WalletMessagePayloads['WALLET_TEST_RPC']>;
+// Multi-wallet messages
+export type WalletListMessage = BaseMessage<'WALLET_LIST'>;
+export type WalletAddMessage = BaseMessage<'WALLET_ADD', WalletMessagePayloads['WALLET_ADD']>;
+export type WalletImportAddMessage = BaseMessage<'WALLET_IMPORT_ADD', WalletMessagePayloads['WALLET_IMPORT_ADD']>;
+export type WalletSwitchMessage = BaseMessage<'WALLET_SWITCH', WalletMessagePayloads['WALLET_SWITCH']>;
+export type WalletRenameMessage = BaseMessage<'WALLET_RENAME', WalletMessagePayloads['WALLET_RENAME']>;
+export type WalletDeleteOneMessage = BaseMessage<'WALLET_DELETE_ONE', WalletMessagePayloads['WALLET_DELETE_ONE']>;
+export type WalletExportOneMessage = BaseMessage<'WALLET_EXPORT_ONE', WalletMessagePayloads['WALLET_EXPORT_ONE']>;
+export type WalletImportPrivateKeyMessage = BaseMessage<'WALLET_IMPORT_PRIVATE_KEY', WalletMessagePayloads['WALLET_IMPORT_PRIVATE_KEY']>;
+export type WalletExportPrivateKeyMessage = BaseMessage<'WALLET_EXPORT_PRIVATE_KEY', WalletMessagePayloads['WALLET_EXPORT_PRIVATE_KEY']>;
+export type WalletGetActiveMessage = BaseMessage<'WALLET_GET_ACTIVE'>;
+// Multi-chain EVM messages
+export type WalletSetChainMessage = BaseMessage<'WALLET_SET_CHAIN', WalletMessagePayloads['WALLET_SET_CHAIN']>;
+export type WalletSetEVMChainMessage = BaseMessage<'WALLET_SET_EVM_CHAIN', WalletMessagePayloads['WALLET_SET_EVM_CHAIN']>;
+export type WalletGetEVMBalanceMessage = BaseMessage<'WALLET_GET_EVM_BALANCE', WalletMessagePayloads['WALLET_GET_EVM_BALANCE']>;
+export type WalletSendETHMessage = BaseMessage<'WALLET_SEND_ETH', WalletMessagePayloads['WALLET_SEND_ETH']>;
+export type WalletSendERC20Message = BaseMessage<'WALLET_SEND_ERC20', WalletMessagePayloads['WALLET_SEND_ERC20']>;
+export type WalletGetEVMTokensMessage = BaseMessage<'WALLET_GET_EVM_TOKENS', WalletMessagePayloads['WALLET_GET_EVM_TOKENS']>;
+export type WalletGetEVMHistoryMessage = BaseMessage<'WALLET_GET_EVM_HISTORY', WalletMessagePayloads['WALLET_GET_EVM_HISTORY']>;
+export type WalletEstimateEVMFeeMessage = BaseMessage<'WALLET_ESTIMATE_EVM_FEE', WalletMessagePayloads['WALLET_ESTIMATE_EVM_FEE']>;
+export type WalletGetEVMAddressMessage = BaseMessage<'WALLET_GET_EVM_ADDRESS'>;
+
+// EVM Pending Transaction Controls messages
+export type EVMGetPendingTxsMessage = BaseMessage<'EVM_GET_PENDING_TXS', WalletMessagePayloads['EVM_GET_PENDING_TXS']>;
+export type EVMSpeedUpTxMessage = BaseMessage<'EVM_SPEED_UP_TX', WalletMessagePayloads['EVM_SPEED_UP_TX']>;
+export type EVMCancelTxMessage = BaseMessage<'EVM_CANCEL_TX', WalletMessagePayloads['EVM_CANCEL_TX']>;
+export type EVMGetGasPresetsMessage = BaseMessage<'EVM_GET_GAS_PRESETS', WalletMessagePayloads['EVM_GET_GAS_PRESETS']>;
+export type EVMEstimateReplacementFeeMessage = BaseMessage<'EVM_ESTIMATE_REPLACEMENT_FEE', WalletMessagePayloads['EVM_ESTIMATE_REPLACEMENT_FEE']>;
+// EVM Allowance Management messages
+export type WalletGetAllowancesMessage = BaseMessage<'WALLET_GET_ALLOWANCES', WalletMessagePayloads['WALLET_GET_ALLOWANCES']>;
+export type WalletEstimateRevokeFeeMessage = BaseMessage<'WALLET_ESTIMATE_REVOKE_FEE', WalletMessagePayloads['WALLET_ESTIMATE_REVOKE_FEE']>;
+export type WalletRevokeAllowanceMessage = BaseMessage<'WALLET_REVOKE_ALLOWANCE', WalletMessagePayloads['WALLET_REVOKE_ALLOWANCE']>;
 
 export type SecurityConnectionRequestMessage = BaseMessage<'SECURITY_CONNECTION_REQUEST', SecurityMessagePayloads['SECURITY_CONNECTION_REQUEST']>;
 export type SecurityConnectionApproveMessage = BaseMessage<'SECURITY_CONNECTION_APPROVE', SecurityMessagePayloads['SECURITY_CONNECTION_APPROVE']>;
@@ -211,14 +312,61 @@ export type SecuritySetDomainTrustMessage = BaseMessage<'SECURITY_SET_DOMAIN_TRU
 export type SecurityGetProgramInfoMessage = BaseMessage<'SECURITY_GET_PROGRAM_INFO', SecurityMessagePayloads['SECURITY_GET_PROGRAM_INFO']>;
 export type SecuritySetProgramTrustMessage = BaseMessage<'SECURITY_SET_PROGRAM_TRUST', SecurityMessagePayloads['SECURITY_SET_PROGRAM_TRUST']>;
 
+// Price messages
+export type GetSolPriceMessage = BaseMessage<'GET_SOL_PRICE'>;
+export type GetEthPriceMessage = BaseMessage<'GET_ETH_PRICE'>;
+export type GetTokenPricesMessage = BaseMessage<'GET_TOKEN_PRICES', { mints: string[] }>;
+
+// dApp Connectivity messages
+export type DappRequestMessage = BaseMessage<'DAPP_REQUEST', {
+  chainType: 'evm' | 'solana';
+  method: string;
+  params: unknown;
+  origin: string;
+  tabId: number;
+  favicon?: string;
+  title?: string;
+}>;
+export type DappApproveMessage = BaseMessage<'DAPP_APPROVE', {
+  requestId: string;
+  selectedAccounts?: string[];
+  remember?: boolean;
+}>;
+export type DappRejectMessage = BaseMessage<'DAPP_REJECT', {
+  requestId: string;
+  reason?: string;
+}>;
+export type DappGetPermissionsMessage = BaseMessage<'DAPP_GET_PERMISSIONS'>;
+export type DappRevokePermissionMessage = BaseMessage<'DAPP_REVOKE_PERMISSION', {
+  origin: string;
+  chainType?: 'evm' | 'solana';
+}>;
+export type DappRevokeAllPermissionsMessage = BaseMessage<'DAPP_REVOKE_ALL_PERMISSIONS'>;
+export type DappGetPendingRequestsMessage = BaseMessage<'DAPP_GET_PENDING_REQUESTS'>;
+export type DappCancelRequestMessage = BaseMessage<'DAPP_CANCEL_REQUEST', {
+  requestId: string;
+}>;
+export type DappGetProviderStateMessage = BaseMessage<'DAPP_GET_PROVIDER_STATE', {
+  chainType: 'evm' | 'solana';
+  origin: string;
+}>;
+export type DappPageUnloadMessage = BaseMessage<'DAPP_PAGE_UNLOAD', {
+  tabId: number;
+  origin: string;
+}>;
+export type GetTabIdMessage = BaseMessage<'GET_TAB_ID'>;
+
 export type ExtensionMessage =
   | GetFeatureFlagsMessage
   | SetFeatureFlagMessage
   | ContentScriptReadyMessage
   | PingMessage
+  | OpenSettingsMessage
   // Privacy messages
   | GetPrivacySettingsMessage
   | SetPrivacySettingsMessage
+  | GetAdBlockerStatusMessage
+  | SetAdBlockerStatusMessage
   | GetSitePrivacyModeMessage
   | SetSitePrivacyModeMessage
   | GetAllSiteSettingsMessage
@@ -233,6 +381,11 @@ export type ExtensionMessage =
   // Filter List Health messages
   | GetFilterListHealthMessage
   | ResetFilterListMessage
+  // Ruleset Management messages
+  | GetRulesetStatsMessage
+  | EnableRulesetMessage
+  | DisableRulesetMessage
+  | ToggleRulesetMessage
   // Threat Intelligence messages
   | GetThreatIntelHealthMessage
   | RefreshThreatIntelMessage
@@ -262,16 +415,50 @@ export type ExtensionMessage =
   | WalletGetSettingsMessage
   | WalletSetSettingsMessage
   | WalletSendSolMessage
+  | WalletSendSPLTokenMessage
   | WalletEstimateFeeMessage
   | WalletGetHistoryMessage
   | WalletGetTokensMessage
   | WalletAddTokenMessage
   | WalletRemoveTokenMessage
+  | WalletGetPopularTokensMessage
+  | WalletGetTokenMetadataMessage
   // Wallet RPC health messages
   | WalletGetRpcHealthMessage
   | WalletAddRpcMessage
   | WalletRemoveRpcMessage
   | WalletTestRpcMessage
+  // Multi-wallet messages
+  | WalletListMessage
+  | WalletAddMessage
+  | WalletImportAddMessage
+  | WalletSwitchMessage
+  | WalletRenameMessage
+  | WalletDeleteOneMessage
+  | WalletExportOneMessage
+  | WalletImportPrivateKeyMessage
+  | WalletExportPrivateKeyMessage
+  | WalletGetActiveMessage
+  // Multi-chain EVM messages
+  | WalletSetChainMessage
+  | WalletSetEVMChainMessage
+  | WalletGetEVMBalanceMessage
+  | WalletSendETHMessage
+  | WalletSendERC20Message
+  | WalletGetEVMTokensMessage
+  | WalletGetEVMHistoryMessage
+  | WalletEstimateEVMFeeMessage
+  | WalletGetEVMAddressMessage
+  // EVM Pending Transaction Controls
+  | EVMGetPendingTxsMessage
+  | EVMSpeedUpTxMessage
+  | EVMCancelTxMessage
+  | EVMGetGasPresetsMessage
+  | EVMEstimateReplacementFeeMessage
+  // EVM Allowance Management
+  | WalletGetAllowancesMessage
+  | WalletEstimateRevokeFeeMessage
+  | WalletRevokeAllowanceMessage
   | SecurityConnectionRequestMessage
   | SecurityConnectionApproveMessage
   | SecurityConnectionDenyMessage
@@ -289,7 +476,23 @@ export type ExtensionMessage =
   | SecurityGetDomainSettingsMessage
   | SecuritySetDomainTrustMessage
   | SecurityGetProgramInfoMessage
-  | SecuritySetProgramTrustMessage;
+  | SecuritySetProgramTrustMessage
+  // Price messages
+  | GetSolPriceMessage
+  | GetEthPriceMessage
+  | GetTokenPricesMessage
+  // dApp Connectivity messages
+  | DappRequestMessage
+  | DappApproveMessage
+  | DappRejectMessage
+  | DappGetPermissionsMessage
+  | DappRevokePermissionMessage
+  | DappRevokeAllPermissionsMessage
+  | DappGetPendingRequestsMessage
+  | DappCancelRequestMessage
+  | DappGetProviderStateMessage
+  | DappPageUnloadMessage
+  | GetTabIdMessage;
 
 export interface MessageResponse<T = unknown> {
   success: boolean;
@@ -305,13 +508,15 @@ import {
   DEFAULT_LAST_KNOWN_GOOD,
 } from '../privacy/types';
 
+import { DEFAULT_RULESET_STATE } from '../privacy/rulesetManager';
+
 import { DEFAULT_FINGERPRINT_SETTINGS } from '../fingerprinting/types';
 import { DEFAULT_CACHED_THREAT_INTEL } from '../threatIntel/types';
 import { DEFAULT_RPC_HEALTH } from '../wallet/types';
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  privacy: false,
-  wallet: false,
+  privacy: true,
+  wallet: true,
   notifications: true,
 };
 
@@ -345,6 +550,8 @@ export const DEFAULT_STORAGE: StorageSchema = {
   },
   // Anchor IDL Cache
   anchorIdlCache: {},
+  // Static Ruleset Management
+  rulesetState: DEFAULT_RULESET_STATE,
 };
 
 // Re-exports
@@ -367,6 +574,7 @@ export type {
 } from '../threatIntel/types';
 
 export type { FingerprintSettings } from '../fingerprinting/types';
+export type { RulesetState, StaticRulesetId } from '../privacy/rulesetManager';
 export type {
   WalletMessageType,
   WalletMessagePayloads,
@@ -378,6 +586,10 @@ export type {
   SignedTransaction,
   SolanaNetwork,
   EncryptedVault,
+  // Multi-wallet types
+  WalletEntry,
+  MultiWalletVault,
+  EncryptedWalletData,
   // Phase 6 types
   SendTransactionParams,
   SendTransactionResult,
@@ -392,7 +604,22 @@ export type {
   // RPC Health types
   RpcEndpointHealth,
   RpcHealthSummary,
+  // EVM Pending Transaction types
+  EVMPendingTxStatus,
+  EVMPendingTxInfo,
+  EVMGasPresets,
+  EVMReplacementFeeEstimate,
+  // EVM Allowance types
+  EVMTokenAllowance,
+  EVMAllowanceEntry,
+  EVMAllowanceDiscoveryResult,
+  EVMRevokeFeeEstimate,
+  // Recent recipients types
+  RecentRecipient,
+  RecentRecipientsMap,
+  RecentRecipientChainId,
 } from '../wallet/types';
+export { MAX_RECENT_RECIPIENTS } from '../wallet/types';
 
 export type { 
   CachedProgramRegistry,

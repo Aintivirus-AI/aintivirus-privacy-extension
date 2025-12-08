@@ -1,8 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "Aintivirus Privacy",
+  "name": "Aintivirus Privacy and Wallet",
   "version": "0.1.0",
   "description": "Aintivirus security extension",
+  
+  "__host_permissions_justification__": [
+    "The <all_urls> host permission is REQUIRED for this extension because:",
+    "1. dApp Provider Injection: Content script must inject window.ethereum/window.solana",
+    "   provider on ANY web page that may be a dApp - cannot predict which sites are dApps",
+    "2. Ad/Tracker Blocking: Privacy protection requires monitoring network requests on all sites",
+    "3. Security Scanning: Phishing detection must analyze page content on any site user visits",
+    "",
+    "SECURITY MITIGATIONS in place:",
+    "- Strict CSP prevents remote code execution",
+    "- All message passing validates sender/origin",
+    "- Content script has minimal privileges (only bridge, no wallet access)",
+    "- Sensitive operations (signing, mnemonic) only in background service worker",
+    "- No sensitive data in window.postMessage (only signed results)",
+    "",
+    "Alternative approaches considered but rejected:",
+    "- optional_host_permissions: Would require user to grant per-site, breaking dApp UX",
+    "- Narrower patterns: Cannot enumerate all possible dApp domains",
+    "",
+    "This field is for documentation only and is ignored by Chrome."
+  ],
+  
   "permissions": [
     "storage",
     "activeTab",
@@ -13,17 +35,39 @@
     "tabs",
     "webNavigation",
     "alarms",
-    "notifications"
+    "notifications",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "declarative_net_request": {
-    "rule_resources": []
+    "rule_resources": [
+      {
+        "id": "ruleset_custom",
+        "enabled": true,
+        "path": "rules/static_ruleset_custom.json"
+      },
+      {
+        "id": "ruleset_fixes",
+        "enabled": true,
+        "path": "rules/static_ruleset_fixes.json"
+      }
+    ]
   },
   "web_accessible_resources": [
     {
-      "resources": ["fingerprintInjected.js", "securityInjected.js"],
+      "resources": [
+        "fingerprintInjected.js",
+        "securityInjected.js",
+        "dappInpage.js",
+        "popup.html",
+        "icons/icon48.png",
+        "empty.js",
+        "noop.js",
+        "noop-sentry.js",
+        "noop-bugsnag.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
@@ -39,13 +83,15 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
     "default_title": "Aintivirus Privacy Extension"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "options_page": "settings.html",
   "icons": {

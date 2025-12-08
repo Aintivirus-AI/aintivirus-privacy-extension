@@ -21,6 +21,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
   ComputeBudgetProgram,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import {
   SendTransactionParams,
@@ -37,6 +38,102 @@ import {
 import { getUnlockedKeypair, getPublicAddress } from './storage';
 import { isValidSolanaAddress } from './keychain';
 import bs58 from 'bs58';
+
+// ============================================
+// SPL TOKEN CONSTANTS (avoiding @solana/spl-token dependency)
+// ============================================
+
+/**
+ * SPL Token Program ID
+ */
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+/**
+ * Associated Token Program ID
+ */
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+/**
+ * SPL Token transfer parameters
+ */
+export interface SendSPLTokenParams {
+  /** Recipient address */
+  recipient: string;
+  /** Amount to send (UI amount, will be converted to raw) */
+  amount: number;
+  /** Token mint address */
+  mint: string;
+  /** Token decimals */
+  decimals: number;
+  /** Sender's token account (optional, will be looked up if not provided) */
+  tokenAccount?: string;
+}
+
+// ============================================
+// SPL TOKEN HELPERS
+// ============================================
+
+/**
+ * Derive Associated Token Account address
+ */
+function getAssociatedTokenAddressSync(
+  mint: PublicKey,
+  owner: PublicKey,
+): PublicKey {
+  const [address] = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  return address;
+}
+
+/**
+ * Create instruction to create an Associated Token Account
+ */
+function createAssociatedTokenAccountInstruction(
+  payer: PublicKey,
+  associatedToken: PublicKey,
+  owner: PublicKey,
+  mint: PublicKey,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: associatedToken, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: false, isWritable: false },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+    data: Buffer.alloc(0), // No data needed for create ATA
+  });
+}
+
+/**
+ * Create SPL Token transfer instruction
+ */
+function createTransferInstruction(
+  source: PublicKey,
+  destination: PublicKey,
+  owner: PublicKey,
+  amount: bigint,
+): TransactionInstruction {
+  // Transfer instruction = 3, followed by u64 amount (little-endian)
+  const data = Buffer.alloc(9);
+  data.writeUInt8(3, 0); // Transfer instruction discriminator
+  data.writeBigUInt64LE(amount, 1);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: source, isSigner: false, isWritable: true },
+      { pubkey: destination, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: true, isWritable: false },
+    ],
+    programId: TOKEN_PROGRAM_ID,
+    data,
+  });
+}
 
 // ============================================
 // CONSTANTS
@@ -636,4 +733,190 @@ export function calculateMaxSendable(balance: number, fee: number): number {
   return lamportsToSol(maxLamports);
 }
 
+// ============================================
+// SPL TOKEN TRANSFERS
+// ============================================
+
+/**
+ * Send SPL tokens to a recipient
+ * 
+ * SECURITY: This requires an unlocked wallet.
+ * Creates Associated Token Account for recipient if needed.
+ * 
+ * @param params - SPL token transfer parameters
+ * @returns Transaction result with signature
+ */
+export async function sendSPLToken(
+  params: SendSPLTokenParams
+): Promise<SendTransactionResult> {
+  const { recipient, amount, mint, decimals, tokenAccount: senderTokenAccount } = params;
+
+  // Get keypair (wallet must be unlocked)
+  const keypair = getUnlockedKeypair();
+  if (!keypair) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock to send transactions.'
+    );
+  }
+
+  // Validate recipient
+  if (!validateRecipient(recipient)) {
+    throw new WalletError(
+      WalletErrorCode.INVALID_RECIPIENT,
+      'Invalid recipient address'
+    );
+  }
+
+  // Validate amount
+  if (amount <= 0) {
+    throw new WalletError(
+      WalletErrorCode.INVALID_AMOUNT,
+      'Amount must be greater than 0'
+    );
+  }
+
+  try {
+    const connection = await getCurrentConnection();
+    const mintPubkey = new PublicKey(mint);
+    const recipientPubkey = new PublicKey(recipient);
+
+    // Calculate raw amount from UI amount
+    const rawAmount = BigInt(Math.floor(amount * Math.pow(10, decimals)));
+
+    // Get or derive the sender's token account
+    let senderATA: PublicKey;
+    if (senderTokenAccount) {
+      senderATA = new PublicKey(senderTokenAccount);
+    } else {
+      senderATA = getAssociatedTokenAddressSync(mintPubkey, keypair.publicKey);
+    }
+
+    // Get the recipient's associated token account
+    const recipientATA = getAssociatedTokenAddressSync(mintPubkey, recipientPubkey);
+
+    // Check if recipient's token account exists
+    let recipientAccountExists = false;
+    try {
+      const accountInfo = await connection.getAccountInfo(recipientATA);
+      recipientAccountExists = accountInfo !== null;
+    } catch {
+      // Account doesn't exist, we'll create it
+      recipientAccountExists = false;
+    }
+
+    // Create transaction
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    const transaction = new Transaction();
+
+    // If recipient ATA doesn't exist, add instruction to create it
+    if (!recipientAccountExists) {
+      transaction.add(
+        createAssociatedTokenAccountInstruction(
+          keypair.publicKey, // payer
+          recipientATA, // ata
+          recipientPubkey, // owner
+          mintPubkey // mint
+        )
+      );
+    }
+
+    // Add transfer instruction
+    transaction.add(
+      createTransferInstruction(
+        senderATA, // source
+        recipientATA, // destination
+        keypair.publicKey, // owner
+        rawAmount // amount (raw)
+      )
+    );
+
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = keypair.publicKey;
+    transaction.lastValidBlockHeight = lastValidBlockHeight;
+
+    // Simulate before sending
+    const simulation = await simulateTransaction(transaction);
+    if (!simulation.success) {
+      throw new WalletError(
+        WalletErrorCode.SIMULATION_FAILED,
+        simulation.error || 'Transaction simulation failed'
+      );
+    }
+
+    // Sign transaction
+    transaction.sign(keypair);
+
+    // Send with retry logic
+    let signature: string | null = null;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        signature = await connection.sendRawTransaction(
+          transaction.serialize(),
+          {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+            maxRetries: 3,
+          }
+        );
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        
+        if (error instanceof SendTransactionError) {
+          const logs = error.logs;
+          console.error('[AINTIVIRUS Wallet] Send SPL token error:', logs);
+        }
+        
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+    }
+
+    if (!signature) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        `Failed to send token: ${lastError?.message || 'Unknown error'}`
+      );
+    }
+
+    // Confirm transaction
+    const confirmResult = await confirmTransaction(signature);
+    
+    // Get explorer URL
+    const explorerUrl = await getTransactionExplorerUrl(signature);
+
+    if (!confirmResult.confirmed) {
+      console.warn(`[AINTIVIRUS Wallet] Token transfer confirmation uncertain: ${confirmResult.error}`);
+    } else {
+      console.log(`[AINTIVIRUS Wallet] Token transfer confirmed: ${signature}`);
+    }
+
+    return {
+      signature,
+      explorerUrl,
+    };
+  } catch (error) {
+    if (error instanceof WalletError) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('insufficient funds') || errorMessage.includes('Insufficient')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        'Insufficient token balance or SOL for fees'
+      );
+    }
+
+    throw new WalletError(
+      WalletErrorCode.TRANSACTION_FAILED,
+      `Token transfer failed: ${errorMessage}`
+    );
+  }
+}
 

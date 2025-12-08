@@ -46,6 +46,7 @@ import {
   logScriptIntercepted,
   logRequestModified,
 } from './metrics';
+export { updateActiveRuleCount } from './metrics';
 import { 
   getSiteMode, 
   setSiteMode, 
@@ -62,6 +63,10 @@ import {
   getCosmeticRulesForDomain,
   getCachedCosmeticRules,
 } from './filterListManager';
+import {
+  enableAllStaticRulesets,
+  disableAllStaticRulesets,
+} from './rulesetManager';
 
 /** Privacy engine state */
 let isInitialized = false;
@@ -83,19 +88,32 @@ export async function initializePrivacyEngine(): Promise<void> {
     // Initialize metrics first (for logging other modules)
     await initializeMetrics();
     
-    // Check if privacy is enabled
+    // Get settings
     const settings = await getPrivacySettings();
     isEnabled = settings.enabled;
+    const adBlockerEnabled = settings.adBlockerEnabled ?? true; // Default to enabled
     
+    // Initialize ad blocker based on its own setting (separate from privacy)
+    if (adBlockerEnabled) {
+      console.log('[Privacy] Ad blocker is enabled, initializing...');
+      await enableAllStaticRulesets();
+      await initializeBlocker();
+    } else {
+      console.log('[Privacy] Ad blocker is disabled');
+      await disableAllStaticRulesets();
+      updateActiveRuleCount(0);
+    }
+    
+    // Initialize privacy protection features (cookie cleanup, headers, etc.)
     if (isEnabled) {
-      await enablePrivacyProtection();
+      await enablePrivacyProtectionFeatures();
     }
     
     // Set up storage listener for reactive updates
     setupStorageListener();
     
     isInitialized = true;
-    console.log('[Privacy] Privacy engine initialized (enabled:', isEnabled, ')');
+    console.log('[Privacy] Privacy engine initialized (privacy:', isEnabled, ', adBlocker:', adBlockerEnabled, ')');
     
   } catch (error) {
     console.error('[Privacy] Failed to initialize privacy engine:', error);
@@ -122,37 +140,79 @@ export async function shutdownPrivacyEngine(): Promise<void> {
 }
 
 /**
- * Enable privacy protection
+ * Enable privacy protection features (cookie cleanup, headers, fingerprinting)
+ * Does NOT include ad blocker - that's handled separately
+ */
+async function enablePrivacyProtectionFeatures(): Promise<void> {
+  console.log('[Privacy] Enabling privacy protection features...');
+  
+  // Sync site exceptions
+  try {
+    await syncSiteExceptions();
+  } catch (error) {
+    console.warn('[Privacy] Failed to sync site exceptions:', error);
+  }
+  
+  // Initialize cookie manager (synchronous, shouldn't fail)
+  try {
+    initializeCookieManager();
+  } catch (error) {
+    console.warn('[Privacy] Failed to initialize cookie manager:', error);
+  }
+  
+  // Initialize header rules
+  try {
+    await initializeHeaderRules();
+  } catch (error) {
+    console.warn('[Privacy] Failed to initialize header rules:', error);
+  }
+  
+  // Initialize cosmetic rules (element hiding)
+  try {
+    await initializeCosmeticRules();
+  } catch (error) {
+    console.warn('[Privacy] Failed to initialize cosmetic rules:', error);
+  }
+  
+  console.log('[Privacy] Privacy protection features enabled');
+}
+
+/**
+ * Enable privacy protection (legacy - includes ad blocker)
+ * Uses graceful degradation - if one component fails, others still initialize
  */
 async function enablePrivacyProtection(): Promise<void> {
   console.log('[Privacy] Enabling privacy protection...');
   
+  const errors: Error[] = [];
+  
+  // Initialize request blocker
   try {
-    // Initialize request blocker
     await initializeBlocker();
-    
-    // Sync site exceptions
-    await syncSiteExceptions();
-    
-    // Initialize cookie manager
-    initializeCookieManager();
-    
-    // Initialize header rules
-    await initializeHeaderRules();
-    
-    // Initialize cosmetic rules (element hiding)
-    await initializeCosmeticRules();
-    
-    // Update metrics
-    updateActiveRuleCount(getActiveRuleCount());
+  } catch (error) {
+    console.error('[Privacy] Failed to initialize request blocker:', error);
+    errors.push(error instanceof Error ? error : new Error(String(error)));
+  }
+  
+  // Enable other privacy features
+  await enablePrivacyProtectionFeatures();
+  
+  // Update metrics
+  try {
     const filterStats = await getFilterListStats();
     updateFilterListCount(filterStats.listCount);
-    
-    console.log('[Privacy] Privacy protection enabled');
-    
   } catch (error) {
-    console.error('[Privacy] Failed to enable privacy protection:', error);
-    throw error;
+    console.warn('[Privacy] Failed to update metrics:', error);
+  }
+  
+  if (errors.length > 0) {
+    console.warn(`[Privacy] Privacy protection enabled with ${errors.length} error(s)`);
+    // Only throw if critical components failed
+    if (errors.some(e => e.message?.includes('call stack'))) {
+      throw errors[0]; // Re-throw stack overflow errors
+    }
+  } else {
+    console.log('[Privacy] Privacy protection enabled');
   }
 }
 
@@ -199,7 +259,8 @@ async function disablePrivacyProtection(): Promise<void> {
 }
 
 /**
- * Toggle privacy protection on/off
+ * Toggle privacy protection on/off (cookie cleanup, headers, fingerprinting)
+ * Note: This does NOT affect the ad blocker - use toggleAdBlocker for that
  */
 export async function togglePrivacyProtection(enabled: boolean): Promise<void> {
   const settings = await getPrivacySettings();
@@ -213,6 +274,35 @@ export async function togglePrivacyProtection(enabled: boolean): Promise<void> {
     await disablePrivacyProtection();
     isEnabled = false;
   }
+}
+
+/**
+ * Toggle ad blocker on/off (static rulesets + dynamic rules)
+ * This is separate from privacy protection
+ */
+export async function toggleAdBlocker(enabled: boolean): Promise<void> {
+  const settings = await getPrivacySettings();
+  settings.adBlockerEnabled = enabled;
+  await setPrivacySettings(settings);
+  
+  if (enabled) {
+    // Enable static rulesets and initialize dynamic rules
+    await enableAllStaticRulesets();
+    await initializeBlocker();
+    console.log('[Privacy] Ad blocker enabled');
+  } else {
+    // Disable everything
+    await disableBlocker();
+    console.log('[Privacy] Ad blocker disabled');
+  }
+}
+
+/**
+ * Get ad blocker status
+ */
+export async function getAdBlockerStatus(): Promise<boolean> {
+  const settings = await getPrivacySettings();
+  return settings.adBlockerEnabled ?? true; // Default to enabled for backwards compatibility
 }
 
 /**
@@ -352,6 +442,15 @@ export async function handlePrivacyMessage(
     case 'SET_PRIVACY_SETTINGS':
       await setPrivacySettings(payload as Partial<PrivacySettings>);
       return { success: true };
+    
+    case 'GET_AD_BLOCKER_STATUS':
+      return getAdBlockerStatus();
+      
+    case 'SET_AD_BLOCKER_STATUS': {
+      const { enabled } = payload as { enabled: boolean };
+      await toggleAdBlocker(enabled);
+      return { success: true };
+    }
       
     case 'GET_SITE_PRIVACY_MODE':
       return getSiteMode((payload as { domain: string }).domain);
@@ -441,6 +540,22 @@ export {
   getBlockerStatus,
   getBlockedCount,
 } from './requestBlocker';
+
+export {
+  enableRuleset,
+  disableRuleset,
+  toggleRuleset,
+  getRulesetStats,
+  isRulesetEnabled,
+  resetRulesets,
+  enableAllStaticRulesets,
+  disableAllStaticRulesets,
+} from './rulesetManager';
+
+export {
+  getSiteFixForDomain,
+  hasSiteFix,
+} from './siteFixes';
 
 export {
   getHeaderRuleStatus,

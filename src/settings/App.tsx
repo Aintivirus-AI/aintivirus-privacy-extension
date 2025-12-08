@@ -351,7 +351,7 @@ const DEFAULT_SECURITY_SETTINGS: SecuritySettingsState = {
   phishingDetection: true,
   warnOnUnknownPrograms: true,
   warnOnLargeTransfers: true,
-  largeTransferThreshold: 10,
+  largeTransferThreshold: 100, // USD
   warnOnAuthorityChanges: true,
   warnOnUnlimitedApprovals: true,
   autoBlockMalicious: true,
@@ -627,7 +627,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   return (
     <section className="settings-section">
       <h2>Wallet Security</h2>
-      <p className="settings-section-desc">Configure security monitoring for wallet interactions</p>
+      <p className="settings-section-desc">Keep your crypto wallet safe from scams and theft</p>
 
       {/* Security Stats */}
       <div className="settings-stats-grid">
@@ -649,8 +649,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       <div className="settings-subsection">
         <h3>Security Monitoring</h3>
         <p className="settings-subsection-desc">
-          These features monitor wallet activity and warn about potential risks.
-          They are informational only and cannot guarantee safety.
+          We watch for suspicious activity and warn you before something bad happens.
         </p>
 
         <div className="settings-group" role="list">
@@ -661,7 +660,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
               </div>
               <div className="settings-item-text">
                 <span className="settings-item-name">Connection Monitoring</span>
-                <span className="settings-item-desc">Track dApp wallet connection requests</span>
+                <span className="settings-item-desc">Know when apps try to connect to your wallet</span>
               </div>
             </div>
             <label className="toggle">
@@ -682,7 +681,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
               </div>
               <div className="settings-item-text">
                 <span className="settings-item-name">Transaction Verification</span>
-                <span className="settings-item-desc">Analyze transactions before signing</span>
+                <span className="settings-item-desc">Check transactions for risks before you approve them</span>
               </div>
             </div>
             <label className="toggle">
@@ -703,7 +702,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
               </div>
               <div className="settings-item-text">
                 <span className="settings-item-name">Phishing Detection</span>
-                <span className="settings-item-desc">Warn on suspicious domains</span>
+                <span className="settings-item-desc">Warn you when visiting fake or scam websites</span>
               </div>
             </div>
             <label className="toggle">
@@ -723,8 +722,8 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
                 <BlockIcon size={20} />
               </div>
               <div className="settings-item-text">
-                <span className="settings-item-name">Auto-Block Malicious</span>
-                <span className="settings-item-desc">Automatically block known scam domains</span>
+                <span className="settings-item-name">Auto-Block Scams</span>
+                <span className="settings-item-desc">Automatically block websites known for stealing crypto</span>
               </div>
             </div>
             <label className="toggle">
@@ -744,39 +743,18 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       <div className="settings-subsection">
         <h3>Transaction Warnings</h3>
         <p className="settings-subsection-desc">
-          Configure which transaction types trigger warnings
+          Get extra warnings for risky transaction types
         </p>
 
         <div className="settings-group" role="list">
           <div className="settings-item" role="listitem">
             <div className="settings-item-info">
               <div className="settings-item-icon">
-                <SearchIcon size={20} />
-              </div>
-              <div className="settings-item-text">
-                <span className="settings-item-name">Warn on Unknown Programs</span>
-                <span className="settings-item-desc">Show warning for unrecognized program interactions</span>
-              </div>
-            </div>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={securitySettings.warnOnUnknownPrograms}
-                onChange={() => handleSettingChange('warnOnUnknownPrograms', !securitySettings.warnOnUnknownPrograms)}
-                disabled={!walletEnabled}
-              />
-              <span className="toggle-track" aria-hidden="true" />
-            </label>
-          </div>
-
-          <div className="settings-item" role="listitem">
-            <div className="settings-item-info">
-              <div className="settings-item-icon">
                 <WalletIcon size={20} />
               </div>
               <div className="settings-item-text">
-                <span className="settings-item-name">Warn on Large Transfers</span>
-                <span className="settings-item-desc">Show warning for transfers exceeding threshold</span>
+                <span className="settings-item-name">Large Transfer Warning</span>
+                <span className="settings-item-desc">Warn when sending more than a set amount</span>
               </div>
             </div>
             <label className="toggle">
@@ -794,22 +772,46 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
             <div className="settings-item" role="listitem" style={{ paddingLeft: '52px' }}>
               <div className="settings-item-info">
                 <div className="settings-item-text">
-                  <span className="settings-item-name">Large Transfer Threshold (SOL)</span>
-                  <span className="settings-item-desc">Transfers above this amount trigger warnings</span>
+                  <span className="settings-item-name">Warning Amount (USD)</span>
+                  <span className="settings-item-desc">Warn when transfer value exceeds this amount</span>
                 </div>
               </div>
-              <input
-                type="number"
-                className="form-input"
-                style={{ width: '100px', textAlign: 'right' }}
-                value={securitySettings.largeTransferThreshold}
-                onChange={(e) => handleSettingChange('largeTransferThreshold', parseFloat(e.target.value) || 10)}
-                min={0.1}
-                step={0.1}
-                disabled={!walletEnabled}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>$</span>
+                <input
+                  type="number"
+                  className="form-input"
+                  style={{ width: '100px', textAlign: 'right' }}
+                  value={securitySettings.largeTransferThreshold}
+                  onChange={(e) => handleSettingChange('largeTransferThreshold', parseFloat(e.target.value) || 100)}
+                  min={1}
+                  step={10}
+                  disabled={!walletEnabled}
+                />
+              </div>
             </div>
           )}
+
+          <div className="settings-item" role="listitem">
+            <div className="settings-item-info">
+              <div className="settings-item-icon">
+                <SearchIcon size={20} />
+              </div>
+              <div className="settings-item-text">
+                <span className="settings-item-name">Unknown App Warning</span>
+                <span className="settings-item-desc">Warn when interacting with apps we don't recognize</span>
+              </div>
+            </div>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={securitySettings.warnOnUnknownPrograms}
+                onChange={() => handleSettingChange('warnOnUnknownPrograms', !securitySettings.warnOnUnknownPrograms)}
+                disabled={!walletEnabled}
+              />
+              <span className="toggle-track" aria-hidden="true" />
+            </label>
+          </div>
 
           <div className="settings-item" role="listitem">
             <div className="settings-item-info">
@@ -817,8 +819,8 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
                 <SettingsIcon size={20} />
               </div>
               <div className="settings-item-text">
-                <span className="settings-item-name">Warn on Authority Changes</span>
-                <span className="settings-item-desc">Alert when transactions change token authorities</span>
+                <span className="settings-item-name">Permission Change Warning</span>
+                <span className="settings-item-desc">Warn when apps try to change who controls your tokens</span>
               </div>
             </div>
             <label className="toggle">
@@ -838,8 +840,8 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
                 <AlertIcon size={20} />
               </div>
               <div className="settings-item-text">
-                <span className="settings-item-name">Warn on Unlimited Approvals</span>
-                <span className="settings-item-desc">Alert for token approvals with no spending limit</span>
+                <span className="settings-item-name">Unlimited Spending Warning</span>
+                <span className="settings-item-desc">Warn when apps ask for unlimited access to your tokens</span>
               </div>
             </div>
             <label className="toggle">
@@ -859,8 +861,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       <div className="settings-subsection">
         <h3>Connected Sites</h3>
         <p className="settings-subsection-desc">
-          Sites that have been granted wallet access. Revoking here removes our tracking record;
-          the site may still request access again.
+          Websites that can see your wallet. You can disconnect any site you don't trust anymore.
         </p>
 
         {activeConnections.length === 0 ? (
@@ -914,9 +915,9 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
 
       {/* RPC Endpoints Management */}
       <div className="settings-subsection">
-        <h3>RPC Endpoints</h3>
+        <h3>Network Connections</h3>
         <p className="settings-subsection-desc">
-          Manage Solana RPC endpoints for network connections
+          Servers used to connect to Solana (advanced - most users don't need to change this)
         </p>
 
         {/* Network Selector */}
@@ -959,6 +960,33 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
                 <span className="settings-stat-value">{rpcHealth.endpoints.length}</span>
                 <span className="settings-stat-label">Total Endpoints</span>
               </div>
+            </div>
+
+            {/* Score Explanation */}
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                What does Score mean?
+              </div>
+              <p style={{ margin: '0 0 8px 0', lineHeight: 1.5 }}>
+                The score (0-100) measures each server's reliability based on response speed, success rate, and recent failures. 
+                Higher scores mean faster, more reliable connections.
+              </p>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                <span><span style={{ color: 'var(--success)', fontWeight: 600 }}>70+</span> = Excellent</span>
+                <span><span style={{ color: 'var(--warning)', fontWeight: 600 }}>50-69</span> = OK</span>
+                <span><span style={{ color: 'var(--danger)', fontWeight: 600 }}>&lt;50</span> = Poor</span>
+              </div>
+              <p style={{ margin: '8px 0 0 0', lineHeight: 1.5, fontStyle: 'italic' }}>
+                Click "Test" to check a server's current performance and update its score.
+              </p>
             </div>
 
             {/* Endpoint List */}
@@ -1114,9 +1142,9 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
 
       {/* Threat Intel Sources */}
       <div className="settings-subsection">
-        <h3>Threat Intelligence Sources</h3>
+        <h3>Scam Database</h3>
         <p className="settings-subsection-desc">
-          Configure remote threat data feeds for phishing detection
+          Lists of known scam websites we check against (updated automatically)
         </p>
 
         {/* Health Summary */}
@@ -1588,7 +1616,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePrivacySettingChange = async (key: keyof PrivacySettings, value: boolean) => {
+  const handlePrivacySettingChange = async <K extends keyof PrivacySettings>(key: K, value: PrivacySettings[K]) => {
     const updated = { ...privacySettings, [key]: value };
     setPrivacySettings(updated);
     await sendToBackground({
@@ -1622,12 +1650,18 @@ const App: React.FC = () => {
   const handleAddFilterList = async () => {
     if (!newFilterUrl.trim()) return;
 
+    const urlToAdd = newFilterUrl.trim();
     try {
       await sendToBackground({
         type: 'ADD_FILTER_LIST',
-        payload: { url: newFilterUrl.trim() },
+        payload: { url: urlToAdd },
       });
       setNewFilterUrl('');
+      // Update local state with the new filter URL
+      setPrivacySettings(prev => ({
+        ...prev,
+        filterListUrls: [...prev.filterListUrls, urlToAdd],
+      }));
       const newMetrics = await fetchMetrics();
       if (newMetrics) setMetrics(newMetrics);
     } catch (error) {
@@ -1748,8 +1782,8 @@ const App: React.FC = () => {
         <main className="settings-main">
           {activeTab === 'general' && (
             <section className="settings-section">
-              <h2>Feature Toggles</h2>
-              <p className="settings-section-desc">Enable or disable protection features</p>
+              <h2>Main Features</h2>
+              <p className="settings-section-desc">Turn protection features on or off</p>
 
               <div className="settings-group" role="list">
                 {FEATURE_FLAG_META.map((feature) => (
@@ -1792,7 +1826,7 @@ const App: React.FC = () => {
           {activeTab === 'privacy' && (
             <section className="settings-section">
               <h2>Privacy Protection</h2>
-              <p className="settings-section-desc">Configure privacy and anti-tracking settings</p>
+              <p className="settings-section-desc">Stop websites from tracking you and showing annoying ads</p>
 
               {/* Privacy Stats */}
               {metrics && (
@@ -1823,6 +1857,11 @@ const App: React.FC = () => {
               {/* Protection Toggles */}
               <div className="settings-subsection">
                 <h3>Protection Features</h3>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" in the General tab to activate these features.
+                  </p>
+                )}
 
                 <div className="settings-group" role="list">
                   <div className="settings-item" role="listitem">
@@ -1832,13 +1871,13 @@ const App: React.FC = () => {
                       </div>
                       <div className="settings-item-text">
                         <span className="settings-item-name">Block Ads & Trackers</span>
-                        <span className="settings-item-desc">Block ads, trackers, and analytics requests</span>
+                        <span className="settings-item-desc">Hide annoying ads and stop companies from watching what you do online</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={privacySettings.blockTrackers}
+                        checked={flags.privacy && privacySettings.blockTrackers}
                         onChange={() => handlePrivacySettingChange('blockTrackers', !privacySettings.blockTrackers)}
                         disabled={!flags.privacy}
                       />
@@ -1853,13 +1892,13 @@ const App: React.FC = () => {
                       </div>
                       <div className="settings-item-text">
                         <span className="settings-item-name">Cookie Auto-Delete</span>
-                        <span className="settings-item-desc">Delete tracking cookies when tabs are closed</span>
+                        <span className="settings-item-desc">Automatically clean up tracking files when you close a tab</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={privacySettings.cookieCleanup}
+                        checked={flags.privacy && privacySettings.cookieCleanup}
                         onChange={() => handlePrivacySettingChange('cookieCleanup', !privacySettings.cookieCleanup)}
                         disabled={!flags.privacy}
                       />
@@ -1873,14 +1912,14 @@ const App: React.FC = () => {
                         <LinkIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">Strip Referer Headers</span>
-                        <span className="settings-item-desc">Remove referrer information on cross-origin requests</span>
+                        <span className="settings-item-name">Hide Where You Came From</span>
+                        <span className="settings-item-desc">Don't let sites know which page you visited before</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={privacySettings.headerMinimization}
+                        checked={flags.privacy && privacySettings.headerMinimization}
                         onChange={() => handlePrivacySettingChange('headerMinimization', !privacySettings.headerMinimization)}
                         disabled={!flags.privacy}
                       />
@@ -1895,13 +1934,13 @@ const App: React.FC = () => {
                       </div>
                       <div className="settings-item-text">
                         <span className="settings-item-name">Global Privacy Control</span>
-                        <span className="settings-item-desc">Send Sec-GPC header to opt-out of data sharing</span>
+                        <span className="settings-item-desc">Tell websites "Do Not Sell My Data" automatically</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={privacySettings.sendGPC}
+                        checked={flags.privacy && privacySettings.sendGPC}
                         onChange={() => handlePrivacySettingChange('sendGPC', !privacySettings.sendGPC)}
                         disabled={!flags.privacy}
                       />
@@ -1915,14 +1954,14 @@ const App: React.FC = () => {
                         <SearchIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">Strip Tracking Parameters</span>
-                        <span className="settings-item-desc">Remove utm_*, fbclid, gclid from URLs</span>
+                        <span className="settings-item-name">Clean Link URLs</span>
+                        <span className="settings-item-desc">Remove tracking codes from links (like those long Facebook/Google URLs)</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={privacySettings.stripTrackingParams}
+                        checked={flags.privacy && privacySettings.stripTrackingParams}
                         onChange={() => handlePrivacySettingChange('stripTrackingParams', !privacySettings.stripTrackingParams)}
                         disabled={!flags.privacy}
                       />
@@ -1936,8 +1975,13 @@ const App: React.FC = () => {
               <div className="settings-subsection">
                 <h3>Fingerprint Protection</h3>
                 <p className="settings-subsection-desc">
-                  Prevent websites from uniquely identifying your browser
+                  Stop websites from recognizing you based on your device's unique characteristics
                 </p>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" in the General tab to activate these features.
+                  </p>
+                )}
 
                 <div className="settings-group" role="list">
                   <div className="settings-item" role="listitem">
@@ -1947,13 +1991,13 @@ const App: React.FC = () => {
                       </div>
                       <div className="settings-item-text">
                         <span className="settings-item-name">Enable Fingerprint Protection</span>
-                        <span className="settings-item-desc">Master toggle for all fingerprint resistance</span>
+                        <span className="settings-item-desc">Turn on all disguise features below</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={fingerprintSettings.enabled}
+                        checked={flags.privacy && fingerprintSettings.enabled}
                         onChange={() => handleFingerprintSettingChange('enabled', !fingerprintSettings.enabled)}
                         disabled={!flags.privacy}
                       />
@@ -1967,14 +2011,14 @@ const App: React.FC = () => {
                         <PaletteIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">Canvas Noise</span>
-                        <span className="settings-item-desc">Add subtle noise to canvas data extraction</span>
+                        <span className="settings-item-name">Canvas Protection</span>
+                        <span className="settings-item-desc">Prevent sites from identifying you through image rendering</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={fingerprintSettings.canvasNoise}
+                        checked={flags.privacy && fingerprintSettings.enabled && fingerprintSettings.canvasNoise}
                         onChange={() => handleFingerprintSettingChange('canvasNoise', !fingerprintSettings.canvasNoise)}
                         disabled={!flags.privacy || !fingerprintSettings.enabled}
                       />
@@ -1988,14 +2032,14 @@ const App: React.FC = () => {
                         <MonitorIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">WebGL Masking</span>
-                        <span className="settings-item-desc">Hide graphics card info from websites</span>
+                        <span className="settings-item-name">Graphics Card Protection</span>
+                        <span className="settings-item-desc">Hide your graphics card details from websites</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={fingerprintSettings.webglMask}
+                        checked={flags.privacy && fingerprintSettings.enabled && fingerprintSettings.webglMask}
                         onChange={() => handleFingerprintSettingChange('webglMask', !fingerprintSettings.webglMask)}
                         disabled={!flags.privacy || !fingerprintSettings.enabled}
                       />
@@ -2009,14 +2053,14 @@ const App: React.FC = () => {
                         <RulerIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">Screen Resolution Masking</span>
-                        <span className="settings-item-desc">Report common resolution (may affect some layouts)</span>
+                        <span className="settings-item-name">Screen Size Protection</span>
+                        <span className="settings-item-desc">Report a common screen size instead of your real one</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={fingerprintSettings.screenMask}
+                        checked={flags.privacy && fingerprintSettings.enabled && fingerprintSettings.screenMask}
                         onChange={() => handleFingerprintSettingChange('screenMask', !fingerprintSettings.screenMask)}
                         disabled={!flags.privacy || !fingerprintSettings.enabled}
                       />
@@ -2030,14 +2074,14 @@ const App: React.FC = () => {
                         <VolumeIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">Audio Fingerprint Noise</span>
-                        <span className="settings-item-desc">Add imperceptible noise to audio context</span>
+                        <span className="settings-item-name">Audio Protection</span>
+                        <span className="settings-item-desc">Prevent tracking through your device's audio system</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={fingerprintSettings.audioNoise}
+                        checked={flags.privacy && fingerprintSettings.enabled && fingerprintSettings.audioNoise}
                         onChange={() => handleFingerprintSettingChange('audioNoise', !fingerprintSettings.audioNoise)}
                         disabled={!flags.privacy || !fingerprintSettings.enabled}
                       />
@@ -2051,14 +2095,14 @@ const App: React.FC = () => {
                         <GlobeIcon size={20} />
                       </div>
                       <div className="settings-item-text">
-                        <span className="settings-item-name">Client Hints Masking</span>
-                        <span className="settings-item-desc">Mask high-entropy browser hints (platform, arch)</span>
+                        <span className="settings-item-name">Device Info Protection</span>
+                        <span className="settings-item-desc">Hide details about your operating system and device type</span>
                       </div>
                     </div>
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={fingerprintSettings.clientHintsMask}
+                        checked={flags.privacy && fingerprintSettings.enabled && fingerprintSettings.clientHintsMask}
                         onChange={() => handleFingerprintSettingChange('clientHintsMask', !fingerprintSettings.clientHintsMask)}
                         disabled={!flags.privacy || !fingerprintSettings.enabled}
                       />
@@ -2070,51 +2114,61 @@ const App: React.FC = () => {
 
               {/* Cookie Cleanup Mode */}
               <div className="settings-subsection">
-                <h3>Default Cookie Cleanup Mode</h3>
-                <p className="settings-subsection-desc">How to handle cookies when tabs are closed</p>
+                <h3>Cookie Cleanup Mode</h3>
+                <p className="settings-subsection-desc">Choose what happens to cookies when you close a tab</p>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" in the General tab to configure cookie cleanup.
+                  </p>
+                )}
 
                 <div className="settings-mode-selector">
                   <button
                     className={`settings-mode-btn ${privacySettings.defaultCookieMode === 'third-party' ? 'active' : ''}`}
-                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'third-party' as unknown as boolean)}
+                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'third-party')}
                     disabled={!flags.privacy}
                   >
                     <TargetCookieIcon size={24} />
-                    <span className="settings-mode-name">Third-Party Only</span>
-                    <span className="settings-mode-desc">Delete tracking cookies, keep sessions</span>
+                    <span className="settings-mode-name">Smart (Recommended)</span>
+                    <span className="settings-mode-desc">Remove trackers but keep you logged in</span>
                   </button>
                   <button
                     className={`settings-mode-btn ${privacySettings.defaultCookieMode === 'all' ? 'active' : ''}`}
-                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'all' as unknown as boolean)}
+                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'all')}
                     disabled={!flags.privacy}
                   >
                     <BroomIcon size={24} />
-                    <span className="settings-mode-name">All Cookies</span>
-                    <span className="settings-mode-desc">Delete all cookies for the site</span>
+                    <span className="settings-mode-name">Delete All</span>
+                    <span className="settings-mode-desc">Full cleanup - you may need to log in again</span>
                   </button>
                   <button
                     className={`settings-mode-btn ${privacySettings.defaultCookieMode === 'none' ? 'active' : ''}`}
-                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'none' as unknown as boolean)}
+                    onClick={() => handlePrivacySettingChange('defaultCookieMode', 'none')}
                     disabled={!flags.privacy}
                   >
                     <HandStopIcon size={24} />
-                    <span className="settings-mode-name">None</span>
-                    <span className="settings-mode-desc">Don't auto-delete cookies</span>
+                    <span className="settings-mode-name">Keep All</span>
+                    <span className="settings-mode-desc">Don't delete any cookies automatically</span>
                   </button>
                 </div>
               </div>
 
               {/* Filter Lists */}
               <div className="settings-subsection">
-                <h3>Filter Lists</h3>
+                <h3>Block Lists</h3>
                 <p className="settings-subsection-desc">
-                  Manage tracker blocking filter lists
+                  Lists of known ads and trackers to block (updated automatically)
                   {privacySettings.lastFilterUpdate && (
                     <span style={{ marginLeft: 'var(--space-sm)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '0.75rem' }}>
                       Last updated: {formatDate(privacySettings.lastFilterUpdate)}
                     </span>
                   )}
                 </p>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" in the General tab to manage filter lists.
+                  </p>
+                )}
 
                 <div className="filter-list-header">
                   <button
@@ -2164,9 +2218,9 @@ const App: React.FC = () => {
               {/* Filter List Health Dashboard */}
               {filterListHealth && (
                 <div className="settings-subsection">
-                  <h3>Filter List Health</h3>
+                  <h3>Block List Status</h3>
                   <p className="settings-subsection-desc">
-                    Monitor the status of your filter lists
+                    Check if your block lists are working properly
                   </p>
 
                   {/* Health Stats Grid */}
@@ -2295,8 +2349,13 @@ const App: React.FC = () => {
 
               {/* Per-Site Settings */}
               <div className="settings-subsection">
-                <h3>Per-Site Settings</h3>
-                <p className="settings-subsection-desc">Configure privacy mode for specific websites</p>
+                <h3>Website Exceptions</h3>
+                <p className="settings-subsection-desc">Adjust protection level for specific sites (useful if a site doesn't work properly)</p>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" in the General tab to configure per-site settings.
+                  </p>
+                )}
 
                 <input
                   type="text"
@@ -2333,20 +2392,18 @@ const App: React.FC = () => {
                   </div>
                 )}
               </div>
-
-              {!flags.privacy && (
-                <div className="notice">
-                  <AlertIcon size={20} />
-                  <p>Privacy protection is disabled. Enable it in the General tab to configure these settings.</p>
-                </div>
-              )}
             </section>
           )}
 
           {activeTab === 'trackers' && (
             <section className="settings-section">
               <h2>Blocked Trackers</h2>
-              <p className="settings-section-desc">View all trackers and requests that have been blocked</p>
+              <p className="settings-section-desc">See everything we've blocked from tracking you</p>
+              {!flags.privacy && (
+                <p className="settings-subsection-hint">
+                  Enable "Privacy & Ad Blocking" in the General tab to start blocking trackers.
+                </p>
+              )}
 
               {/* Stats Summary */}
               {metrics && (
@@ -2515,20 +2572,18 @@ const App: React.FC = () => {
                   </div>
                 );
               })()}
-
-              {!flags.privacy && (
-                <div className="notice" style={{ marginTop: '24px' }}>
-                  <AlertIcon size={20} />
-                  <p>Privacy protection is disabled. Enable it in the General tab to start blocking trackers.</p>
-                </div>
-              )}
             </section>
           )}
 
           {activeTab === 'scripts' && (
             <section className="settings-section">
               <h2>Intercepted Scripts</h2>
-              <p className="settings-section-desc">View scripts that have been intercepted by fingerprint protection</p>
+              <p className="settings-section-desc">Scripts we've modified to protect your identity</p>
+              {!flags.privacy && (
+                <p className="settings-subsection-hint">
+                  Enable "Privacy & Ad Blocking" in the General tab to start intercepting fingerprinting scripts.
+                </p>
+              )}
 
               {/* Stats Summary */}
               {metrics && (
@@ -2550,9 +2605,9 @@ const App: React.FC = () => {
 
               {/* Fingerprint Protection Status */}
               <div className="settings-subsection" style={{ marginTop: 0 }}>
-                <h3>Fingerprint Protection</h3>
+                <h3>Protection Status</h3>
                 <p className="settings-subsection-desc">
-                  These protections prevent websites from uniquely identifying your browser through JavaScript APIs
+                  These features disguise your browser so websites can't recognize you
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
@@ -2569,8 +2624,8 @@ const App: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <PaletteIcon size={20} />
                       <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Canvas Fingerprinting</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Adds noise to canvas data extraction</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Canvas Protection</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Blocks image-based tracking</div>
                       </div>
                     </div>
                     <span style={{
@@ -2598,8 +2653,8 @@ const App: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <MonitorIcon size={20} />
                       <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>WebGL Fingerprinting</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Masks graphics card information</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Graphics Card Protection</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Hides your graphics card details</div>
                       </div>
                     </div>
                     <span style={{
@@ -2627,8 +2682,8 @@ const App: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <VolumeIcon size={20} />
                       <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Audio Fingerprinting</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Adds imperceptible noise to audio context</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Audio Protection</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Blocks audio-based tracking</div>
                       </div>
                     </div>
                     <span style={{
@@ -2656,8 +2711,8 @@ const App: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <RulerIcon size={20} />
                       <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Screen Resolution</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Reports common resolution values</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Screen Size Protection</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Hides your real screen size</div>
                       </div>
                     </div>
                     <span style={{
@@ -2685,8 +2740,8 @@ const App: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <GlobeIcon size={20} />
                       <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Client Hints</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Masks browser platform and architecture hints</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>Device Info Protection</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Hides your device and system details</div>
                       </div>
                     </div>
                     <span style={{
@@ -2725,13 +2780,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {!flags.privacy && (
-                <div className="notice" style={{ marginTop: '24px' }}>
-                  <AlertIcon size={20} />
-                  <p>Privacy protection is disabled. Enable it in the General tab to start intercepting fingerprinting scripts.</p>
-                </div>
-              )}
             </section>
           )}
 
@@ -2756,15 +2804,15 @@ const App: React.FC = () => {
                 </p>
 
                 <div className="about-links">
-                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="about-link">
+                  <a href="https://github.com/Aintivirus-AI/aintivirus-privacy-extension" target="_blank" rel="noopener noreferrer" className="about-link">
                     <GitHubIcon size={16} />
                     <span>GitHub Repository</span>
                   </a>
-                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="about-link">
+                  <a href="https://github.com/Aintivirus-AI/aintivirus-privacy-extension#readme" target="_blank" rel="noopener noreferrer" className="about-link">
                     <BookIcon size={16} />
                     <span>Documentation</span>
                   </a>
-                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="about-link">
+                  <a href="https://github.com/Aintivirus-AI/aintivirus-privacy-extension/issues" target="_blank" rel="noopener noreferrer" className="about-link">
                     <BugIcon size={16} />
                     <span>Report an Issue</span>
                   </a>

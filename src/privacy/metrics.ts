@@ -27,7 +27,12 @@ import { extractDomain } from './utils';
  * Maximum number of domains to track in blockedByDomain
  * SECURITY: Prevents unbounded storage growth
  */
-const MAX_TRACKED_DOMAINS = 500;
+const MAX_TRACKED_DOMAINS = 100;
+
+/**
+ * Maximum URL length to store (truncate longer URLs)
+ */
+const MAX_URL_LENGTH = 150;
 
 /**
  * In-memory metrics state
@@ -88,13 +93,63 @@ export async function shutdownMetrics(): Promise<void> {
 }
 
 /**
+ * Create a storage-safe copy of metrics with trimmed data
+ */
+function createPersistableMetrics(): PrivacyMetrics {
+  // Trim blockedByDomain before persisting
+  const sortedDomains = Object.entries(metrics.blockedByDomain)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_TRACKED_DOMAINS);
+  
+  // Trim URLs in recentBlocked to save space
+  const trimmedRecentBlocked = metrics.recentBlocked.slice(0, 50).map(entry => ({
+    ...entry,
+    url: entry.url.length > MAX_URL_LENGTH 
+      ? entry.url.substring(0, MAX_URL_LENGTH) + '...' 
+      : entry.url,
+  }));
+  
+  return {
+    ...metrics,
+    blockedByDomain: Object.fromEntries(sortedDomains),
+    recentBlocked: trimmedRecentBlocked,
+    recentCookieCleanups: metrics.recentCookieCleanups.slice(0, 20),
+  };
+}
+
+/**
  * Persist metrics to storage
  */
 async function persistMetrics(): Promise<void> {
   try {
-    await storage.set('privacyMetrics', metrics);
+    const persistable = createPersistableMetrics();
+    await storage.set('privacyMetrics', persistable);
   } catch (error) {
-    console.error('[Privacy] Failed to persist metrics:', error);
+    // If quota exceeded, try with even less data
+    if (error instanceof Error && error.message.includes('quota')) {
+      console.warn('[Privacy] Metrics storage quota exceeded, persisting minimal data');
+      try {
+        // Persist only aggregate counts, not detailed logs
+        const minimal: PrivacyMetrics = {
+          ...DEFAULT_PRIVACY_METRICS,
+          totalBlockedRequests: metrics.totalBlockedRequests,
+          totalCookiesDeleted: metrics.totalCookiesDeleted,
+          activeRuleCount: metrics.activeRuleCount,
+          filterListCount: metrics.filterListCount,
+          scriptsIntercepted: metrics.scriptsIntercepted,
+          requestsModified: metrics.requestsModified,
+          sessionStart: metrics.sessionStart,
+          blockedByDomain: {}, // Clear to save space
+          recentBlocked: [],
+          recentCookieCleanups: [],
+        };
+        await storage.set('privacyMetrics', minimal);
+      } catch (retryError) {
+        console.error('[Privacy] Failed to persist even minimal metrics:', retryError);
+      }
+    } else {
+      console.error('[Privacy] Failed to persist metrics:', error);
+    }
   }
 }
 
@@ -151,8 +206,8 @@ export function logBlockedRequest(
     metrics.recentBlocked = metrics.recentBlocked.slice(0, MAX_RECENT_BLOCKED);
   }
   
-  // Periodically trim domain tracking (every 1000 blocked requests)
-  if (metrics.totalBlockedRequests % 1000 === 0) {
+  // Periodically trim domain tracking (every 100 blocked requests)
+  if (metrics.totalBlockedRequests % 100 === 0) {
     trimBlockedByDomain();
   }
 }

@@ -16,11 +16,13 @@ import {
   FilterListCache, 
   FILTER_LIST_TTL,
   BOOTSTRAP_TRACKER_DOMAINS,
+  BOOTSTRAP_URL_PATTERNS,
   DEFAULT_PRIVACY_SETTINGS,
   CosmeticRule,
   CachedCosmeticRules,
   DEFAULT_COSMETIC_RULES,
   BOOTSTRAP_COSMETIC_SELECTORS,
+  PROTECTED_SITES,
 } from './types';
 import {
   recordFetchSuccess,
@@ -32,6 +34,7 @@ import {
   trackUnsupportedPattern,
 } from './filterListHealth';
 import type { FilterListHealthSummary } from './types';
+import { isProtectedSite } from './adguardEngine';
 
 /**
  * Get all cached filter lists
@@ -405,6 +408,12 @@ function isUnsupportedSelector(selector: string): boolean {
 }
 
 /**
+ * Maximum rules to cache per filter list
+ * Full lists are kept in memory but we only cache a subset to stay within storage limits
+ */
+const MAX_CACHED_RULES_PER_LIST = 10000;
+
+/**
  * Cache a fetched filter list
  */
 export async function cacheFilterList(
@@ -413,17 +422,41 @@ export async function cacheFilterList(
 ): Promise<void> {
   const cache = await getCachedFilterLists();
   
+  // Truncate rules to avoid storage quota issues
+  // Prioritize domain-anchored rules (||) as they're most effective
+  const domainRules = rules.filter(r => r.startsWith('||'));
+  const otherRules = rules.filter(r => !r.startsWith('||'));
+  const truncatedRules = [
+    ...domainRules.slice(0, Math.floor(MAX_CACHED_RULES_PER_LIST * 0.7)),
+    ...otherRules.slice(0, Math.floor(MAX_CACHED_RULES_PER_LIST * 0.3)),
+  ];
+  
   const entry: CachedFilterList = {
     url,
-    rules,
+    rules: truncatedRules,
     fetchedAt: Date.now(),
     expiresAt: Date.now() + FILTER_LIST_TTL,
   };
   
   cache[url] = entry;
-  await storage.set('filterListCache', cache);
   
-  console.log(`[Privacy] Cached filter list: ${url} (${rules.length} rules)`);
+  try {
+    await storage.set('filterListCache', cache);
+    console.log(`[Privacy] Cached filter list: ${url} (${truncatedRules.length}/${rules.length} rules)`);
+  } catch (error) {
+    // If storage fails, try clearing old cache entries
+    if (error instanceof Error && error.message.includes('quota')) {
+      console.warn('[Privacy] Storage quota exceeded, clearing old cache entries');
+      try {
+        // Only keep this entry
+        await storage.set('filterListCache', { [url]: entry });
+      } catch (retryError) {
+        console.error('[Privacy] Failed to cache filter list:', retryError);
+      }
+    } else {
+      console.error('[Privacy] Failed to cache filter list:', error);
+    }
+  }
 }
 
 /**
@@ -559,6 +592,12 @@ export async function removeFilterListUrl(url: string): Promise<void> {
 }
 
 /**
+ * Maximum total filter rules to process
+ * This prevents memory issues and storage quota problems
+ */
+const MAX_TOTAL_FILTER_RULES = 50000;
+
+/**
  * Fetch all configured filter lists
  * Returns combined rules from all lists plus bootstrap list
  */
@@ -568,48 +607,85 @@ export async function fetchAllFilterLists(
   const urls = await getFilterListUrls();
   const allRules: string[] = [];
   
-  // Add bootstrap rules first (converted to filter syntax)
+  // Add bootstrap domain rules first (converted to filter syntax)
   for (const domain of BOOTSTRAP_TRACKER_DOMAINS) {
     allRules.push(`||${domain}^`);
   }
   
-  // Fetch each configured list
-  const results = await Promise.allSettled(
-    urls.map(url => getOrFetchFilterList(url, forceRefresh))
-  );
+  // Add bootstrap URL pattern rules (blocks ad paths on any domain)
+  for (const pattern of BOOTSTRAP_URL_PATTERNS) {
+    allRules.push(pattern);
+  }
   
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    if (result.status === 'fulfilled') {
-      allRules.push(...result.value);
-    } else {
-      console.error(`[Privacy] Failed to load filter list ${urls[i]}:`, result.reason);
+  // Fetch each configured list sequentially to avoid memory spikes
+  // and allow early termination if we hit the rule limit
+  for (const url of urls) {
+    if (allRules.length >= MAX_TOTAL_FILTER_RULES) {
+      console.log(`[Privacy] Reached max rule limit (${MAX_TOTAL_FILTER_RULES}), skipping remaining lists`);
+      break;
+    }
+    
+    try {
+      const rules = await getOrFetchFilterList(url, forceRefresh);
+      // Only add rules up to the limit
+      const remainingCapacity = MAX_TOTAL_FILTER_RULES - allRules.length;
+      const rulesToAdd = rules.slice(0, remainingCapacity);
+      allRules.push(...rulesToAdd);
+      
+      if (rules.length > rulesToAdd.length) {
+        console.log(`[Privacy] Truncated ${url}: added ${rulesToAdd.length}/${rules.length} rules`);
+      }
+    } catch (error) {
+      console.error(`[Privacy] Failed to load filter list ${url}:`, error);
     }
   }
   
   // Update last filter update timestamp
-  const settings = await storage.get('privacySettings');
-  if (settings) {
-    settings.lastFilterUpdate = Date.now();
-    await storage.set('privacySettings', settings);
+  try {
+    const settings = await storage.get('privacySettings');
+    if (settings) {
+      settings.lastFilterUpdate = Date.now();
+      await storage.set('privacySettings', settings);
+    }
+  } catch (error) {
+    console.warn('[Privacy] Failed to update lastFilterUpdate:', error);
   }
   
-  // Deduplicate rules
-  const uniqueRules = [...new Set(allRules)];
+  // Deduplicate rules using a more memory-efficient approach
+  const seenRules = new Set<string>();
+  const uniqueRules: string[] = [];
+  for (const rule of allRules) {
+    if (!seenRules.has(rule)) {
+      seenRules.add(rule);
+      uniqueRules.push(rule);
+    }
+  }
+  
   console.log(`[Privacy] Loaded ${uniqueRules.length} unique filter rules`);
   
   return uniqueRules;
 }
 
 /**
+ * Maximum cosmetic rules to cache to avoid storage quota issues
+ */
+const MAX_GENERIC_COSMETIC_RULES = 2000;
+const MAX_DOMAIN_SPECIFIC_RULES_PER_DOMAIN = 100;
+const MAX_DOMAINS_WITH_SPECIFIC_RULES = 500;
+
+/**
  * Fetch all cosmetic rules from filter lists
  * Returns organized cosmetic rules for injection into pages
+ * 
+ * Note: Bootstrap selectors are applied separately and more conservatively
+ * to avoid false positives on major sites
  */
 export async function fetchAllCosmeticRules(
   forceRefresh = false
 ): Promise<CachedCosmeticRules> {
   const urls = await getFilterListUrls();
   const cosmeticRules: CachedCosmeticRules = {
+    // Start with safe bootstrap selectors (curated, low false positive rate)
     generic: [...BOOTSTRAP_COSMETIC_SELECTORS],
     domainSpecific: {},
     exceptions: {},
@@ -624,13 +700,24 @@ export async function fetchAllCosmeticRules(
       
       for (const rule of rules) {
         if (rule.type === 'generic') {
-          cosmeticRules.generic.push(rule.selector);
+          // Limit generic rules to avoid excessive memory/storage use
+          if (cosmeticRules.generic.length < MAX_GENERIC_COSMETIC_RULES) {
+            cosmeticRules.generic.push(rule.selector);
+          }
         } else if (rule.type === 'domain-specific' && rule.domains) {
           for (const domain of rule.domains) {
+            // Limit number of domains we track
+            if (Object.keys(cosmeticRules.domainSpecific).length >= MAX_DOMAINS_WITH_SPECIFIC_RULES &&
+                !cosmeticRules.domainSpecific[domain]) {
+              continue;
+            }
             if (!cosmeticRules.domainSpecific[domain]) {
               cosmeticRules.domainSpecific[domain] = [];
             }
-            cosmeticRules.domainSpecific[domain].push(rule.selector);
+            // Limit rules per domain
+            if (cosmeticRules.domainSpecific[domain].length < MAX_DOMAIN_SPECIFIC_RULES_PER_DOMAIN) {
+              cosmeticRules.domainSpecific[domain].push(rule.selector);
+            }
           }
         } else if (rule.type === 'exception' && rule.domains) {
           for (const domain of rule.domains) {
@@ -654,8 +741,12 @@ export async function fetchAllCosmeticRules(
     cosmeticRules.domainSpecific[domain] = [...new Set(cosmeticRules.domainSpecific[domain])];
   }
   
-  // Cache the cosmetic rules
-  await storage.set('cosmeticRulesCache', cosmeticRules);
+  // Cache the cosmetic rules with error handling
+  try {
+    await storage.set('cosmeticRulesCache', cosmeticRules);
+  } catch (error) {
+    console.warn('[Privacy] Failed to cache cosmetic rules, continuing without cache:', error);
+  }
   
   console.log(`[Privacy] Loaded ${cosmeticRules.generic.length} generic cosmetic rules`);
   console.log(`[Privacy] Loaded domain-specific rules for ${Object.keys(cosmeticRules.domainSpecific).length} domains`);
@@ -708,12 +799,25 @@ export async function getCachedCosmeticRules(): Promise<CachedCosmeticRules> {
 /**
  * Get cosmetic rules for a specific domain
  * Combines generic rules with domain-specific rules, excluding exceptions
+ * 
+ * For protected sites (Twitter, YouTube, etc.), only domain-specific rules are returned
+ * to prevent false positives from overly broad generic selectors
  */
 export async function getCosmeticRulesForDomain(domain: string): Promise<string[]> {
   const cached = await getCachedCosmeticRules();
-  const selectors: Set<string> = new Set(cached.generic);
+  const selectors: Set<string> = new Set();
   
-  // Add domain-specific rules
+  // Check if this is a protected site - if so, skip generic rules
+  const siteIsProtected = isProtectedSite(domain);
+  
+  if (!siteIsProtected) {
+    // Add generic rules only for non-protected sites
+    for (const selector of cached.generic) {
+      selectors.add(selector);
+    }
+  }
+  
+  // Add domain-specific rules (these are safe for all sites)
   // Match exact domain and parent domains (e.g., sub.example.com matches example.com rules)
   const domainParts = domain.split('.');
   for (let i = 0; i < domainParts.length - 1; i++) {
@@ -735,6 +839,10 @@ export async function getCosmeticRulesForDomain(domain: string): Promise<string[
         selectors.delete(selector);
       }
     }
+  }
+  
+  if (process.env.NODE_ENV !== 'production' && siteIsProtected) {
+    console.log(`[Privacy] Protected site ${domain}: returning ${selectors.size} domain-specific rules only`);
   }
   
   return Array.from(selectors);

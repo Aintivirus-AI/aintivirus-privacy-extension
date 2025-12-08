@@ -28,6 +28,9 @@ import {
 import { getCurrentConnection } from './rpc';
 import { getPublicAddress } from './storage';
 
+// Token Program ID for fetching token accounts
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
 // ============================================
 // CONSTANTS
 // ============================================
@@ -43,9 +46,9 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
 /**
- * Cache duration in milliseconds (5 minutes)
+ * Cache duration in milliseconds (30 seconds - short for fresher data)
  */
-const CACHE_DURATION = 5 * 60 * 1000;
+const CACHE_DURATION = 30 * 1000;
 
 // ============================================
 // CACHE
@@ -87,9 +90,9 @@ function isCacheValid(address: string): boolean {
  * @returns Transaction history result
  */
 export async function getTransactionHistory(
-  options: { limit?: number; before?: string } = {}
+  options: { limit?: number; before?: string; forceRefresh?: boolean } = {}
 ): Promise<TransactionHistoryResult> {
-  const { limit = DEFAULT_LIMIT, before } = options;
+  const { limit = DEFAULT_LIMIT, before, forceRefresh } = options;
   
   // Get wallet address
   const address = await getPublicAddress();
@@ -100,8 +103,13 @@ export async function getTransactionHistory(
     );
   }
 
-  // Use cache for first page if available
-  if (!before && isCacheValid(address)) {
+  // Clear cache if force refresh requested
+  if (forceRefresh) {
+    clearHistoryCache();
+  }
+
+  // Use cache for first page if available (and not force refreshing)
+  if (!before && !forceRefresh && isCacheValid(address)) {
     const cached = historyCache!.transactions.slice(0, limit);
     return {
       transactions: cached,
@@ -114,8 +122,8 @@ export async function getTransactionHistory(
     const connection = await getCurrentConnection();
     const publicKey = new PublicKey(address);
     
-    // Fetch signatures
-    const signatures = await connection.getSignaturesForAddress(
+    // Fetch signatures for the wallet address
+    const walletSignatures = await connection.getSignaturesForAddress(
       publicKey,
       {
         limit: Math.min(limit, MAX_LIMIT),
@@ -123,7 +131,48 @@ export async function getTransactionHistory(
       }
     );
 
-    if (signatures.length === 0) {
+    // Also fetch signatures for token accounts (ATAs) to catch incoming token transfers
+    // This is important because received tokens don't involve the wallet as a signer
+    let tokenAccountSignatures: ConfirmedSignatureInfo[] = [];
+    try {
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+        publicKey,
+        { programId: TOKEN_PROGRAM_ID }
+      );
+      
+      // Fetch signatures for each token account (limit to first 5 accounts to avoid rate limits)
+      const accountsToCheck = tokenAccounts.value.slice(0, 5);
+      const signaturePromises = accountsToCheck.map(account =>
+        connection.getSignaturesForAddress(
+          account.pubkey,
+          { limit: Math.min(limit, 10) } // Fewer per account
+        ).catch(() => [] as ConfirmedSignatureInfo[])
+      );
+      
+      const allTokenSignatures = await Promise.all(signaturePromises);
+      tokenAccountSignatures = allTokenSignatures.flat();
+    } catch (tokenError) {
+      // If fetching token account signatures fails, continue with wallet signatures only
+      console.warn('[AINTIVIRUS Wallet] Failed to fetch token account signatures:', tokenError);
+    }
+
+    // Merge and deduplicate signatures, keeping unique by signature string
+    const signatureMap = new Map<string, ConfirmedSignatureInfo>();
+    for (const sig of walletSignatures) {
+      signatureMap.set(sig.signature, sig);
+    }
+    for (const sig of tokenAccountSignatures) {
+      if (!signatureMap.has(sig.signature)) {
+        signatureMap.set(sig.signature, sig);
+      }
+    }
+    
+    // Sort by block time (newest first) and limit
+    const allSignatures = Array.from(signatureMap.values())
+      .sort((a, b) => (b.blockTime || 0) - (a.blockTime || 0))
+      .slice(0, Math.min(limit, MAX_LIMIT));
+
+    if (allSignatures.length === 0) {
       return {
         transactions: [],
         hasMore: false,
@@ -133,7 +182,7 @@ export async function getTransactionHistory(
 
     // Fetch transaction details
     const transactions = await fetchTransactionDetails(
-      signatures,
+      allSignatures,
       address
     );
 
@@ -148,7 +197,7 @@ export async function getTransactionHistory(
 
     return {
       transactions,
-      hasMore: signatures.length === limit,
+      hasMore: allSignatures.length === limit,
       cursor: transactions.length > 0 
         ? transactions[transactions.length - 1].signature 
         : null,
@@ -253,8 +302,26 @@ function parseTransactionToHistoryItem(
   item.amountSol = result.amount / LAMPORTS_PER_SOL;
   item.counterparty = result.counterparty;
   item.type = result.type;
+  
+  // Add token info if available
+  if (result.tokenInfo) {
+    item.tokenInfo = {
+      mint: result.tokenInfo.mint,
+      decimals: result.tokenInfo.decimals,
+      amount: result.tokenInfo.amount,
+    };
+  }
 
   return item;
+}
+
+/**
+ * Token info extracted from a transaction
+ */
+interface ExtractedTokenInfo {
+  mint: string;
+  decimals: number;
+  amount: number;
 }
 
 /**
@@ -272,6 +339,7 @@ function parseTransferInfo(
   amount: number;
   counterparty: string | null;
   type: string;
+  tokenInfo?: ExtractedTokenInfo;
 } {
   const meta = parsed.meta;
   const message = parsed.transaction.message;
@@ -285,12 +353,29 @@ function parseTransferInfo(
     };
   }
 
-  // Find wallet account index
+  // Check for SPL token transfer FIRST - this uses token balance metadata
+  // which includes owner info, so it works even when wallet isn't in accountKeys
+  const tokenTransferInfo = parseTokenTransfer(parsed, walletAddress);
+  
+  // If we found a token transfer, return it immediately
+  // This is important for received tokens where the wallet might not be in accountKeys
+  if (tokenTransferInfo) {
+    return {
+      direction: tokenTransferInfo.direction,
+      amount: 0, // SOL amount is 0 for token transfers
+      counterparty: tokenTransferInfo.counterparty,
+      type: tokenTransferInfo.direction === 'sent' ? 'Sent Token' : 'Received Token',
+      tokenInfo: tokenTransferInfo.tokenInfo,
+    };
+  }
+
+  // Find wallet account index for SOL balance changes
   const accountKeys = message.accountKeys;
   const walletIndex = accountKeys.findIndex(
     key => key.pubkey.toBase58() === walletAddress
   );
 
+  // If wallet not in account keys and no token transfer found, it's unknown
   if (walletIndex === -1) {
     return {
       direction: 'unknown',
@@ -299,13 +384,13 @@ function parseTransferInfo(
       type: 'Unknown',
     };
   }
-
+  
   // Calculate SOL change for wallet
   const preBalance = meta.preBalances[walletIndex] || 0;
   const postBalance = meta.postBalances[walletIndex] || 0;
   const balanceChange = postBalance - preBalance;
 
-  // Determine direction and amount
+  // Determine direction and amount based on SOL balance change
   let direction: TransactionDirection = 'unknown';
   let amount = 0;
   let counterparty: string | null = null;
@@ -333,6 +418,200 @@ function parseTransferInfo(
     counterparty,
     type,
   };
+}
+
+/**
+ * Parse SPL token transfer from a transaction
+ */
+function parseTokenTransfer(
+  parsed: ParsedTransactionWithMeta,
+  walletAddress: string
+): {
+  direction: TransactionDirection;
+  counterparty: string | null;
+  tokenInfo: ExtractedTokenInfo;
+} | null {
+  const instructions = parsed.transaction.message.instructions;
+  const meta = parsed.meta;
+  
+  if (!meta) return null;
+
+  // Look for token transfer instructions
+  for (const instruction of instructions) {
+    if ('program' in instruction && instruction.program === 'spl-token') {
+      const parsedInstruction = instruction as {
+        parsed?: {
+          type?: string;
+          info?: {
+            source?: string;
+            destination?: string;
+            authority?: string;
+            mint?: string;
+            tokenAmount?: {
+              amount: string;
+              decimals: number;
+              uiAmount: number;
+              uiAmountString: string;
+            };
+            amount?: string;
+          };
+        };
+      };
+      
+      const parsedType = parsedInstruction.parsed?.type;
+      const info = parsedInstruction.parsed?.info;
+      
+      if ((parsedType === 'transfer' || parsedType === 'transferChecked') && info) {
+        // For transferChecked, we have mint and tokenAmount directly
+        if (parsedType === 'transferChecked' && info.mint && info.tokenAmount) {
+          const isSource = info.authority === walletAddress;
+          const direction: TransactionDirection = isSource ? 'sent' : 'received';
+          
+          return {
+            direction,
+            counterparty: isSource ? info.destination || null : info.source || null,
+            tokenInfo: {
+              mint: info.mint,
+              decimals: info.tokenAmount.decimals,
+              amount: info.tokenAmount.uiAmount,
+            },
+          };
+        }
+        
+        // For regular transfer, check token balance changes
+        if (meta.preTokenBalances && meta.postTokenBalances) {
+          const tokenBalanceChange = findTokenBalanceChange(
+            meta.preTokenBalances,
+            meta.postTokenBalances,
+            walletAddress,
+            parsed.transaction.message.accountKeys
+          );
+          
+          if (tokenBalanceChange) {
+            return {
+              direction: tokenBalanceChange.direction,
+              counterparty: null,
+              tokenInfo: {
+                mint: tokenBalanceChange.mint,
+                decimals: tokenBalanceChange.decimals,
+                amount: Math.abs(tokenBalanceChange.uiAmount),
+              },
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // Also check for token balance changes even without explicit instructions
+  // (some transactions might use inner instructions)
+  const preTokenBalances = meta.preTokenBalances || [];
+  const postTokenBalances = meta.postTokenBalances || [];
+  if (preTokenBalances.length > 0 || postTokenBalances.length > 0) {
+    const tokenBalanceChange = findTokenBalanceChange(
+      preTokenBalances,
+      postTokenBalances,
+      walletAddress,
+      parsed.transaction.message.accountKeys
+    );
+    
+    if (tokenBalanceChange) {
+      return {
+        direction: tokenBalanceChange.direction,
+        counterparty: null,
+        tokenInfo: {
+          mint: tokenBalanceChange.mint,
+          decimals: tokenBalanceChange.decimals,
+          amount: Math.abs(tokenBalanceChange.uiAmount),
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find token balance change for a wallet
+ */
+function findTokenBalanceChange(
+  preBalances: { accountIndex: number; mint: string; owner?: string; uiTokenAmount: { decimals: number; uiAmount: number | null } }[],
+  postBalances: { accountIndex: number; mint: string; owner?: string; uiTokenAmount: { decimals: number; uiAmount: number | null } }[],
+  walletAddress: string,
+  _accountKeys: { pubkey: PublicKey }[]
+): {
+  mint: string;
+  decimals: number;
+  uiAmount: number;
+  direction: TransactionDirection;
+} | null {
+  // Create maps for wallet-owned token accounts only (keyed by mint)
+  const preMap = new Map<string, { mint: string; uiAmount: number; decimals: number }>();
+  const postMap = new Map<string, { mint: string; uiAmount: number; decimals: number }>();
+  
+  // Only include token accounts owned by the wallet
+  for (const balance of preBalances) {
+    if (balance.owner === walletAddress) {
+      preMap.set(balance.mint, {
+        mint: balance.mint,
+        uiAmount: balance.uiTokenAmount.uiAmount || 0,
+        decimals: balance.uiTokenAmount.decimals,
+      });
+    }
+  }
+  
+  for (const balance of postBalances) {
+    if (balance.owner === walletAddress) {
+      postMap.set(balance.mint, {
+        mint: balance.mint,
+        uiAmount: balance.uiTokenAmount.uiAmount || 0,
+        decimals: balance.uiTokenAmount.decimals,
+      });
+    }
+  }
+
+  // Find changes for wallet-owned token accounts
+  for (const [mint, postData] of postMap) {
+    const preData = preMap.get(mint);
+    const preAmount = preData?.uiAmount || 0;
+    const postAmount = postData.uiAmount;
+    const change = postAmount - preAmount;
+    
+    if (Math.abs(change) > 0.000001) {
+      return {
+        mint: postData.mint,
+        decimals: postData.decimals,
+        uiAmount: change,
+        direction: change > 0 ? 'received' : 'sent',
+      };
+    }
+  }
+
+  // Check for token accounts that existed in pre but not in post (closed account = sent all)
+  for (const [mint, preData] of preMap) {
+    if (!postMap.has(mint) && preData.uiAmount > 0) {
+      return {
+        mint: preData.mint,
+        decimals: preData.decimals,
+        uiAmount: -preData.uiAmount,
+        direction: 'sent',
+      };
+    }
+  }
+
+  // Check for new token accounts (received tokens into new account)
+  for (const [mint, postData] of postMap) {
+    if (!preMap.has(mint) && postData.uiAmount > 0) {
+      return {
+        mint: postData.mint,
+        decimals: postData.decimals,
+        uiAmount: postData.uiAmount,
+        direction: 'received',
+      };
+    }
+  }
+
+  return null;
 }
 
 /**
