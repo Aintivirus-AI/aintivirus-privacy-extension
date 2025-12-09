@@ -1,5 +1,3 @@
-// Polyfill for Solana libraries that freak out when window doesn't exist
-// Service workers don't have window, but web3.js really wants it
 if (typeof globalThis !== 'undefined' && typeof (globalThis as unknown as Record<string, unknown>).window === 'undefined') {
   (globalThis as unknown as Record<string, unknown>).window = globalThis;
 }
@@ -15,7 +13,6 @@ import {
   notifyRiskyTransaction,
 } from '@shared/notifications';
 
-// Privacy stuff
 import { 
   initializePrivacyEngine,
   handlePrivacyMessage,
@@ -27,7 +24,6 @@ import {
   getRulesetStats,
 } from '../privacy';
 
-// Threat Intelligence
 import {
   initializeThreatIntel,
   setupThreatIntelAlarm,
@@ -39,19 +35,16 @@ import {
   toggleThreatIntelSource,
 } from '../threatIntel';
 
-// Filter List Health
 import {
   getFilterListHealth,
   resetFilterList,
 } from '../privacy/filterListManager';
 
-// Anti-fingerprinting
 import {
   initializeFingerprintProtection,
   handleFingerprintMessage,
 } from '../fingerprinting';
 
-// Wallet
 import {
   initializeWalletModule,
   handleWalletMessage,
@@ -72,7 +65,6 @@ import {
   getTokenPrices,
 } from '../wallet/prices';
 
-// Security checks
 import {
   initializeSecurityModule,
   handleSecurityMessage,
@@ -80,7 +72,6 @@ import {
   SecurityMessageType,
 } from '../security';
 
-// dApp Connectivity
 import {
   initializeDAppHandlers,
   handleDAppMessage,
@@ -89,15 +80,10 @@ import {
 } from '../dapp/handlers';
 import { handleRequestQueueAlarm } from '../dapp/queue/requestQueue';
 
-// Main background service worker - this is where all the magic happens.
-// Routes messages around, manages features, and keeps everything in sync.
-
 console.log('[AINTIVIRUS] Background service worker starting...');
 
-// Get notification handlers ready before anything else
 initializeNotificationHandlers();
 
-// First run or update - set things up
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[AINTIVIRUS] Extension installed/updated:', details.reason);
 
@@ -109,7 +95,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     console.log('[AINTIVIRUS] Updated from version:', details.previousVersion);
   }
 
-  // Fire up all the modules once storage is ready
   await initializePrivacyEngine();
   await initializeFingerprintProtection();
   await initializeWalletModule();
@@ -117,18 +102,15 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await initializeThreatIntel();
   await initializeDAppHandlers();
   setupThreatIntelAlarm();
-  // Set up EVM pending tx polling if there are pending txs
   await setupTxPollingAlarm();
 });
 
-// Browser just opened - wake everything up
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[AINTIVIRUS] Browser started - extension waking up');
   
   const flags = await getFeatureFlags();
   console.log('[AINTIVIRUS] Current feature flags:', flags);
 
-  // Spin up all the modules
   await initializePrivacyEngine();
   await initializeFingerprintProtection();
   await initializeWalletModule();
@@ -136,55 +118,43 @@ chrome.runtime.onStartup.addListener(async () => {
   await initializeThreatIntel();
   await initializeDAppHandlers();
   
-  // Might need fresh filter lists
   await checkAndRefreshFilterLists();
   
-  // Resume EVM pending tx polling if there are pending txs
   await setupTxPollingAlarm();
 });
 
-// Alarms keep us on schedule even when the service worker gets killed
 chrome.alarms.create('filterListRefresh', {
-  periodInMinutes: 60 * 6, // every 6 hours
+  periodInMinutes: 60 * 6,
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  // First check if this is a request queue alarm (expiration or cleanup)
   const handledByQueue = await handleRequestQueueAlarm(alarm);
   if (handledByQueue) return;
   
   if (alarm.name === 'filterListRefresh') {
     await checkAndRefreshFilterLists();
   } else if (alarm.name === getAutoLockAlarmName()) {
-    // Lock the wallet if user's been idle too long
     handleAutoLockAlarm();
-    // Also notify dApp handlers that wallet is locked
     await handleDAppWalletLocked();
   } else if (alarm.name === 'securityCleanup') {
     await handleSecurityCleanupAlarm();
   } else if (alarm.name === TX_POLL_ALARM_NAME) {
-    // Poll pending EVM transactions for status updates
     await handleTxPollAlarm();
   }
 });
 
-// Handle extension icon click - open the side panel
-// Side panel persists across all tabs and doesn't close when clicking outside
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id) return;
   
   try {
-    // Open the side panel - it will persist across tab switches!
     await chrome.sidePanel.open({ windowId: tab.windowId });
     console.log('[AINTIVIRUS] Side panel opened');
   } catch (error) {
     console.error('[AINTIVIRUS] Failed to open side panel:', error);
-    // Fallback: open popup in a new tab
     chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
   }
 });
 
-// Central message router - popup, settings, and content scripts all talk through here
 createMessageListener((message, sender, sendResponse) => {
   handleMessage(message, sender)
     .then(sendResponse)
@@ -196,25 +166,85 @@ createMessageListener((message, sender, sendResponse) => {
       });
     });
 
-  return true; // async response
+  return true;
 });
 
-// Figure out what kind of message this is and route it to the right handler
 async function handleMessage(
-  message: ExtensionMessage,
+  message: ExtensionMessage | { what?: string; css?: string },
   sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse> {
-  console.log('[AINTIVIRUS] Received message:', message.type, 'from:', sender.tab?.url || 'extension');
+  
+  if ('what' in message && message.what) {
+    const legacyMessage = message as { what: string; css?: string };
+    const tabId = sender.tab?.id;
+    const frameId = sender.frameId ?? 0;
 
-  switch (message.type) {
+    console.log('[AINTIVIRUS] Received uBOL message:', legacyMessage.what, 'from:', sender.tab?.url || 'extension');
+
+    switch (legacyMessage.what) {
+      case 'insertCSS': {
+        if (tabId === undefined || frameId === undefined) return { success: false };
+        try {
+          await chrome.scripting.insertCSS({
+            css: legacyMessage.css || '',
+            origin: 'USER',
+            target: { tabId, frameIds: [frameId] },
+          });
+          return { success: true };
+        } catch (error) {
+          console.error('[AINTIVIRUS] insertCSS error:', error);
+          return { success: false, error: String(error) };
+        }
+      }
+
+      case 'removeCSS': {
+        if (tabId === undefined || frameId === undefined) return { success: false };
+        try {
+          await chrome.scripting.removeCSS({
+            css: legacyMessage.css || '',
+            origin: 'USER',
+            target: { tabId, frameIds: [frameId] },
+          });
+          return { success: true };
+        } catch (error) {
+          console.error('[AINTIVIRUS] removeCSS error:', error);
+          return { success: false, error: String(error) };
+        }
+      }
+
+      case 'injectCSSProceduralAPI': {
+        if (tabId === undefined || frameId === undefined) return { success: false };
+        try {
+          await chrome.scripting.executeScript({
+            files: ['/ubol/js/scripting/css-procedural-api.js'],
+            target: { tabId, frameIds: [frameId] },
+            injectImmediately: true,
+          });
+          return { success: true };
+        } catch (error) {
+          console.error('[AINTIVIRUS] injectCSSProceduralAPI error:', error);
+          return { success: false, error: String(error) };
+        }
+      }
+
+      default:
+        return { success: false, error: 'Unknown uBOL message type' };
+    }
+  }
+
+  
+  const extMessage = message as ExtensionMessage;
+  console.log('[AINTIVIRUS] Received message:', extMessage.type, 'from:', sender.tab?.url || 'extension');
+
+  switch (extMessage.type) {
     case 'GET_FEATURE_FLAGS':
       return handleGetFeatureFlags();
 
     case 'SET_FEATURE_FLAG':
-      return handleSetFeatureFlag(message.payload);
+      return handleSetFeatureFlag(extMessage.payload);
 
     case 'CONTENT_SCRIPT_READY':
-      return handleContentScriptReady(message.payload, sender);
+      return handleContentScriptReady(extMessage.payload, sender);
 
     case 'PING':
       return { success: true, data: 'pong' };
@@ -223,7 +253,6 @@ async function handleMessage(
       chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
       return { success: true };
 
-    // Privacy
     case 'GET_PRIVACY_SETTINGS':
     case 'SET_PRIVACY_SETTINGS':
     case 'GET_AD_BLOCKER_STATUS':
@@ -238,29 +267,26 @@ async function handleMessage(
     case 'GET_BLOCKED_COUNT':
     case 'GET_BLOCKED_REQUESTS':
     case 'GET_COSMETIC_RULES':
-      return handlePrivacyMessageWrapper(message.type, message.payload);
+      return handlePrivacyMessageWrapper(extMessage.type, extMessage.payload);
 
-    // Filter List Health
     case 'GET_FILTER_LIST_HEALTH':
       return handleGetFilterListHealth();
     
     case 'RESET_FILTER_LIST':
-      return handleResetFilterList(message.payload);
+      return handleResetFilterList(extMessage.payload);
 
-    // Ruleset Management
     case 'GET_RULESET_STATS':
       return handleGetRulesetStats();
     
     case 'ENABLE_RULESET':
-      return handleEnableRuleset(message.payload);
+      return handleEnableRuleset(extMessage.payload);
     
     case 'DISABLE_RULESET':
-      return handleDisableRuleset(message.payload);
+      return handleDisableRuleset(extMessage.payload);
     
     case 'TOGGLE_RULESET':
-      return handleToggleRuleset(message.payload);
+      return handleToggleRuleset(extMessage.payload);
 
-    // Threat Intelligence
     case 'GET_THREAT_INTEL_HEALTH':
       return handleGetThreatIntelHealth();
     
@@ -271,21 +297,19 @@ async function handleMessage(
       return handleGetThreatIntelSources();
     
     case 'ADD_THREAT_INTEL_SOURCE':
-      return handleAddThreatIntelSource(message.payload);
+      return handleAddThreatIntelSource(extMessage.payload);
     
     case 'REMOVE_THREAT_INTEL_SOURCE':
-      return handleRemoveThreatIntelSource(message.payload);
+      return handleRemoveThreatIntelSource(extMessage.payload);
     
     case 'TOGGLE_THREAT_INTEL_SOURCE':
-      return handleToggleThreatIntelSource(message.payload);
+      return handleToggleThreatIntelSource(extMessage.payload);
 
-    // Fingerprinting
     case 'GET_FINGERPRINT_SETTINGS':
     case 'SET_FINGERPRINT_SETTINGS':
     case 'GET_FINGERPRINT_STATUS':
-      return handleFingerprintMessageWrapper(message.type, message.payload);
+      return handleFingerprintMessageWrapper(extMessage.type, extMessage.payload);
 
-    // Wallet
     case 'WALLET_CREATE':
     case 'WALLET_IMPORT':
     case 'WALLET_UNLOCK':
@@ -303,7 +327,6 @@ async function handleMessage(
     case 'WALLET_SIGN_MESSAGE':
     case 'WALLET_GET_SETTINGS':
     case 'WALLET_SET_SETTINGS':
-    // Wallet transactions
     case 'WALLET_SEND_SOL':
     case 'WALLET_SEND_SPL_TOKEN':
     case 'WALLET_ESTIMATE_FEE':
@@ -311,12 +334,10 @@ async function handleMessage(
     case 'WALLET_GET_TOKENS':
     case 'WALLET_ADD_TOKEN':
     case 'WALLET_REMOVE_TOKEN':
-    // Wallet RPC health
     case 'WALLET_GET_RPC_HEALTH':
     case 'WALLET_ADD_RPC':
     case 'WALLET_REMOVE_RPC':
     case 'WALLET_TEST_RPC':
-    // Multi-wallet management
     case 'WALLET_LIST':
     case 'WALLET_ADD':
     case 'WALLET_IMPORT_ADD':
@@ -325,7 +346,6 @@ async function handleMessage(
     case 'WALLET_DELETE_ONE':
     case 'WALLET_EXPORT_ONE':
     case 'WALLET_GET_ACTIVE':
-    // Multi-chain support
     case 'WALLET_SET_CHAIN':
     case 'WALLET_SET_EVM_CHAIN':
     case 'WALLET_GET_EVM_BALANCE':
@@ -335,15 +355,13 @@ async function handleMessage(
     case 'WALLET_GET_EVM_HISTORY':
     case 'WALLET_ESTIMATE_EVM_FEE':
     case 'WALLET_GET_EVM_ADDRESS':
-    // EVM Pending Transaction Controls
     case 'EVM_GET_PENDING_TXS':
     case 'EVM_SPEED_UP_TX':
     case 'EVM_CANCEL_TX':
     case 'EVM_GET_GAS_PRESETS':
     case 'EVM_ESTIMATE_REPLACEMENT_FEE':
-      return handleWalletMessageWrapper(message.type as WalletMessageType, message.payload);
+      return handleWalletMessageWrapper(extMessage.type as WalletMessageType, extMessage.payload);
 
-    // Security
     case 'SECURITY_CONNECTION_REQUEST':
     case 'SECURITY_CONNECTION_APPROVE':
     case 'SECURITY_CONNECTION_DENY':
@@ -362,9 +380,8 @@ async function handleMessage(
     case 'SECURITY_SET_DOMAIN_TRUST':
     case 'SECURITY_GET_PROGRAM_INFO':
     case 'SECURITY_SET_PROGRAM_TRUST':
-      return handleSecurityMessageWrapper(message.type as SecurityMessageType, message.payload, sender.tab?.id);
+      return handleSecurityMessageWrapper(extMessage.type as SecurityMessageType, extMessage.payload, sender.tab?.id);
 
-    // Price
     case 'GET_SOL_PRICE':
       return handleGetSolPrice();
     
@@ -372,9 +389,8 @@ async function handleMessage(
       return handleGetEthPrice();
     
     case 'GET_TOKEN_PRICES':
-      return handleGetTokenPrices(message.payload);
+      return handleGetTokenPrices(extMessage.payload);
 
-    // dApp Connectivity
     case 'DAPP_REQUEST':
     case 'DAPP_APPROVE':
     case 'DAPP_REJECT':
@@ -386,12 +402,12 @@ async function handleMessage(
     case 'DAPP_GET_PROVIDER_STATE':
     case 'DAPP_PAGE_UNLOAD':
     case 'GET_TAB_ID':
-      return handleDAppMessageWrapper(message.type, message.payload, sender);
+      return handleDAppMessageWrapper(extMessage.type, extMessage.payload, sender);
 
     default:
       return {
         success: false,
-        error: `Unknown message type: ${(message as ExtensionMessage).type}`,
+        error: `Unknown message type: ${extMessage.type}`,
       };
   }
 }
@@ -407,7 +423,6 @@ async function handleSetFeatureFlag(
   await setFeatureFlag(payload.id, payload.enabled);
   console.log('[AINTIVIRUS] Feature flag updated:', payload.id, '=', payload.enabled);
 
-  // Keep privacy engine in sync
   if (payload.id === 'privacy') {
     await togglePrivacyProtection(payload.enabled);
   }
@@ -420,7 +435,6 @@ async function handleContentScriptReady(
   sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse> {
   console.log('[AINTIVIRUS] Content script ready on tab:', sender.tab?.id, 'url:', payload.url);
-  // DNR handles the heavy lifting, content script is mostly for UI stuff
   return { success: true };
 }
 
@@ -456,7 +470,6 @@ async function handleFingerprintMessageWrapper(
   }
 }
 
-// All wallet ops go through here - keys never leave the wallet module
 async function handleWalletMessageWrapper(
   type: WalletMessageType,
   payload: unknown
@@ -473,7 +486,6 @@ async function handleWalletMessageWrapper(
   }
 }
 
-// Security features: connection tracking, tx verification, phishing checks
 async function handleSecurityMessageWrapper(
   type: SecurityMessageType,
   payload: unknown,
@@ -491,7 +503,6 @@ async function handleSecurityMessageWrapper(
   }
 }
 
-// Filter List Health handlers
 async function handleGetFilterListHealth(): Promise<MessageResponse> {
   try {
     const health = await getFilterListHealth();
@@ -520,7 +531,6 @@ async function handleResetFilterList(
   }
 }
 
-// Ruleset Management handlers
 async function handleGetRulesetStats(): Promise<MessageResponse> {
   try {
     const stats = await getRulesetStats();
@@ -579,7 +589,6 @@ async function handleToggleRuleset(
   }
 }
 
-// Threat Intelligence handlers
 async function handleGetThreatIntelHealth(): Promise<MessageResponse> {
   try {
     const health = await getThreatIntelHealth();
@@ -672,7 +681,6 @@ async function handleToggleThreatIntelSource(
   }
 }
 
-// Price handlers
 async function handleGetSolPrice(): Promise<MessageResponse> {
   try {
     const result = await getSolPriceWithChange();
@@ -704,7 +712,6 @@ async function handleGetTokenPrices(
 ): Promise<MessageResponse> {
   try {
     const prices = await getTokenPrices(payload.mints);
-    // Convert Map to object for serialization
     const pricesObj: Record<string, number> = {};
     prices.forEach((price, mint) => {
       pricesObj[mint] = price;
@@ -719,7 +726,6 @@ async function handleGetTokenPrices(
   }
 }
 
-// dApp connectivity message handler
 async function handleDAppMessageWrapper(
   type: string,
   payload: unknown,

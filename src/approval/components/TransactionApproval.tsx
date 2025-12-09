@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
 import {
@@ -10,7 +8,6 @@ import {
   formatEthValue,
 } from '../../decoding';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -274,23 +271,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 interface Props {
   request: QueuedRequest;
   onApprove: () => void;
   onReject: (reason?: string) => void;
 }
 
-
 export function TransactionApproval({ request, onApprove, onReject }: Props) {
   const [showData, setShowData] = useState(false);
   const [decoded, setDecoded] = useState<DecodedEvmTx | null>(null);
   const [isDecoding, setIsDecoding] = useState(true);
 
-  
   const formattedOrigin = useMemo(() => formatOriginUtil(request.origin), [request.origin]);
 
-  
   useEffect(() => {
     let cancelled = false;
 
@@ -320,19 +313,15 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
       }
 
       try {
-        
         await new Promise(resolve => setTimeout(resolve, 0));
-        
         if (cancelled) return;
 
         const decodedTx = decodeEvmTx(params);
-        
         if (!cancelled) {
           setDecoded(decodedTx);
           setIsDecoding(false);
         }
       } catch (error) {
-
         if (!cancelled) {
           setIsDecoding(false);
         }
@@ -346,7 +335,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     };
   }, [request]);
 
-  
   const solanaDetails = useMemo(() => {
     if (request.chainType === 'solana') {
       const params = request.params as {
@@ -417,7 +405,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     return chains[chainId] || `Chain ${chainId}`;
   };
 
-  
   if (isDecoding && request.chainType === 'evm') {
     return (
       <div style={styles.container}>
@@ -475,14 +462,12 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     );
   }
 
-  
   if (decoded) {
     const hasValue =
       decoded.details.valueEth !== '0 ETH' && decoded.details.value !== '0';
 
     return (
       <div style={styles.container}>
-        {}
         <div style={styles.siteInfo}>
           <div style={styles.favicon}>
             {request.favicon ? (
@@ -504,7 +489,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         </div>
 
-        {}
         {decoded.warnings.map((warning, idx) => (
           <div key={idx} style={getWarningStyle(warning.level)}>
             <WarningIcon color={getWarningColor(warning.level)} />
@@ -529,7 +513,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         ))}
 
-        {}
         <div style={styles.txCard}>
           <div style={styles.txHeader}>
             <span style={styles.txType}>
@@ -582,7 +565,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
             )}
           </div>
 
-          {}
           {decoded.decodedCall && decoded.decodedCall.params.length > 0 && (
             <div style={styles.decodedCall}>
               <div style={styles.decodedCallHeader}>Parameters</div>
@@ -617,7 +599,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
             </div>
           )}
 
-          {}
           <div style={styles.feeSection}>
             <div style={styles.divider} />
             {decoded.details.gasLimit && (
@@ -635,7 +616,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         </div>
 
-        {}
         {decoded.details.data && decoded.details.data !== '0x' && (
           <div style={styles.dataSection}>
             <button
@@ -670,7 +650,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         )}
 
-        {}
         <div style={styles.buttons}>
           <button
             style={{ ...styles.button, ...styles.rejectButton }}
@@ -689,7 +668,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     );
   }
 
-  
   return (
     <div style={styles.container}>
       <div style={styles.siteInfo}>
@@ -779,7 +757,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     </div>
   );
 }
-
 
 function WarningIcon({ color }: { color: string }) {
   return (

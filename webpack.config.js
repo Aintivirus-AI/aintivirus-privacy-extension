@@ -15,13 +15,9 @@ module.exports = (env, argv) => {
       content: './src/content/index.ts',
       popup: './src/popup/index.tsx',
       settings: './src/settings/index.tsx',
-      // Fingerprint protection script - injected into MAIN world
       fingerprintInjected: './src/fingerprinting/injectedScript.ts',
-      // Security monitoring script - injected into MAIN world for wallet interception
       securityInjected: './src/security/injected.ts',
-      // dApp provider script - injected into MAIN world for EIP-1193/Solana providers
       dappInpage: './src/dapp/providers/inpage.ts',
-      // dApp approval window
       approval: './src/approval/index.tsx',
     },
     output: {
@@ -49,22 +45,18 @@ module.exports = (env, argv) => {
         '@wallet': path.resolve(__dirname, 'src/wallet'),
       },
       fallback: {
-        // Node.js polyfills for Solana/crypto libraries
         stream: require.resolve('stream-browserify'),
         buffer: require.resolve('buffer/'),
       },
     },
     plugins: [
-      // Extract CSS to separate files (required for Chrome extension CSP)
       new MiniCssExtractPlugin({
         filename: '[name].css',
       }),
-      // Provide Node.js globals for browser compatibility
       new webpack.ProvidePlugin({
         process: 'process/browser',
         Buffer: ['buffer', 'Buffer'],
       }),
-      // Define environment variables for conditional logging
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
       }),
@@ -99,9 +91,6 @@ module.exports = (env, argv) => {
             from: 'public',
             to: '.',
           },
-          // uBOL (uBlock Origin Lite) integration files
-          // Licensed under GPL-3.0 - see vendor/ubol/LICENSE.txt
-          // This is the ONLY ad blocking engine - all rules come from uBOL
           {
             from: 'vendor/ubol/rulesets',
             to: 'ubol/rulesets',
@@ -128,8 +117,6 @@ module.exports = (env, argv) => {
         new TerserPlugin({
           terserOptions: {
             compress: {
-              // SECURITY: Remove console.log/warn in production to prevent fingerprinting
-              // Keep console.error for critical errors
               drop_console: false,
               pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
             },

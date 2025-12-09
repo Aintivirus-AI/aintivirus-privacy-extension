@@ -26,11 +26,14 @@ const TRUSTED_DIRECTIVE_PRIORITY = 2000000;
 
 export const DEFAULT_RULESETS = [
   'ublock-filters',
+  'ublock-experimental',
   'easylist',
   'easyprivacy',
   'pgl',
   'ublock-badware',
   'urlhaus-full',
+  'annoyances-overlays',
+  'annoyances-others',
 ] as const;
 
 
@@ -41,12 +44,12 @@ export const ALL_RULESETS = [
   'pgl',
   'ublock-badware',
   'urlhaus-full',
+  'annoyances-overlays',
   'adguard-mobile',
   'block-lan',
   'dpollock-0',
   'adguard-spyware-url',
   'annoyances-cookies',
-  'annoyances-overlays',
   'annoyances-social',
   'annoyances-widgets',
   'annoyances-others',
@@ -88,8 +91,8 @@ const defaultRulesetConfig: RulesetConfig = {
 const defaultFilteringModes: FilteringModeDetails = {
   none: new Set(),
   basic: new Set(),
-  optimal: new Set(['all-urls']), 
-  complete: new Set(),
+  optimal: new Set(),
+  complete: new Set(['all-urls']),
 };
 
 

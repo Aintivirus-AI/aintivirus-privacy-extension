@@ -101,8 +101,6 @@ interface PrivacyStats {
 type MainTab = 'security' | 'wallet';
 type WalletView = 'dashboard' | 'send' | 'receive' | 'history' | 'manage' | 'add-wallet' | 'swap';
 
-// --- Utils ---
-
 function truncateAddress(address: string, chars: number = 4): string {
   if (address.length <= chars * 2 + 3) return address;
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
@@ -110,18 +108,13 @@ function truncateAddress(address: string, chars: number = 4): string {
 
 function formatSol(amount: number): string {
   if (amount === 0) return '0';
-  // For very small amounts, show actual value with appropriate decimals
   if (amount < 0.0001) {
-    // Find the first significant digit and show 2 significant figures
     const str = amount.toFixed(8);
-    // Remove trailing zeros but keep at least one digit after decimal
     return str.replace(/\.?0+$/, '') || '0';
   }
   if (amount < 1) {
-    // For amounts less than 1, show up to 6 decimal places
     return amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 });
   }
-  // For larger amounts, show up to 4 decimal places
   return amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 }
 
@@ -152,9 +145,6 @@ function getFeatureIcon(iconName: string): React.ReactNode {
   }
 }
 
-/**
- * Render text with highlighted matching segments
- */
 const HighlightedText: React.FC<{ text: string; segments: HighlightSegment[] }> = ({ segments }) => (
   <>
     {segments.map((seg, i) =>
@@ -166,8 +156,6 @@ const HighlightedText: React.FC<{ text: string; segments: HighlightSegment[] }> 
     )}
   </>
 );
-
-// --- Security Tab ---
 
 interface SecurityTabProps {
   flags: FeatureFlags;
@@ -185,17 +173,15 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   onAdBlockerToggle,
 }) => {
   const handleTrackersClick = () => {
-    // Open settings page directly with trackers tab hash
     chrome.tabs.create({ url: chrome.runtime.getURL('settings.html#trackers') });
   };
 
   const handleScriptsClick = () => {
-    // Open settings page directly with scripts tab hash
     chrome.tabs.create({ url: chrome.runtime.getURL('settings.html#scripts') });
   };
 
   const sessionDuration = stats.sessionStart
-    ? Math.floor((Date.now() - stats.sessionStart) / 1000 / 60) // minutes
+    ? Math.floor((Date.now() - stats.sessionStart) / 1000 / 60)
     : 0;
 
   const topTrackedSites = stats.blockedByDomain
@@ -392,8 +378,6 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
   );
 };
 
-// --- Wallet Tab ---
-
 interface WalletTabProps {
   walletState: WalletState | null;
   onStateChange: () => void;
@@ -410,7 +394,6 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
   const [switchingToWalletId, setSwitchingToWalletId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedTokenForSend, setSelectedTokenForSend] = useState<SelectedTokenForSend | null>(null);
-  // Key to force WalletDashboard remount after successful send
   const [dashboardKey, setDashboardKey] = useState(0);
 
   const handleUnlock = async () => {
@@ -565,7 +548,6 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
                 payload: { chain, evmChainId },
               });
               console.log('[ChainChange] SET_CHAIN result:', result);
-              // Refresh wallet state after chain change
               await onStateChange();
               console.log('[ChainChange] State refreshed');
             }}
@@ -587,15 +569,10 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
             onSuccess={async () => {
               setSelectedTokenForSend(null);
               setView('dashboard');
-              // Increment key to force WalletDashboard remount with fresh data
-              // This triggers an immediate fetch - caches are cleared on backend after send
               setDashboardKey(k => k + 1);
-              // Additional refreshes to catch transaction propagation on-chain
-              // First refresh after 2s - transaction should be confirmed by now
               setTimeout(() => {
                 setDashboardKey(k => k + 1);
               }, 2000);
-              // Second refresh after 6s for slower propagation/finality
               setTimeout(() => {
                 setDashboardKey(k => k + 1);
               }, 6000);
@@ -1115,7 +1092,6 @@ const ChainIcon: React.FC<{ chain: ChainType; evmChainId?: EVMChainId; size?: nu
     }
   };
 
-  // Fallback color for error state
   const getFallbackColor = () => {
     if (chain === 'solana') return '#9945FF';
     switch (evmChainId) {

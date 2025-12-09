@@ -1,5 +1,3 @@
-
-
 const PANEL_ID = 'aintivirus-floating-panel';
 const PANEL_CONTAINER_ID = 'aintivirus-panel-container';
 
@@ -13,19 +11,15 @@ let panelState: PanelState = {
   isMinimized: true,
 };
 
-
 let panelElement: HTMLElement | null = null;
 
-
 function createFloatingPanel(): HTMLElement {
-  
   const existing = document.getElementById(PANEL_CONTAINER_ID);
   if (existing) {
     existing.remove();
     panelElement = null;
   }
 
-  
   const container = document.createElement('div');
   container.id = PANEL_CONTAINER_ID;
   container.style.cssText = `
@@ -39,10 +33,8 @@ function createFloatingPanel(): HTMLElement {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
-  
   const shadow = container.attachShadow({ mode: 'closed' });
 
-  
   const styles = document.createElement('style');
   styles.textContent = `
     * {
@@ -182,16 +174,13 @@ function createFloatingPanel(): HTMLElement {
   `;
   shadow.appendChild(styles);
 
-  
   const panelWrapper = document.createElement('div');
   panelWrapper.className = 'panel-wrapper minimized';
   panelWrapper.id = PANEL_ID;
 
-  
   const header = document.createElement('div');
   header.className = 'panel-header';
 
-  
   const brand = document.createElement('div');
   brand.className = 'panel-brand';
 
@@ -210,7 +199,6 @@ function createFloatingPanel(): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
 
-  
   const settingsBtn = document.createElement('button');
   settingsBtn.className = 'panel-btn settings-btn';
   settingsBtn.title = 'Settings';
@@ -225,7 +213,6 @@ function createFloatingPanel(): HTMLElement {
     chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
   });
 
-  
   const closeBtn = document.createElement('button');
   closeBtn.className = 'panel-btn close-btn';
   closeBtn.title = 'Close';
@@ -239,7 +226,6 @@ function createFloatingPanel(): HTMLElement {
     e.stopPropagation();
     e.preventDefault();
 
-    
     panelWrapper.classList.remove('visible');
     panelWrapper.classList.add('minimized');
     panelState.isVisible = false;
@@ -252,7 +238,6 @@ function createFloatingPanel(): HTMLElement {
   header.appendChild(brand);
   header.appendChild(actions);
 
-  
   const content = document.createElement('div');
   content.className = 'panel-content';
 
@@ -266,17 +251,14 @@ function createFloatingPanel(): HTMLElement {
   panelWrapper.appendChild(content);
   shadow.appendChild(panelWrapper);
 
-  
   setupDragging(panelWrapper, header);
 
   document.body.appendChild(container);
 
-  
   panelElement = panelWrapper;
 
   return panelWrapper;
 }
-
 
 function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
   let isDragging = false;
@@ -286,7 +268,6 @@ function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
   let startTop = 16;
 
   handle.addEventListener('mousedown', (e: MouseEvent) => {
-    
     if ((e.target as HTMLElement).closest('button')) return;
 
     isDragging = true;
@@ -322,7 +303,6 @@ function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
   });
 }
 
-
 function showPanel(): void {
   if (!panelElement) {
     createFloatingPanel();
@@ -336,8 +316,7 @@ function showPanel(): void {
   }
 }
 
-
-function closePanel(): void {
+function closePanel(): void{
   if (panelElement) {
     panelElement.classList.remove('visible');
     panelElement.classList.add('minimized');
@@ -345,7 +324,6 @@ function closePanel(): void {
     panelState.isMinimized = true;
   }
 }
-
 
 function togglePanel(): void {
   if (panelState.isMinimized) {
@@ -355,9 +333,7 @@ function togglePanel(): void {
   }
 }
 
-
 export function initializeFloatingPanel(): void {
-  
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'TOGGLE_PANEL') {
       togglePanel();
@@ -379,6 +355,4 @@ export function initializeFloatingPanel(): void {
 
 }
 
-
 export { showPanel, closePanel, togglePanel };
-

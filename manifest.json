@@ -101,7 +101,7 @@
       },
       {
         "id": "annoyances-overlays",
-        "enabled": false,
+        "enabled": true,
         "path": "ubol/rulesets/main/annoyances-overlays.json"
       },
       {
@@ -116,7 +116,7 @@
       },
       {
         "id": "annoyances-others",
-        "enabled": false,
+        "enabled": true,
         "path": "ubol/rulesets/main/annoyances-others.json"
       },
       {
@@ -126,7 +126,7 @@
       },
       {
         "id": "ublock-experimental",
-        "enabled": false,
+        "enabled": true,
         "path": "ubol/rulesets/main/ublock-experimental.json"
       },
       {

@@ -1,5 +1,3 @@
-
-
 const fs = require('fs');
 const path = require('path');
 
@@ -7,18 +5,14 @@ const dir = path.join(__dirname, '..', 'public', 'icons');
 const sourceImage = path.join(dir, 'binary_john.jpg');
 
 async function createIcons() {
-  
   let sharp;
   try {
     sharp = require('sharp');
   } catch (e) {
-
-
     return;
   }
 
   if (!fs.existsSync(sourceImage)) {
-
     return;
   }
 
@@ -30,11 +24,7 @@ async function createIcons() {
       .resize(size, size, { fit: 'cover' })
       .png()
       .toFile(outputPath);
-
   }
-
-
 }
 
 createIcons().catch(console.error);
-

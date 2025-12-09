@@ -1,9 +1,6 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -189,26 +186,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 interface Props {
   request: QueuedRequest;
   onApprove: () => void;
   onReject: (reason?: string) => void;
 }
 
-
 export function SignApproval({ request, onApprove, onReject }: Props) {
   const [viewMode, setViewMode] = useState<'text' | 'hex'>('text');
 
-  
   const formattedOrigin = useMemo(() => formatOriginUtil(request.origin), [request.origin]);
 
-  
   const messageData = useMemo(() => {
     const params = request.params as unknown[];
     if (!params) return { text: '', hex: '', isHex: false, byteLength: 0 };
 
-    
     if (request.method === 'personal_sign' && Array.isArray(params)) {
       const message = params[0] as string;
       if (message.startsWith('0x')) {
@@ -229,11 +221,9 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       };
     }
 
-    
     if (request.method === 'signMessage') {
       const { message } = request.params as { message: string };
       try {
-        
         const decoded = atob(message);
         const bytes = Uint8Array.from(decoded, (c) => c.charCodeAt(0));
         return {
@@ -252,7 +242,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       }
     }
 
-    
     if (request.method === 'wallet_switchEthereumChain') {
       const { chainId } = params[0] as { chainId: string };
       return {
@@ -263,7 +252,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       };
     }
 
-    
     if (request.method === 'wallet_addEthereumChain') {
       const chainParams = params[0] as {
         chainId: string;
@@ -306,7 +294,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
   const getWarnings = (): { type: 'warning' | 'danger'; message: string }[] => {
     const warnings: { type: 'warning' | 'danger'; message: string }[] = [];
 
-    
     if (request.method === 'eth_sign') {
       warnings.push({
         type: 'danger',
@@ -315,12 +302,11 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       });
     }
 
-    
     if (messageData.text.includes('0x') && messageData.byteLength > 100) {
       const looksLikeTx =
-        messageData.hex.includes('095ea7b3') || 
-        messageData.hex.includes('a9059cbb') || 
-        messageData.hex.includes('23b872dd');   
+        messageData.hex.includes('095ea7b3') ||
+        messageData.hex.includes('a9059cbb') ||
+        messageData.hex.includes('23b872dd');
 
       if (looksLikeTx) {
         warnings.push({
@@ -331,7 +317,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       }
     }
 
-    
     if (messageData.byteLength > 1000) {
       warnings.push({
         type: 'warning',
@@ -347,7 +332,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
 
   return (
     <div style={styles.container}>
-      {}
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
@@ -372,7 +356,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         <span style={styles.requestText}>{getRequestTitle()}</span>
       </div>
 
-      {}
       {warnings.map((warning, idx) =>
         warning.type === 'danger' ? (
           <div key={idx} style={styles.dangerBox}>
@@ -413,7 +396,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         )
       )}
 
-      {}
       <div style={styles.section}>
         <div style={styles.sectionHeader}>
           <span style={styles.sectionTitle}>
@@ -457,13 +439,11 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         )}
       </div>
 
-      {}
       <div style={styles.infoRow}>
         <span style={styles.infoLabel}>Method</span>
         <span style={styles.infoValue}>{request.method}</span>
       </div>
 
-      {}
       <div style={styles.buttons}>
         <button
           style={{ ...styles.button, ...styles.rejectButton }}
@@ -482,7 +462,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
   );
 }
 
-
 function hexToString(hex: string): string {
   let str = '';
   for (let i = 0; i < hex.length; i += 2) {
@@ -490,7 +469,6 @@ function hexToString(hex: string): string {
     if (charCode > 0 && charCode < 128) {
       str += String.fromCharCode(charCode);
     } else if (charCode >= 128) {
-      
       str += '�';
     }
   }

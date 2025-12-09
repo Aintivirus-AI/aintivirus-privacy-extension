@@ -1,9 +1,6 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest, AccountInfo } from '../../dapp/types';
 import { formatOrigin } from '../../shared/utils/formatOrigin';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -211,14 +208,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 interface Props {
   request: QueuedRequest;
   accounts: AccountInfo[];
   onApprove: (selectedAccounts: string[], remember: boolean) => void;
   onReject: (reason?: string) => void;
 }
-
 
 export function ConnectApproval({ request, accounts, onApprove, onReject }: Props) {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(
@@ -254,12 +249,10 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
     };
   };
 
-  
   const formattedOrigin = useMemo(() => formatOrigin(request.origin), [request.origin]);
 
   return (
     <div style={styles.container}>
-      {}
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
@@ -292,7 +285,6 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
         </span>
       </div>
 
-      {}
       <div style={styles.section}>
         <span style={styles.sectionTitle}>Select Account</span>
         <div style={styles.accountList}>
@@ -331,7 +323,6 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
         </div>
       </div>
 
-      {}
       <div style={styles.rememberSection}>
         <div
           style={{
@@ -353,7 +344,6 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
         </div>
       </div>
 
-      {}
       <div style={styles.buttons}>
         <button
           style={{ ...styles.button, ...styles.rejectButton }}

@@ -1,12 +1,9 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { ConnectApproval } from './components/ConnectApproval';
 import { SignApproval } from './components/SignApproval';
 import { SignTypedDataApproval } from './components/SignTypedDataApproval';
 import { TransactionApproval } from './components/TransactionApproval';
 import { QueuedRequest, ApprovalType, AccountInfo } from '../dapp/types';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -65,14 +62,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [request, setRequest] = useState<QueuedRequest | null>(null);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
 
-  
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestId = params.get('requestId');
@@ -83,13 +78,11 @@ export function App() {
       return;
     }
 
-    
     fetchRequestDetails(requestId);
   }, []);
 
   async function fetchRequestDetails(requestId: string) {
     try {
-      
       const response = await chrome.runtime.sendMessage({
         type: 'DAPP_GET_PENDING_REQUESTS',
         payload: undefined,
@@ -110,7 +103,6 @@ export function App() {
 
       setRequest(targetRequest);
 
-      
       const walletResponse = await chrome.runtime.sendMessage({
         type: 'WALLET_GET_STATE',
         payload: undefined,
@@ -119,7 +111,6 @@ export function App() {
       if (walletResponse.success && walletResponse.data) {
         const walletState = walletResponse.data;
 
-        
         const accountList: AccountInfo[] = [];
 
         if (targetRequest.chainType === 'solana' && walletState.address) {
@@ -144,7 +135,6 @@ export function App() {
 
       setLoading(false);
     } catch (err) {
-
       setError(err instanceof Error ? err.message : 'Unknown error');
       setLoading(false);
     }
@@ -165,9 +155,7 @@ export function App() {
         },
       });
 
-      
     } catch (err) {
-
       setError(err instanceof Error ? err.message : 'Failed to approve');
       setLoading(false);
     }
@@ -187,15 +175,12 @@ export function App() {
         },
       });
 
-      
     } catch (err) {
-
       setError(err instanceof Error ? err.message : 'Failed to reject');
       setLoading(false);
     }
   }
 
-  
   if (loading) {
     return (
       <div style={styles.container}>
@@ -208,7 +193,6 @@ export function App() {
     );
   }
 
-  
   if (error) {
     return (
       <div style={styles.container}>
@@ -234,7 +218,6 @@ export function App() {
     );
   }
 
-  
   return (
     <div style={styles.container}>
       <Header />
@@ -244,7 +227,6 @@ export function App() {
     </div>
   );
 }
-
 
 function Header() {
   return (
@@ -275,7 +257,6 @@ function Header() {
   );
 }
 
-
 function isTypedDataRequest(request: QueuedRequest): boolean {
   return (
     request.method === 'eth_signTypedData' ||
@@ -283,7 +264,6 @@ function isTypedDataRequest(request: QueuedRequest): boolean {
     request.method === 'eth_signTypedData_v4'
   );
 }
-
 
 function renderApprovalComponent(
   request: QueuedRequest,
@@ -305,7 +285,6 @@ function renderApprovalComponent(
       );
 
     case 'signMessage':
-      
       if (isTypedDataRequest(request)) {
         return (
           <SignTypedDataApproval

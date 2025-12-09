@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
 import {
@@ -11,7 +9,6 @@ import {
   TxWarning,
 } from '../../decoding';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -221,30 +218,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 interface Props {
   request: QueuedRequest;
   onApprove: () => void;
   onReject: (reason?: string) => void;
 }
 
-
 export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
   const [showRaw, setShowRaw] = useState(false);
 
-  
   const parseResult = useMemo(() => {
     const params = request.params as unknown[];
     if (!params || params.length < 2) {
       return null;
     }
 
-    
     const typedDataString = params[1] as string;
     return decodeTypedData(typedDataString);
   }, [request.params]);
 
-  
   const formattedOrigin = useMemo(() => formatOriginUtil(request.origin), [request.origin]);
 
   const getPatternLabel = (pattern: string): { label: string; color: string } => {
@@ -308,7 +300,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
     }
   };
 
-  
   if (!parseResult || !parseResult.isValid) {
     return (
       <div style={styles.container}>
@@ -355,7 +346,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
 
   return (
     <div style={styles.container}>
-      {}
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
@@ -388,7 +378,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </span>
       </div>
 
-      {}
       {warnings.map((warning, idx) => (
         <div key={idx} style={getWarningStyle(warning.level)}>
           <WarningIcon color={getWarningColor(warning.level)} />
@@ -403,7 +392,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       ))}
 
-      {}
       {displayModel?.domain && (
         <div style={styles.card}>
           <div style={styles.cardHeader}>Domain</div>
@@ -439,7 +427,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       )}
 
-      {}
       {displayModel?.messageFields && displayModel.messageFields.length > 0 && (
         <div style={styles.card}>
           <div style={styles.cardHeader}>{displayModel.primaryType}</div>
@@ -464,7 +451,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       )}
 
-      {}
       {displayModel?.nestedStructs?.map((struct, structIdx) => (
         <div key={structIdx} style={styles.card}>
           <div style={styles.cardHeader}>{struct.name}</div>
@@ -488,7 +474,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       ))}
 
-      {}
       <button style={styles.toggleButton} onClick={() => setShowRaw(!showRaw)}>
         <svg
           width="16"
@@ -514,7 +499,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         <div style={styles.rawData}>{JSON.stringify(raw, null, 2)}</div>
       )}
 
-      {}
       <div style={styles.buttons}>
         <button
           style={{ ...styles.button, ...styles.rejectButton }}
@@ -532,7 +516,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
     </div>
   );
 }
-
 
 function WarningIcon({ color }: { color: string }) {
   return (

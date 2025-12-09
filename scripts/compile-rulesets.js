@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 
-
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-
 const CONFIG = {
   cacheDir: path.join(__dirname, '../.filter-cache'),
   rulesDir: path.join(__dirname, '../rules'),
-  maxRulesPerRuleset: 30000, 
-  cacheTTL: 24 * 60 * 60 * 1000, 
+  maxRulesPerRuleset: 30000,
+  cacheTTL: 24 * 60 * 60 * 1000,
 };
-
 
 const FILTER_LISTS = {
   ads: [
@@ -37,7 +34,6 @@ const FILTER_LISTS = {
   ],
 };
 
-
 const RESOURCE_TYPE_MAP = {
   'script': 'script',
   'image': 'image',
@@ -55,12 +51,11 @@ const RESOURCE_TYPE_MAP = {
   'other': 'other',
 };
 
-
 const ALL_RESOURCE_TYPES = [
-  'main_frame',  
-  'sub_frame',   
+  'main_frame',
+  'sub_frame',
   'script',
-  'image', 
+  'image',
   'stylesheet',
   'object',
   'xmlhttprequest',
@@ -71,10 +66,8 @@ const ALL_RESOURCE_TYPES = [
   'other',
 ];
 
-
 async function fetchWithCache(url, forceRefresh = false) {
   const cacheFile = path.join(CONFIG.cacheDir, Buffer.from(url).toString('base64').slice(0, 50) + '.txt');
-  
   
   if (!forceRefresh && fs.existsSync(cacheFile)) {
     const stats = fs.statSync(cacheFile);
@@ -89,27 +82,22 @@ async function fetchWithCache(url, forceRefresh = false) {
         'Accept': 'text/plain',
       },
     }, (response) => {
-      
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         fetchWithCache(response.headers.location, forceRefresh).then(resolve).catch(reject);
         return;
       }
-      
       if (response.statusCode !== 200) {
         reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
         return;
       }
-      
       let data = '';
       response.on('data', chunk => data += chunk);
       response.on('end', () => {
-        
         fs.mkdirSync(CONFIG.cacheDir, { recursive: true });
         fs.writeFileSync(cacheFile, data);
         resolve(data);
       });
     });
-    
     request.on('error', reject);
     request.setTimeout(30000, () => {
       request.destroy();
@@ -118,10 +106,8 @@ async function fetchWithCache(url, forceRefresh = false) {
   });
 }
 
-
 function parseFilterRule(rule) {
   let trimmed = rule.trim();
-  
   
   if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('#')) return null;
   if (trimmed.startsWith('[Adblock')) return null;
@@ -129,15 +115,12 @@ function parseFilterRule(rule) {
   if (trimmed.includes('#$#') || trimmed.includes('#@$#')) return null;
   if (trimmed.includes('##+js') || trimmed.includes('#@#+js')) return null;
   
-  
   const isAllow = trimmed.startsWith('@@');
   if (isAllow) trimmed = trimmed.slice(2);
-  
   
   const dollarIndex = trimmed.indexOf('$');
   let pattern = dollarIndex >= 0 ? trimmed.slice(0, dollarIndex) : trimmed;
   const modifiers = dollarIndex >= 0 ? trimmed.slice(dollarIndex + 1).split(',') : [];
-  
   
   let resourceTypes = [];
   let domains = undefined;
@@ -148,19 +131,16 @@ function parseFilterRule(rule) {
   for (const mod of modifiers) {
     const modLower = mod.toLowerCase().trim();
     
-    
     if (RESOURCE_TYPE_MAP[modLower]) {
       resourceTypes.push(RESOURCE_TYPE_MAP[modLower]);
       continue;
     }
-    
     
     if (modLower.startsWith('~') && RESOURCE_TYPE_MAP[modLower.slice(1)]) {
       if (resourceTypes.length === 0) resourceTypes = [...ALL_RESOURCE_TYPES];
       resourceTypes = resourceTypes.filter(t => t !== RESOURCE_TYPE_MAP[modLower.slice(1)]);
       continue;
     }
-    
     
     if (modLower === 'third-party' || modLower === '3p') {
       isThirdParty = true;
@@ -170,7 +150,6 @@ function parseFilterRule(rule) {
       isThirdParty = false;
       continue;
     }
-    
     
     if (modLower.startsWith('domain=')) {
       const domainList = mod.slice(7).split('|');
@@ -185,27 +164,21 @@ function parseFilterRule(rule) {
       continue;
     }
     
-    
     if (['popup', 'document', 'csp', 'redirect', 'redirect-rule', 'removeparam', 
          'important', 'badfilter', 'match-case', 'all', 'frame'].includes(modLower)) {
       hasUnsupportedModifier = true;
     }
   }
   
-  
   if (hasUnsupportedModifier) return null;
   
-  
   if (resourceTypes.length === 0) resourceTypes = [...ALL_RESOURCE_TYPES];
-  
   
   const isDomainAnchored = pattern.startsWith('||');
   if (isDomainAnchored) pattern = pattern.slice(2);
   
-  
   if (pattern.startsWith('|')) pattern = pattern.slice(1);
   if (pattern.endsWith('|')) pattern = pattern.slice(0, -1);
-  
   
   if (!pattern || pattern === '*' || pattern === '^') return null;
   
@@ -221,14 +194,12 @@ function parseFilterRule(rule) {
   };
 }
 
-
 function convertToDNR(parsed, ruleId) {
   try {
     let urlFilter = parsed.pattern;
     if (parsed.isDomainAnchored) urlFilter = '||' + urlFilter;
     
-    
-    if (urlFilter.length > 4096) return null; 
+    if (urlFilter.length > 4096) return null;
     
     const rule = {
       id: ruleId,
@@ -240,14 +211,12 @@ function convertToDNR(parsed, ruleId) {
       },
     };
     
-    
     if (parsed.domains?.length > 0) {
       rule.condition.initiatorDomains = parsed.domains;
     }
     if (parsed.excludedDomains?.length > 0) {
       rule.condition.excludedInitiatorDomains = parsed.excludedDomains;
     }
-    
     
     if (parsed.isThirdParty === true) {
       rule.condition.domainType = 'thirdParty';
@@ -260,7 +229,6 @@ function convertToDNR(parsed, ruleId) {
     return null;
   }
 }
-
 
 async function compileRuleset(name, lists, startId, forceRefresh) {
   const allRules = [];
@@ -279,7 +247,6 @@ async function compileRuleset(name, lists, startId, forceRefresh) {
         const parsed = parseFilterRule(line);
         if (!parsed) continue;
         
-        
         const key = `${parsed.type}:${parsed.pattern}`;
         if (seenPatterns.has(key)) continue;
         seenPatterns.add(key);
@@ -297,31 +264,23 @@ async function compileRuleset(name, lists, startId, forceRefresh) {
   return allRules;
 }
 
-
 function generateCustomRuleset() {
   const rules = [];
   let id = 1;
   
-  
   const trackerDomains = [
-    
     'sentry.io', 'browser.sentry-cdn.com', 'sentry-cdn.com',
     'bugsnag.com', 'd2wy8f7a9ursnm.cloudfront.net', 'sessions.bugsnag.com',
     'notify.bugsnag.com', 'app.bugsnag.com',
     'rollbar.com', 'raygun.com', 'trackjs.com',
     'logrocket.com', 'logrocket.io', 'lr-ingest.io',
-    
     'google-analytics.com', 'googleadservices.com', 'googlesyndication.com',
     'doubleclick.net', 'googletagmanager.com', 'googletagservices.com',
-    
     'taboola.com', 'outbrain.com', 'criteo.com', 'criteo.net',
     'adroll.com', 'adsrvr.org', 'pubmatic.com',
-    
     'hotjar.com', 'mixpanel.com', 'segment.io', 'segment.com',
     'amplitude.com', 'heapanalytics.com', 'fullstory.com',
-    
     'facebook.net', 'connect.facebook.net', 'analytics.twitter.com',
-    
     'trackersimulator.org', 'eviltracker.net', 'do-not-tracker.org',
   ];
   
@@ -339,11 +298,9 @@ function generateCustomRuleset() {
   return rules;
 }
 
-
 function generateFixesRuleset() {
   const rules = [];
   let id = 1;
-  
   
   rules.push({
     id: id++,
@@ -443,7 +400,6 @@ function generateFixesRuleset() {
     },
   });
   
-  
   const adImagePatterns = [
     '/ads/*',
     '/ad/*',
@@ -478,7 +434,6 @@ function generateFixesRuleset() {
     },
   });
   
-  
   const analyticsPatterns = [
     '||google-analytics.com/analytics.js',
     '||google-analytics.com/ga.js',
@@ -500,13 +455,11 @@ function generateFixesRuleset() {
   return rules;
 }
 
-
 function writeRuleset(name, rules) {
   fs.mkdirSync(CONFIG.rulesDir, { recursive: true });
   const filePath = path.join(CONFIG.rulesDir, `static_ruleset_${name}.json`);
   fs.writeFileSync(filePath, JSON.stringify(rules, null, 2));
 }
-
 
 async function main() {
   const forceRefresh = process.argv.includes('--force');
@@ -514,22 +467,17 @@ async function main() {
   }
   
   try {
-    
     const adsRules = await compileRuleset('ads', FILTER_LISTS.ads, 1, forceRefresh);
     writeRuleset('ads', adsRules);
-    
     
     const privacyRules = await compileRuleset('privacy', FILTER_LISTS.privacy, 100001, forceRefresh);
     writeRuleset('privacy', privacyRules);
     
-    
     const customRules = generateCustomRuleset();
     writeRuleset('custom', customRules);
     
-    
     const fixesRules = generateFixesRuleset();
     writeRuleset('fixes', fixesRules);
-    
     
   } catch (error) {
     process.exit(1);
