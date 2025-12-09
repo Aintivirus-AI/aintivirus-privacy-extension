@@ -2444,6 +2444,66 @@ export async function getPublicAddress(): Promise<string | null> {
 }
 
 
+const TOKEN_METADATA_CACHE_KEY = 'tokenMetadataCache';
+
+interface TokenMetadataCacheEntry {
+  mint: string;
+  symbol?: string;
+  name?: string;
+  decimals?: number;
+  logoUri?: string;
+  cachedAt: number;
+}
+
+type TokenMetadataCache = Record<string, TokenMetadataCacheEntry>;
+
+
+export async function getTokenMetadataCache(): Promise<TokenMetadataCache> {
+  try {
+    const result = await chrome.storage.local.get(TOKEN_METADATA_CACHE_KEY);
+    return result[TOKEN_METADATA_CACHE_KEY] || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+
+export async function saveTokenMetadataToCache(
+  mint: string,
+  metadata: {
+    symbol?: string;
+    name?: string;
+    decimals?: number;
+    logoUri?: string;
+  }
+): Promise<void> {
+  try {
+    const cache = await getTokenMetadataCache();
+    cache[mint] = {
+      mint,
+      symbol: metadata.symbol,
+      name: metadata.name,
+      decimals: metadata.decimals,
+      logoUri: metadata.logoUri,
+      cachedAt: Date.now(),
+    };
+    await chrome.storage.local.set({ [TOKEN_METADATA_CACHE_KEY]: cache });
+  } catch (error) {
+    // Silently fail - cache is not critical
+  }
+}
+
+
+export async function getCachedTokenMetadata(mint: string): Promise<TokenMetadataCacheEntry | null> {
+  try {
+    const cache = await getTokenMetadataCache();
+    return cache[mint] || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+
 export async function importWalletFromPrivateKey(
   privateKey: string,
   password?: string,

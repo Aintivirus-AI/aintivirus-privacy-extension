@@ -14,7 +14,12 @@ import {
   WalletErrorCode,
 } from './types';
 import { getCurrentConnection } from './rpc';
-import { getPublicAddress, getWalletSettings, saveWalletSettings } from './storage';
+import { 
+  getPublicAddress, 
+  getWalletSettings, 
+  saveWalletSettings,
+  saveTokenMetadataToCache,
+} from './storage';
 import {
   tokenDedup,
   metadataDedup,
@@ -193,6 +198,15 @@ export async function fetchJupiterTokenMetadata(mint: string): Promise<TokenMeta
       if (metadata) {
         
         tokenMetadataCache.set(mint, metadata);
+        
+        // Also save to persistent storage
+        await saveTokenMetadataToCache(mint, {
+          symbol: metadata.symbol,
+          name: metadata.name,
+          decimals: metadata.decimals,
+          logoUri: metadata.logoUri,
+        });
+        
         return metadata;
       }
 
@@ -722,7 +736,7 @@ function parseTokenAccount(
     
     const metadata = getTokenMetadata(mint);
 
-    return {
+    const tokenBalance: SPLTokenBalance = {
       mint,
       symbol: metadata?.symbol || truncateMint(mint),
       name: metadata?.name || 'Unknown Token',
@@ -732,6 +746,18 @@ function parseTokenAccount(
       tokenAccount: account.pubkey.toBase58(),
       logoUri: metadata?.logoUri,
     };
+    
+    // Cache metadata if we have it
+    if (metadata) {
+      saveTokenMetadataToCache(mint, {
+        symbol: metadata.symbol,
+        name: metadata.name,
+        decimals: metadata.decimals,
+        logoUri: metadata.logoUri,
+      }).catch(() => {}); // Fire and forget
+    }
+    
+    return tokenBalance;
   } catch (error) {
     return null;
   }
@@ -748,12 +774,22 @@ async function enrichTokenWithJupiterMetadata(token: SPLTokenBalance): Promise<S
   const jupiterMetadata = await fetchJupiterTokenMetadata(token.mint);
   
   if (jupiterMetadata) {
-    return {
+    const enriched = {
       ...token,
       symbol: jupiterMetadata.symbol,
       name: jupiterMetadata.name,
       logoUri: jupiterMetadata.logoUri || token.logoUri,
     };
+    
+    // Cache to persistent storage
+    await saveTokenMetadataToCache(token.mint, {
+      symbol: enriched.symbol,
+      name: enriched.name,
+      decimals: enriched.decimals,
+      logoUri: enriched.logoUri,
+    });
+    
+    return enriched;
   }
 
   return token;
@@ -866,6 +902,13 @@ export async function addCustomToken(
   await saveWalletSettings({ 
     customTokens,
     hiddenTokens: newHiddenTokens,
+  });
+
+  
+  await saveTokenMetadataToCache(normalizedMint, {
+    symbol: symbol,
+    name: name,
+    logoUri: logoUri,
   });
 
   

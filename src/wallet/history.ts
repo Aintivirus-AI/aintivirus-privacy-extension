@@ -15,7 +15,12 @@ import {
   WalletErrorCode,
 } from './types';
 import { getCurrentConnection } from './rpc';
-import { getPublicAddress, getWalletSettings } from './storage';
+import { 
+  getPublicAddress, 
+  getWalletSettings,
+  getCachedTokenMetadata,
+  saveTokenMetadataToCache,
+} from './storage';
 import {
   historyDedup,
   historyKey,
@@ -390,12 +395,22 @@ async function enrichTokenInfo(tokenInfo: ExtractedTokenInfo): Promise<Extracted
     const customToken = (settings.customTokens || []).find(t => t.mint === mint);
     
     if (customToken) {
-      return {
+      const enriched = {
         ...tokenInfo,
         symbol: customToken.symbol || tokenInfo.symbol,
         name: customToken.name || tokenInfo.name,
         logoUri: customToken.logoUri || tokenInfo.logoUri,
       };
+      
+      // Cache this token metadata for future use
+      await saveTokenMetadataToCache(mint, {
+        symbol: enriched.symbol,
+        name: enriched.name,
+        decimals: enriched.decimals,
+        logoUri: enriched.logoUri,
+      });
+      
+      return enriched;
     }
   } catch (error) {
     
@@ -404,12 +419,37 @@ async function enrichTokenInfo(tokenInfo: ExtractedTokenInfo): Promise<Extracted
   
   const metadata = getTokenMetadata(mint);
   if (metadata) {
-    return {
+    const enriched = {
       ...tokenInfo,
       symbol: metadata.symbol || tokenInfo.symbol,
       name: metadata.name || tokenInfo.name,
       logoUri: metadata.logoUri || tokenInfo.logoUri,
     };
+    
+    // Cache this token metadata for future use
+    await saveTokenMetadataToCache(mint, {
+      symbol: enriched.symbol,
+      name: enriched.name,
+      decimals: enriched.decimals,
+      logoUri: enriched.logoUri,
+    });
+    
+    return enriched;
+  }
+  
+  // Check the persistent cache (for tokens that were previously added but now removed)
+  try {
+    const cachedMetadata = await getCachedTokenMetadata(mint);
+    if (cachedMetadata && (cachedMetadata.symbol || cachedMetadata.name)) {
+      return {
+        ...tokenInfo,
+        symbol: cachedMetadata.symbol || tokenInfo.symbol,
+        name: cachedMetadata.name || tokenInfo.name,
+        logoUri: cachedMetadata.logoUri || tokenInfo.logoUri,
+      };
+    }
+  } catch (error) {
+    
   }
   
   return tokenInfo;
