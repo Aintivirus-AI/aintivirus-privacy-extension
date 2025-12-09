@@ -1,44 +1,24 @@
-/**
- * AINTIVIRUS - ChainPill Component
- * 
- * Shows blockchain network indicator with:
- * - Chain icon/logo
- * - Chain name
- * - Optional testnet indicator
- * - Consistent colors per chain
- * 
- * Accessible: uses both color AND icon (not color-only)
- * 
- * @example
- * <ChainPill chain="evm" evmChainId={1} />
- * <ChainPill chain="solana" testnet />
- */
+
 
 import React, { useMemo } from 'react';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface ChainPillProps {
-  /** Chain type */
+  
   chain: ChainType;
-  /** EVM chain ID (for EVM chains) */
+  
   evmChainId?: EVMChainId;
-  /** Is this a testnet? */
+  
   testnet?: boolean;
-  /** Size variant */
+  
   size?: 'xs' | 'sm' | 'md';
-  /** Show full name or abbreviation */
+  
   variant?: 'full' | 'short' | 'icon-only';
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// CHAIN CONFIG
-// ============================================
 
 interface ChainConfig {
   name: string;
@@ -48,9 +28,9 @@ interface ChainConfig {
   icon: React.ReactNode;
 }
 
-// Map EVMChainId string type to config
+
 const EVM_CHAINS: Record<string, ChainConfig> = {
-  // String-based chain IDs (matching EVMChainId type)
+  
   ethereum: {
     name: 'Ethereum',
     shortName: 'ETH',
@@ -86,7 +66,7 @@ const EVM_CHAINS: Record<string, ChainConfig> = {
     bgColor: 'rgba(0, 82, 255, 0.12)',
     icon: <BaseIcon />,
   },
-  // Numeric chain IDs as strings (for fallback/legacy support)
+  
   '1': {
     name: 'Ethereum',
     shortName: 'ETH',
@@ -147,9 +127,6 @@ const DEFAULT_CONFIG: ChainConfig = {
   icon: <UnknownIcon />,
 };
 
-// ============================================
-// ICONS
-// ============================================
 
 function EthereumIcon() {
   return (
@@ -218,9 +195,6 @@ function UnknownIcon() {
   );
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export const ChainPill: React.FC<ChainPillProps> = ({
   chain,

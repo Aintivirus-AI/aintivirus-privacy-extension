@@ -1,9 +1,4 @@
-/**
- * AINTIVIRUS dApp Connectivity - Transaction Approval Component
- *
- * Shows transaction approval request from a dApp with decoded details
- * and risk analysis using the decoding module.
- */
+
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
@@ -16,9 +11,6 @@ import {
 } from '../../decoding';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -282,9 +274,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// PROPS
-// ============================================
 
 interface Props {
   request: QueuedRequest;
@@ -292,19 +281,25 @@ interface Props {
   onReject: (reason?: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function TransactionApproval({ request, onApprove, onReject }: Props) {
   const [showData, setShowData] = useState(false);
+  const [decoded, setDecoded] = useState<DecodedEvmTx | null>(null);
+  const [isDecoding, setIsDecoding] = useState(true);
 
-  // Use shared formatOrigin for IDN/homograph protection
+  
   const formattedOrigin = useMemo(() => formatOriginUtil(request.origin), [request.origin]);
 
-  // Decode the transaction
-  const decoded = useMemo((): DecodedEvmTx | null => {
-    if (request.chainType === 'evm') {
+  
+  useEffect(() => {
+    let cancelled = false;
+
+    async function decodeTransaction() {
+      if (request.chainType !== 'evm') {
+        setIsDecoding(false);
+        return;
+      }
+
       const params = (request.params as unknown[])?.[0] as {
         from?: string;
         to?: string;
@@ -319,15 +314,39 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
         chainId?: number;
       };
 
-      if (params) {
-        return decodeEvmTx(params);
+      if (!params) {
+        setIsDecoding(false);
+        return;
+      }
+
+      try {
+        
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
+        if (cancelled) return;
+
+        const decodedTx = decodeEvmTx(params);
+        
+        if (!cancelled) {
+          setDecoded(decodedTx);
+          setIsDecoding(false);
+        }
+      } catch (error) {
+
+        if (!cancelled) {
+          setIsDecoding(false);
+        }
       }
     }
 
-    return null;
+    decodeTransaction();
+
+    return () => {
+      cancelled = true;
+    };
   }, [request]);
 
-  // For Solana, use basic parsing (could be enhanced with decodeSolanaTransaction)
+  
   const solanaDetails = useMemo(() => {
     if (request.chainType === 'solana') {
       const params = request.params as {
@@ -398,14 +417,72 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     return chains[chainId] || `Chain ${chainId}`;
   };
 
-  // Render EVM transaction
+  
+  if (isDecoding && request.chainType === 'evm') {
+    return (
+      <div style={styles.container}>
+        <div style={styles.siteInfo}>
+          <div style={styles.favicon}>
+            {request.favicon ? (
+              <img
+                src={request.favicon}
+                alt=""
+                style={styles.faviconImage}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <GlobeIcon />
+            )}
+          </div>
+          <div style={styles.siteText}>
+            <div style={styles.origin}>{formattedOrigin.etldPlusOne}</div>
+            <div style={styles.requestType}>Transaction Request</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ marginBottom: '12px' }}>
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 40 40"
+              fill="none"
+              style={{
+                animation: 'spin 1s linear infinite',
+                display: 'inline-block',
+              }}
+            >
+              <circle
+                cx="20"
+                cy="20"
+                r="16"
+                stroke="rgba(91, 95, 199, 0.2)"
+                strokeWidth="3"
+              />
+              <path
+                d="M 20 4 A 16 16 0 0 1 36 20"
+                stroke="#5b5fc7"
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+            </svg>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+          <div>Decoding transaction...</div>
+        </div>
+      </div>
+    );
+  }
+
+  
   if (decoded) {
     const hasValue =
       decoded.details.valueEth !== '0 ETH' && decoded.details.value !== '0';
 
     return (
       <div style={styles.container}>
-        {/* Site Info */}
+        {}
         <div style={styles.siteInfo}>
           <div style={styles.favicon}>
             {request.favicon ? (
@@ -427,7 +504,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         </div>
 
-        {/* Warnings */}
+        {}
         {decoded.warnings.map((warning, idx) => (
           <div key={idx} style={getWarningStyle(warning.level)}>
             <WarningIcon color={getWarningColor(warning.level)} />
@@ -452,7 +529,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         ))}
 
-        {/* Transaction Card */}
+        {}
         <div style={styles.txCard}>
           <div style={styles.txHeader}>
             <span style={styles.txType}>
@@ -505,7 +582,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
             )}
           </div>
 
-          {/* Decoded Call Parameters */}
+          {}
           {decoded.decodedCall && decoded.decodedCall.params.length > 0 && (
             <div style={styles.decodedCall}>
               <div style={styles.decodedCallHeader}>Parameters</div>
@@ -540,7 +617,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
             </div>
           )}
 
-          {/* Fee Section */}
+          {}
           <div style={styles.feeSection}>
             <div style={styles.divider} />
             {decoded.details.gasLimit && (
@@ -558,7 +635,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         </div>
 
-        {/* Raw Data Toggle */}
+        {}
         {decoded.details.data && decoded.details.data !== '0x' && (
           <div style={styles.dataSection}>
             <button
@@ -593,7 +670,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
           </div>
         )}
 
-        {/* Buttons */}
+        {}
         <div style={styles.buttons}>
           <button
             style={{ ...styles.button, ...styles.rejectButton }}
@@ -612,7 +689,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
     );
   }
 
-  // Fallback for Solana or unparseable transactions
+  
   return (
     <div style={styles.container}>
       <div style={styles.siteInfo}>
@@ -703,9 +780,6 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
   );
 }
 
-// ============================================
-// ICONS
-// ============================================
 
 function WarningIcon({ color }: { color: string }) {
   return (

@@ -1,16 +1,9 @@
-/**
- * AINTIVIRUS dApp Connectivity - Connect Approval Component
- * 
- * Shows connection request from a dApp with account selection.
- */
+
 
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest, AccountInfo } from '../../dapp/types';
 import { formatOrigin } from '../../shared/utils/formatOrigin';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -218,9 +211,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// PROPS
-// ============================================
 
 interface Props {
   request: QueuedRequest;
@@ -229,9 +219,6 @@ interface Props {
   onReject: (reason?: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function ConnectApproval({ request, accounts, onApprove, onReject }: Props) {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(
@@ -267,12 +254,12 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
     };
   };
 
-  // Use shared formatOrigin for IDN/homograph protection
+  
   const formattedOrigin = useMemo(() => formatOrigin(request.origin), [request.origin]);
 
   return (
     <div style={styles.container}>
-      {/* Site Info */}
+      {}
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
@@ -305,7 +292,7 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
         </span>
       </div>
 
-      {/* Account Selection */}
+      {}
       <div style={styles.section}>
         <span style={styles.sectionTitle}>Select Account</span>
         <div style={styles.accountList}>
@@ -344,7 +331,7 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
         </div>
       </div>
 
-      {/* Remember Setting */}
+      {}
       <div style={styles.rememberSection}>
         <div
           style={{
@@ -366,7 +353,7 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
         </div>
       </div>
 
-      {/* Buttons */}
+      {}
       <div style={styles.buttons}>
         <button
           style={{ ...styles.button, ...styles.rejectButton }}

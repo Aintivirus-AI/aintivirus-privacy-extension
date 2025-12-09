@@ -1,15 +1,8 @@
-/**
- * AINTIVIRUS dApp Connectivity - Connected Sites Component
- * 
- * Shows list of connected dApps with ability to revoke permissions.
- */
+
 
 import React, { useState, useEffect } from 'react';
 import { SitePermission } from '../../dapp/types';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -146,17 +139,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// PROPS
-// ============================================
 
 interface Props {
   onBack?: () => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function ConnectedSites({ onBack }: Props) {
   const [sites, setSites] = useState<SitePermission[]>([]);
@@ -177,7 +164,7 @@ export function ConnectedSites({ onBack }: Props) {
         setSites(response.data as SitePermission[]);
       }
     } catch (error) {
-      console.error('Failed to load connected sites:', error);
+
     } finally {
       setLoading(false);
     }
@@ -190,10 +177,10 @@ export function ConnectedSites({ onBack }: Props) {
         payload: { origin, chainType },
       });
 
-      // Refresh list
+      
       loadConnectedSites();
     } catch (error) {
-      console.error('Failed to revoke permission:', error);
+
     }
   }
 
@@ -206,10 +193,10 @@ export function ConnectedSites({ onBack }: Props) {
         payload: undefined,
       });
 
-      // Refresh list
+      
       loadConnectedSites();
     } catch (error) {
-      console.error('Failed to revoke all permissions:', error);
+
     }
   }
 

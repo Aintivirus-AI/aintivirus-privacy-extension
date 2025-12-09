@@ -10,9 +10,6 @@ import {
   type TxDisplayStatus,
 } from '@wallet/txStatus';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface PendingTxListProps {
   chainId?: EVMChainId;
@@ -23,9 +20,6 @@ export interface PendingTxListProps {
   compact?: boolean;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function formatTimeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -40,11 +34,9 @@ function truncateHash(hash: string, chars: number = 6): string {
   return `${hash.slice(0, chars + 2)}...${hash.slice(-chars)}`;
 }
 
-/**
- * Map raw tx status to display status
- */
+
 function getDisplayStatus(tx: EVMPendingTxInfo): TxDisplayStatus {
-  // For mined transactions, estimate confirmations based on time
+  
   const confirmations = tx.status === 'mined' 
     ? Math.max(0, Math.floor((Date.now() - tx.submittedAt) / 12000))
     : 0;
@@ -57,9 +49,6 @@ function getDisplayStatus(tx: EVMPendingTxInfo): TxDisplayStatus {
   );
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function PendingTxList({
   chainId,
@@ -92,12 +81,12 @@ export function PendingTxList({
     }
   }, [chainId, address]);
 
-  // Initial load
+  
   useEffect(() => {
     loadTransactions();
   }, [loadTransactions]);
 
-  // Auto-refresh every 15 seconds for pending txs
+  
   useEffect(() => {
     const hasPending = transactions.some(tx => tx.status === 'pending');
     if (!hasPending) return;
@@ -137,7 +126,7 @@ export function PendingTxList({
 
   return (
     <div className={`pending-tx-list ${compact ? 'compact' : ''}`}>
-      {/* Pending Section */}
+      {}
       {pendingTxs.length > 0 && (
         <div className="tx-section">
           <h4 className="section-title">
@@ -212,7 +201,7 @@ export function PendingTxList({
         </div>
       )}
 
-      {/* Recent Section */}
+      {}
       {recentTxs.length > 0 && !compact && (
         <div className="tx-section">
           <h4 className="section-title">Recent</h4>

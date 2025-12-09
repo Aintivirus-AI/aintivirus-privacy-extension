@@ -3,9 +3,6 @@ import { sendToBackground } from '@shared/messaging';
 import type { EVMPendingTxInfo, EVMReplacementFeeEstimate, EVMTransactionResult } from '@shared/types';
 import { GasSettingsPanel, type GasSettings } from './GasSettingsPanel';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface SpeedUpModalProps {
   tx: EVMPendingTxInfo;
@@ -13,9 +10,6 @@ export interface SpeedUpModalProps {
   onSuccess: (newHash: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
   const [gasSettings, setGasSettings] = useState<GasSettings | null>(null);
@@ -24,7 +18,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'configure' | 'confirm'>('configure');
 
-  // Load initial fee estimate
+  
   useEffect(() => {
     async function loadEstimate() {
       try {
@@ -37,7 +31,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
           setFeeEstimate(response.data);
         }
       } catch (err) {
-        console.error('Failed to load fee estimate:', err);
+
       }
     }
 
@@ -92,7 +86,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
 
         {step === 'configure' && (
           <>
-            {/* Transaction Info */}
+            {}
             <div className="tx-info-section">
               <div className="info-row">
                 <span className="label">Transaction</span>
@@ -112,7 +106,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
               </div>
             </div>
 
-            {/* Gas Settings */}
+            {}
             <div className="gas-section">
               <h3>New Gas Settings</h3>
               <GasSettingsPanel
@@ -123,12 +117,12 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
                   maxPriorityFeePerGas: BigInt(Math.floor(tx.maxPriorityFeeGwei * 1e9)),
                 }}
                 txHash={tx.hash}
-                gasLimit={21000n} // TODO: Get actual gas limit from tx
+                gasLimit={21000n} 
                 onFeesChange={handleGasChange}
               />
             </div>
 
-            {/* Cost Comparison */}
+            {}
             {feeEstimate && (
               <div className="cost-comparison">
                 <div className="comparison-row">
@@ -142,14 +136,14 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
               </div>
             )}
 
-            {/* Warning */}
+            {}
             {feeEstimate?.warning && (
               <div className="warning-box">
                 ⚠️ {feeEstimate.warning}
               </div>
             )}
 
-            {/* Actions */}
+            {}
             <div className="modal-actions">
               <button className="btn secondary" onClick={onClose}>
                 Cancel

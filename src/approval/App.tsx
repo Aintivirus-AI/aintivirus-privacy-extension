@@ -1,9 +1,4 @@
-/**
- * AINTIVIRUS dApp Connectivity - Approval Window App
- *
- * Main component for the approval window. Renders different approval
- * components based on the request type.
- */
+
 
 import React, { useState, useEffect } from 'react';
 import { ConnectApproval } from './components/ConnectApproval';
@@ -12,9 +7,6 @@ import { SignTypedDataApproval } from './components/SignTypedDataApproval';
 import { TransactionApproval } from './components/TransactionApproval';
 import { QueuedRequest, ApprovalType, AccountInfo } from '../dapp/types';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -73,9 +65,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function App() {
   const [loading, setLoading] = useState(true);
@@ -83,7 +72,7 @@ export function App() {
   const [request, setRequest] = useState<QueuedRequest | null>(null);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
 
-  // Get request ID from URL
+  
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestId = params.get('requestId');
@@ -94,13 +83,13 @@ export function App() {
       return;
     }
 
-    // Fetch request details from background
+    
     fetchRequestDetails(requestId);
   }, []);
 
   async function fetchRequestDetails(requestId: string) {
     try {
-      // Get the pending request
+      
       const response = await chrome.runtime.sendMessage({
         type: 'DAPP_GET_PENDING_REQUESTS',
         payload: undefined,
@@ -121,7 +110,7 @@ export function App() {
 
       setRequest(targetRequest);
 
-      // Get wallet state for available accounts
+      
       const walletResponse = await chrome.runtime.sendMessage({
         type: 'WALLET_GET_STATE',
         payload: undefined,
@@ -130,7 +119,7 @@ export function App() {
       if (walletResponse.success && walletResponse.data) {
         const walletState = walletResponse.data;
 
-        // Build account list based on chain type
+        
         const accountList: AccountInfo[] = [];
 
         if (targetRequest.chainType === 'solana' && walletState.address) {
@@ -155,7 +144,7 @@ export function App() {
 
       setLoading(false);
     } catch (err) {
-      console.error('[Approval] Error fetching request:', err);
+
       setError(err instanceof Error ? err.message : 'Unknown error');
       setLoading(false);
     }
@@ -176,9 +165,9 @@ export function App() {
         },
       });
 
-      // Window will be closed by background
+      
     } catch (err) {
-      console.error('[Approval] Error approving:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to approve');
       setLoading(false);
     }
@@ -198,15 +187,15 @@ export function App() {
         },
       });
 
-      // Window will be closed by background
+      
     } catch (err) {
-      console.error('[Approval] Error rejecting:', err);
+
       setError(err instanceof Error ? err.message : 'Failed to reject');
       setLoading(false);
     }
   }
 
-  // Render loading state
+  
   if (loading) {
     return (
       <div style={styles.container}>
@@ -219,7 +208,7 @@ export function App() {
     );
   }
 
-  // Render error state
+  
   if (error) {
     return (
       <div style={styles.container}>
@@ -245,7 +234,7 @@ export function App() {
     );
   }
 
-  // Render based on approval type
+  
   return (
     <div style={styles.container}>
       <Header />
@@ -256,9 +245,6 @@ export function App() {
   );
 }
 
-// ============================================
-// HEADER COMPONENT
-// ============================================
 
 function Header() {
   return (
@@ -289,13 +275,7 @@ function Header() {
   );
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
-/**
- * Check if request is for EIP-712 typed data signing
- */
 function isTypedDataRequest(request: QueuedRequest): boolean {
   return (
     request.method === 'eth_signTypedData' ||
@@ -304,9 +284,6 @@ function isTypedDataRequest(request: QueuedRequest): boolean {
   );
 }
 
-// ============================================
-// RENDER APPROVAL COMPONENT
-// ============================================
 
 function renderApprovalComponent(
   request: QueuedRequest,
@@ -328,7 +305,7 @@ function renderApprovalComponent(
       );
 
     case 'signMessage':
-      // Check if this is a typed data request
+      
       if (isTypedDataRequest(request)) {
         return (
           <SignTypedDataApproval

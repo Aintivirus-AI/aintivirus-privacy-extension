@@ -1,83 +1,58 @@
-/**
- * AINTIVIRUS - Skeleton Loading Components
- *
- * Provides skeleton placeholders for loading states with smooth shimmer animation.
- * Designed to prevent layout shift and provide smooth transitions to loaded content.
- *
- * @example
- * // Basic usage
- * <Skeleton variant="text" width="100%" />
- * <Skeleton variant="circle" size={32} />
- * <Skeleton variant="rect" width={100} height={50} />
- *
- * // Preset components
- * <SkeletonWalletBalance />
- * <SkeletonTokenItem />
- * <SkeletonTxItem />
- */
+
 
 import React from 'react';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface SkeletonProps {
-  /** Skeleton shape variant */
+  
   variant?: 'text' | 'circle' | 'rect';
-  /** Width - number (px) or string (e.g., '100%') */
+  
   width?: number | string;
-  /** Height - number (px) or string (e.g., '100%') */
+  
   height?: number | string;
-  /** Size for circle variant (sets both width and height) */
+  
   size?: number;
-  /** Border radius override */
+  
   borderRadius?: number | string;
-  /** Disable shimmer animation */
+  
   animation?: boolean;
-  /** Additional CSS class */
+  
   className?: string;
-  /** Inline styles */
+  
   style?: React.CSSProperties;
-  /** For accessibility - describes what is loading */
+  
   'aria-label'?: string;
 }
 
 export interface SkeletonTextProps {
-  /** Number of text lines to show */
+  
   lines?: number;
-  /** Width of last line (for more natural appearance) */
+  
   lastLineWidth?: number | string;
-  /** Gap between lines */
+  
   gap?: number;
-  /** Line height */
+  
   lineHeight?: number;
-  /** Animation enabled */
+  
   animation?: boolean;
-  /** Additional class */
+  
   className?: string;
 }
 
 export interface SkeletonGroupProps {
-  /** Show skeleton or children */
+  
   loading: boolean;
-  /** Skeleton content when loading */
+  
   skeleton: React.ReactNode;
-  /** Actual content when loaded */
+  
   children: React.ReactNode;
-  /** Fade transition duration in ms */
+  
   fadeDuration?: number;
-  /** Additional class */
+  
   className?: string;
 }
 
-// ============================================
-// BASE SKELETON COMPONENT
-// ============================================
 
-/**
- * Base Skeleton component for loading placeholders
- */
 export const Skeleton: React.FC<SkeletonProps> = ({
   variant = 'text',
   width,
@@ -89,7 +64,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   style,
   'aria-label': ariaLabel,
 }) => {
-  // Determine dimensions based on variant
+  
   let computedWidth: number | string | undefined = width;
   let computedHeight: number | string | undefined = height;
   let computedRadius: number | string | undefined = borderRadius;
@@ -130,13 +105,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   );
 };
 
-// ============================================
-// SKELETON TEXT (Multiple lines)
-// ============================================
 
-/**
- * Skeleton for multi-line text content
- */
 export const SkeletonText: React.FC<SkeletonTextProps> = ({
   lines = 3,
   lastLineWidth = '70%',
@@ -160,13 +129,7 @@ export const SkeletonText: React.FC<SkeletonTextProps> = ({
   );
 };
 
-// ============================================
-// SKELETON GROUP (Loading wrapper with transition)
-// ============================================
 
-/**
- * Wrapper that shows skeleton when loading, with smooth fade transition
- */
 export const SkeletonGroup: React.FC<SkeletonGroupProps> = ({
   loading,
   skeleton,
@@ -186,24 +149,18 @@ export const SkeletonGroup: React.FC<SkeletonGroupProps> = ({
   );
 };
 
-// ============================================
-// PRESET: Wallet Balance Skeleton
-// ============================================
 
 export const SkeletonWalletBalance: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-wallet-balance ${className}`.trim()}>
-    {/* Main balance value */}
+    {}
     <Skeleton variant="rect" width={180} height={38} borderRadius={8} />
-    {/* Currency symbol */}
+    {}
     <Skeleton variant="text" width={40} height={14} style={{ marginTop: 4 }} />
-    {/* USD value */}
+    {}
     <Skeleton variant="text" width={80} height={16} style={{ marginTop: 8 }} />
   </div>
 );
 
-// ============================================
-// PRESET: Token Item Skeleton
-// ============================================
 
 export const SkeletonTokenItem: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-token-item ${className}`.trim()}>
@@ -219,9 +176,6 @@ export const SkeletonTokenItem: React.FC<{ className?: string }> = ({ className 
   </div>
 );
 
-// ============================================
-// PRESET: Transaction Item Skeleton
-// ============================================
 
 export const SkeletonTxItem: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-tx-item ${className}`.trim()}>
@@ -237,9 +191,6 @@ export const SkeletonTxItem: React.FC<{ className?: string }> = ({ className = '
   </div>
 );
 
-// ============================================
-// PRESET: Stat Card Skeleton
-// ============================================
 
 export const SkeletonStatCard: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-stat-card ${className}`.trim()}>
@@ -248,9 +199,6 @@ export const SkeletonStatCard: React.FC<{ className?: string }> = ({ className =
   </div>
 );
 
-// ============================================
-// PRESET: Feature Item Skeleton
-// ============================================
 
 export const SkeletonFeatureItem: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-feature-item ${className}`.trim()}>
@@ -263,9 +211,6 @@ export const SkeletonFeatureItem: React.FC<{ className?: string }> = ({ classNam
   </div>
 );
 
-// ============================================
-// PRESET: Connected Site Skeleton
-// ============================================
 
 export const SkeletonConnectedSite: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-connected-site ${className}`.trim()}>
@@ -275,9 +220,6 @@ export const SkeletonConnectedSite: React.FC<{ className?: string }> = ({ classN
   </div>
 );
 
-// ============================================
-// PRESET: Allowance Card Skeleton
-// ============================================
 
 export const SkeletonAllowanceCard: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-allowance-card ${className}`.trim()}>
@@ -302,9 +244,6 @@ export const SkeletonAllowanceCard: React.FC<{ className?: string }> = ({ classN
   </div>
 );
 
-// ============================================
-// PRESET: Pending Transaction Skeleton
-// ============================================
 
 export const SkeletonPendingTx: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-pending-tx ${className}`.trim()}>
@@ -327,9 +266,6 @@ export const SkeletonPendingTx: React.FC<{ className?: string }> = ({ className 
   </div>
 );
 
-// ============================================
-// PRESET: Address Display Skeleton
-// ============================================
 
 export const SkeletonAddress: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-address ${className}`.trim()}>
@@ -338,19 +274,16 @@ export const SkeletonAddress: React.FC<{ className?: string }> = ({ className = 
   </div>
 );
 
-// ============================================
-// PRESET: Full Wallet View Skeleton
-// ============================================
 
 export const SkeletonWalletView: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-wallet-view ${className}`.trim()}>
-    {/* Balance Card */}
+    {}
     <div className="skeleton-balance-card">
       <SkeletonWalletBalance />
       <SkeletonAddress />
     </div>
 
-    {/* Action Buttons */}
+    {}
     <div className="skeleton-wallet-actions">
       {[1, 2, 3, 4].map((i) => (
         <div key={i} className="skeleton-action-btn">
@@ -360,7 +293,7 @@ export const SkeletonWalletView: React.FC<{ className?: string }> = ({ className
       ))}
     </div>
 
-    {/* Token List */}
+    {}
     <div className="skeleton-token-list">
       {[1, 2, 3].map((i) => (
         <SkeletonTokenItem key={i} />
@@ -369,9 +302,6 @@ export const SkeletonWalletView: React.FC<{ className?: string }> = ({ className
   </div>
 );
 
-// ============================================
-// PRESET: Security Stats Skeleton
-// ============================================
 
 export const SkeletonSecurityStats: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-security-stats ${className}`.trim()}>
@@ -387,8 +317,5 @@ export const SkeletonSecurityStats: React.FC<{ className?: string }> = ({ classN
   </div>
 );
 
-// ============================================
-// EXPORTS
-// ============================================
 
 export default Skeleton;

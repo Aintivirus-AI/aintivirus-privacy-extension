@@ -1,16 +1,4 @@
-/**
- * AINTIVIRUS Security Module - Storage Layer
- * 
- * Handles persistence of security-related data including:
- * - Connection history
- * - Domain settings and trust levels
- * - Security settings
- * - Custom program configurations
- * 
- * SECURITY NOTE:
- * All data is stored in chrome.storage.local which is accessible
- * only to this extension. Data is not encrypted at rest.
- */
+
 
 import {
   SecurityStorageSchema,
@@ -26,9 +14,6 @@ import {
   ConnectionFilter,
 } from './types';
 
-// ============================================
-// STORAGE KEYS
-// ============================================
 
 const STORAGE_KEYS = {
   SECURITY_SETTINGS: 'securitySettings',
@@ -40,13 +25,7 @@ const STORAGE_KEYS = {
   PENDING_VERIFICATIONS: 'pendingVerifications',
 } as const;
 
-// ============================================
-// INITIALIZATION
-// ============================================
 
-/**
- * Initialize security storage with defaults if not present
- */
 export async function initializeSecurityStorage(): Promise<void> {
   const storage = await chrome.storage.local.get(Object.values(STORAGE_KEYS));
   
@@ -76,25 +55,16 @@ export async function initializeSecurityStorage(): Promise<void> {
   
   if (Object.keys(updates).length > 0) {
     await chrome.storage.local.set(updates);
-    console.log('[AINTIVIRUS Security] Storage initialized with defaults');
   }
 }
 
-// ============================================
-// SECURITY SETTINGS
-// ============================================
 
-/**
- * Get current security settings
- */
 export async function getSecuritySettings(): Promise<SecuritySettings> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.SECURITY_SETTINGS);
   return result[STORAGE_KEYS.SECURITY_SETTINGS] || DEFAULT_SECURITY_SETTINGS;
 }
 
-/**
- * Update security settings
- */
+
 export async function saveSecuritySettings(
   settings: Partial<SecuritySettings>
 ): Promise<SecuritySettings> {
@@ -104,13 +74,7 @@ export async function saveSecuritySettings(
   return updated;
 }
 
-// ============================================
-// CONNECTION HISTORY
-// ============================================
 
-/**
- * Get connection history with optional filtering
- */
 export async function getConnectionHistory(
   filter?: ConnectionFilter,
   limit?: number,
@@ -119,7 +83,7 @@ export async function getConnectionHistory(
   const result = await chrome.storage.local.get(STORAGE_KEYS.CONNECTION_HISTORY);
   let history: ConnectionRecord[] = result[STORAGE_KEYS.CONNECTION_HISTORY] || [];
   
-  // Apply filters
+  
   if (filter) {
     if (filter.domain) {
       history = history.filter(c => c.domain.includes(filter.domain!));
@@ -138,10 +102,10 @@ export async function getConnectionHistory(
     }
   }
   
-  // Sort by timestamp descending (most recent first)
+  
   history.sort((a, b) => b.timestamp - a.timestamp);
   
-  // Apply pagination
+  
   if (offset !== undefined) {
     history = history.slice(offset);
   }
@@ -152,9 +116,7 @@ export async function getConnectionHistory(
   return history;
 }
 
-/**
- * Add a connection record to history
- */
+
 export async function addConnectionRecord(
   record: ConnectionRecord
 ): Promise<void> {
@@ -162,10 +124,10 @@ export async function addConnectionRecord(
   const result = await chrome.storage.local.get(STORAGE_KEYS.CONNECTION_HISTORY);
   let history: ConnectionRecord[] = result[STORAGE_KEYS.CONNECTION_HISTORY] || [];
   
-  // Add new record at the beginning
+  
   history.unshift(record);
   
-  // Enforce maximum history size
+  
   if (history.length > settings.maxConnectionHistory) {
     history = history.slice(0, settings.maxConnectionHistory);
   }
@@ -173,9 +135,7 @@ export async function addConnectionRecord(
   await chrome.storage.local.set({ [STORAGE_KEYS.CONNECTION_HISTORY]: history });
 }
 
-/**
- * Update a connection record (e.g., to mark as revoked)
- */
+
 export async function updateConnectionRecord(
   id: string,
   updates: Partial<ConnectionRecord>
@@ -194,9 +154,7 @@ export async function updateConnectionRecord(
   return history[index];
 }
 
-/**
- * Get the most recent connection for a domain
- */
+
 export async function getLastConnectionForDomain(
   domain: string
 ): Promise<ConnectionRecord | null> {
@@ -204,28 +162,18 @@ export async function getLastConnectionForDomain(
   return history[0] || null;
 }
 
-/**
- * Clear all connection history
- */
+
 export async function clearConnectionHistory(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.CONNECTION_HISTORY]: [] });
 }
 
-// ============================================
-// ACTIVE CONNECTIONS
-// ============================================
 
-/**
- * Get all active connections
- */
 export async function getActiveConnections(): Promise<Record<string, ActiveConnection>> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.ACTIVE_CONNECTIONS);
   return result[STORAGE_KEYS.ACTIVE_CONNECTIONS] || {};
 }
 
-/**
- * Get active connection for a domain
- */
+
 export async function getActiveConnection(
   domain: string
 ): Promise<ActiveConnection | null> {
@@ -233,9 +181,7 @@ export async function getActiveConnection(
   return connections[domain] || null;
 }
 
-/**
- * Set active connection for a domain
- */
+
 export async function setActiveConnection(
   domain: string,
   connection: ActiveConnection
@@ -245,30 +191,20 @@ export async function setActiveConnection(
   await chrome.storage.local.set({ [STORAGE_KEYS.ACTIVE_CONNECTIONS]: connections });
 }
 
-/**
- * Remove active connection for a domain
- */
+
 export async function removeActiveConnection(domain: string): Promise<void> {
   const connections = await getActiveConnections();
   delete connections[domain];
   await chrome.storage.local.set({ [STORAGE_KEYS.ACTIVE_CONNECTIONS]: connections });
 }
 
-/**
- * Get list of all active connections as array
- */
+
 export async function getActiveConnectionsList(): Promise<ActiveConnection[]> {
   const connections = await getActiveConnections();
   return Object.values(connections);
 }
 
-// ============================================
-// DOMAIN SETTINGS
-// ============================================
 
-/**
- * Get settings for a specific domain
- */
 export async function getDomainSettings(
   domain: string
 ): Promise<DomainSettings | null> {
@@ -277,17 +213,13 @@ export async function getDomainSettings(
   return settings[domain] || null;
 }
 
-/**
- * Get all domain settings
- */
+
 export async function getAllDomainSettings(): Promise<Record<string, DomainSettings>> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.DOMAIN_SETTINGS);
   return result[STORAGE_KEYS.DOMAIN_SETTINGS] || {};
 }
 
-/**
- * Create or update domain settings
- */
+
 export async function saveDomainSettings(
   domain: string,
   updates: Partial<DomainSettings>
@@ -319,9 +251,7 @@ export async function saveDomainSettings(
   return allSettings[domain];
 }
 
-/**
- * Update domain trust status
- */
+
 export async function setDomainTrustStatus(
   domain: string,
   trustStatus: DomainTrustStatus
@@ -329,18 +259,14 @@ export async function setDomainTrustStatus(
   await saveDomainSettings(domain, { trustStatus });
 }
 
-/**
- * Increment connection count for a domain
- */
+
 export async function incrementDomainConnectionCount(domain: string): Promise<void> {
   const settings = await getDomainSettings(domain);
   const currentCount = settings?.connectionCount || 0;
   await saveDomainSettings(domain, { connectionCount: currentCount + 1 });
 }
 
-/**
- * Get domains by trust status
- */
+
 export async function getDomainsByTrustStatus(
   status: DomainTrustStatus
 ): Promise<DomainSettings[]> {
@@ -348,13 +274,7 @@ export async function getDomainsByTrustStatus(
   return Object.values(allSettings).filter(s => s.trustStatus === status);
 }
 
-// ============================================
-// CUSTOM PROGRAMS
-// ============================================
 
-/**
- * Get custom program setting
- */
 export async function getCustomProgramSetting(
   programId: string
 ): Promise<CustomProgramSetting | null> {
@@ -363,17 +283,13 @@ export async function getCustomProgramSetting(
   return programs[programId] || null;
 }
 
-/**
- * Get all custom program settings
- */
+
 export async function getAllCustomProgramSettings(): Promise<Record<string, CustomProgramSetting>> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_PROGRAMS);
   return result[STORAGE_KEYS.CUSTOM_PROGRAMS] || {};
 }
 
-/**
- * Set custom program trust level
- */
+
 export async function setCustomProgramSetting(
   programId: string,
   trustLevel: 'trusted' | 'neutral' | 'blocked',
@@ -393,9 +309,7 @@ export async function setCustomProgramSetting(
   return programs[programId];
 }
 
-/**
- * Remove custom program setting
- */
+
 export async function removeCustomProgramSetting(programId: string): Promise<void> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_PROGRAMS);
   const programs: Record<string, CustomProgramSetting> = result[STORAGE_KEYS.CUSTOM_PROGRAMS] || {};
@@ -404,22 +318,14 @@ export async function removeCustomProgramSetting(programId: string): Promise<voi
   await chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_PROGRAMS]: programs });
 }
 
-// ============================================
-// DISMISSED WARNINGS
-// ============================================
 
-/**
- * Check if warnings have been dismissed for a domain
- */
 export async function isWarningDismissed(domain: string): Promise<boolean> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_WARNINGS);
   const dismissed: Record<string, number> = result[STORAGE_KEYS.DISMISSED_WARNINGS] || {};
   return domain in dismissed;
 }
 
-/**
- * Get dismissed warning timestamp for a domain
- */
+
 export async function getDismissedWarningTimestamp(
   domain: string
 ): Promise<number | null> {
@@ -428,9 +334,7 @@ export async function getDismissedWarningTimestamp(
   return dismissed[domain] || null;
 }
 
-/**
- * Mark warning as dismissed for a domain
- */
+
 export async function dismissWarning(domain: string): Promise<void> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_WARNINGS);
   const dismissed: Record<string, number> = result[STORAGE_KEYS.DISMISSED_WARNINGS] || {};
@@ -439,9 +343,7 @@ export async function dismissWarning(domain: string): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_WARNINGS]: dismissed });
 }
 
-/**
- * Clear dismissed warning for a domain
- */
+
 export async function clearDismissedWarning(domain: string): Promise<void> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_WARNINGS);
   const dismissed: Record<string, number> = result[STORAGE_KEYS.DISMISSED_WARNINGS] || {};
@@ -450,21 +352,13 @@ export async function clearDismissedWarning(domain: string): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_WARNINGS]: dismissed });
 }
 
-// ============================================
-// PENDING VERIFICATIONS
-// ============================================
 
-/**
- * Get all pending transaction verifications
- */
 export async function getPendingVerifications(): Promise<TransactionVerificationRequest[]> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.PENDING_VERIFICATIONS);
   return result[STORAGE_KEYS.PENDING_VERIFICATIONS] || [];
 }
 
-/**
- * Add a pending transaction verification
- */
+
 export async function addPendingVerification(
   request: TransactionVerificationRequest
 ): Promise<void> {
@@ -473,9 +367,7 @@ export async function addPendingVerification(
   await chrome.storage.local.set({ [STORAGE_KEYS.PENDING_VERIFICATIONS]: pending });
 }
 
-/**
- * Get a specific pending verification by ID
- */
+
 export async function getPendingVerification(
   requestId: string
 ): Promise<TransactionVerificationRequest | null> {
@@ -483,18 +375,14 @@ export async function getPendingVerification(
   return pending.find(p => p.requestId === requestId) || null;
 }
 
-/**
- * Remove a pending verification (after decision)
- */
+
 export async function removePendingVerification(requestId: string): Promise<void> {
   const pending = await getPendingVerifications();
   const filtered = pending.filter(p => p.requestId !== requestId);
   await chrome.storage.local.set({ [STORAGE_KEYS.PENDING_VERIFICATIONS]: filtered });
 }
 
-/**
- * Clear expired pending verifications (older than 5 minutes)
- */
+
 export async function clearExpiredVerifications(): Promise<void> {
   const pending = await getPendingVerifications();
   const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
@@ -502,24 +390,15 @@ export async function clearExpiredVerifications(): Promise<void> {
   
   if (valid.length !== pending.length) {
     await chrome.storage.local.set({ [STORAGE_KEYS.PENDING_VERIFICATIONS]: valid });
-    console.log(`[AINTIVIRUS Security] Cleared ${pending.length - valid.length} expired verifications`);
   }
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
 
-/**
- * Generate a unique ID for records
- */
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
-/**
- * Extract domain from URL
- */
+
 export function extractDomain(url: string): string {
   try {
     const urlObj = new URL(url);
@@ -529,9 +408,7 @@ export function extractDomain(url: string): string {
   }
 }
 
-/**
- * Get complete security storage state (for debugging)
- */
+
 export async function getFullSecurityStorage(): Promise<SecurityStorageSchema> {
   const result = await chrome.storage.local.get(Object.values(STORAGE_KEYS));
   return {
@@ -545,13 +422,9 @@ export async function getFullSecurityStorage(): Promise<SecurityStorageSchema> {
   };
 }
 
-/**
- * Clear all security storage (for reset/testing)
- */
+
 export async function clearAllSecurityStorage(): Promise<void> {
   await chrome.storage.local.remove(Object.values(STORAGE_KEYS));
   await initializeSecurityStorage();
-  console.log('[AINTIVIRUS Security] All security storage cleared');
 }
-
 

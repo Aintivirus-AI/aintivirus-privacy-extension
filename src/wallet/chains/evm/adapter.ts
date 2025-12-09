@@ -1,17 +1,4 @@
-/**
- * AINTIVIRUS Wallet - EVM Chain Adapter
- * 
- * This adapter implements the ChainAdapter interface for all
- * EVM-compatible chains (Ethereum, Polygon, Arbitrum, Optimism, Base).
- * 
- * The same adapter class works for all EVM chains - they share
- * the same address format, transaction structure, and signing logic.
- * 
- * SECURITY:
- * - Chain ID is always verified before signing
- * - Private keys never leave memory
- * - All transactions use EIP-155 replay protection
- */
+
 
 import { formatUnits } from 'ethers';
 import type {
@@ -67,16 +54,31 @@ import {
   toTokenBalance,
 } from './tokens';
 
-// ============================================
-// EVM ADAPTER IMPLEMENTATION
-// ============================================
 
-/**
- * EVM Chain Adapter
- * 
- * Implements ChainAdapter interface for all EVM-compatible chains.
- * A single adapter instance handles one specific chain (e.g., Ethereum).
- */
+const historyCache = new Map<string, { 
+  transactions: ChainTxHistoryItem[]; 
+  timestamp: number;
+  hasMore: boolean;
+}>();
+
+
+const HISTORY_CACHE_TTL = 2 * 60 * 1000;
+
+
+function getCachedHistory(key: string): { transactions: ChainTxHistoryItem[]; hasMore: boolean } | null {
+  const cached = historyCache.get(key);
+  if (cached && Date.now() - cached.timestamp < HISTORY_CACHE_TTL) {
+    return { transactions: cached.transactions, hasMore: cached.hasMore };
+  }
+  return null;
+}
+
+
+function setCachedHistory(key: string, transactions: ChainTxHistoryItem[], hasMore: boolean): void {
+  historyCache.set(key, { transactions, timestamp: Date.now(), hasMore });
+}
+
+
 export class EVMAdapter implements ChainAdapter {
   readonly chainType = 'evm' as const;
   readonly evmChainId: EVMChainId;
@@ -99,14 +101,11 @@ export class EVMAdapter implements ChainAdapter {
     return this._network;
   }
   
-  /**
-   * Get the numeric chain ID for the current network
-   */
+  
   get numericChainId(): number {
     return getNumericChainId(this.evmChainId, this._network === 'testnet');
   }
   
-  // ---- Account Operations ----
   
   async deriveAddress(mnemonic: string, index: number = 0): Promise<string> {
     const normalized = normalizeMnemonic(mnemonic);
@@ -136,7 +135,6 @@ export class EVMAdapter implements ChainAdapter {
     return isValidEVMAddress(address);
   }
   
-  // ---- Balance Operations ----
   
   async getBalance(address: string): Promise<ChainBalance> {
     if (!this.isValidAddress(address)) {
@@ -181,14 +179,14 @@ export class EVMAdapter implements ChainAdapter {
     const testnet = this._network === 'testnet';
     
     try {
-      // Get popular token balances
+      
       const popularBalances = await getPopularTokenBalances(
         this.evmChainId,
         testnet,
         address
       );
       
-      // Get custom token balances if any
+      
       let customBalances: TokenBalance[] = [];
       if (this._customTokens.length > 0) {
         const custom = await getMultipleTokenBalances(
@@ -200,7 +198,7 @@ export class EVMAdapter implements ChainAdapter {
         customBalances = custom.map(toTokenBalance);
       }
       
-      // Combine and deduplicate
+      
       const allBalances = [...popularBalances.map(toTokenBalance), ...customBalances];
       const seen = new Set<string>();
       
@@ -219,9 +217,7 @@ export class EVMAdapter implements ChainAdapter {
     }
   }
   
-  /**
-   * Add a custom token to track
-   */
+  
   addCustomToken(tokenAddress: string): void {
     if (isValidEVMAddress(tokenAddress)) {
       const normalized = tokenAddress.toLowerCase();
@@ -231,15 +227,12 @@ export class EVMAdapter implements ChainAdapter {
     }
   }
   
-  /**
-   * Remove a custom token
-   */
+  
   removeCustomToken(tokenAddress: string): void {
     const normalized = tokenAddress.toLowerCase();
     this._customTokens = this._customTokens.filter(t => t !== normalized);
   }
   
-  // ---- Transaction Operations ----
   
   async createTransfer(from: string, to: string, amount: bigint): Promise<UnsignedChainTx> {
     if (!this.isValidAddress(from)) {
@@ -309,7 +302,7 @@ export class EVMAdapter implements ChainAdapter {
       gasEstimate = await estimateTokenTransferGas(
         this.evmChainId,
         testnet,
-        '', // from - will use a dummy for estimation
+        '', 
         tx.to,
         tx.tokenAddress,
         tx.amount
@@ -318,7 +311,7 @@ export class EVMAdapter implements ChainAdapter {
       gasEstimate = await estimateNativeTransferGas(
         this.evmChainId,
         testnet,
-        '', // from
+        '', 
         tx.to,
         tx.amount
       );
@@ -336,7 +329,7 @@ export class EVMAdapter implements ChainAdapter {
   }
   
   async signTransaction(tx: UnsignedChainTx, keypair: ChainKeypair): Promise<SignedChainTx> {
-    // Verify chain type
+    
     if (tx.chainType !== 'evm' || keypair.chainType !== 'evm') {
       throw new ChainError(
         ChainErrorCode.CHAIN_MISMATCH,
@@ -345,7 +338,7 @@ export class EVMAdapter implements ChainAdapter {
       );
     }
     
-    // Verify chain ID matches
+    
     if (tx.evmChainId && tx.evmChainId !== this.evmChainId) {
       throw new ChainError(
         ChainErrorCode.CHAIN_MISMATCH,
@@ -357,13 +350,13 @@ export class EVMAdapter implements ChainAdapter {
     const unsignedTx = tx._raw as UnsignedEVMTransaction;
     const evmKeypair = keypair._raw as EVMKeypair;
     
-    // Sign the transaction
+    
     const signedTxHex = signTransaction(unsignedTx, evmKeypair, this.numericChainId);
     
     return {
       chainType: 'evm',
       serialized: signedTxHex,
-      hash: '', // Will be set after broadcast
+      hash: '', 
       _raw: { signedTx: signedTxHex, chainId: this.evmChainId, testnet: this._network === 'testnet' },
     };
   }
@@ -390,7 +383,7 @@ export class EVMAdapter implements ChainAdapter {
       const hash = txResponse.hash;
       const explorerUrl = `${explorerBase}/tx/${hash}`;
       
-      // Wait for confirmation
+      
       const receipt = await confirmTransaction(this.evmChainId, testnet, hash);
       
       if (receipt) {
@@ -427,25 +420,167 @@ export class EVMAdapter implements ChainAdapter {
     limit: number = 20,
     before?: string
   ): Promise<{ transactions: ChainTxHistoryItem[]; hasMore: boolean; cursor: string | null }> {
-    // Note: EVM transaction history requires an indexer API
-    // (Etherscan, etc.) which typically needs API keys.
-    // For now, return empty and let UI show "View on Explorer" link.
+    const testnet = this._network === 'testnet';
+    const explorerBase = getEVMExplorerUrl(this.evmChainId, testnet);
     
-    // In production, integrate with:
-    // - Etherscan API
-    // - Alchemy/Infura transaction APIs
-    // - The Graph
     
-    console.warn('[EVM Adapter] Transaction history not implemented - use block explorer');
+    const cacheKey = `${this.evmChainId}:${address.toLowerCase()}:${testnet}`;
+    const cached = getCachedHistory(cacheKey);
+    if (cached && !before) {
+      return { ...cached, cursor: null };
+    }
     
-    return {
-      transactions: [],
-      hasMore: false,
-      cursor: null,
-    };
+    try {
+      
+      const apiUrl = this.getExplorerApiUrl(testnet);
+      if (!apiUrl) {
+        return { transactions: [], hasMore: false, cursor: null };
+      }
+      
+      
+      const txListUrl = `${apiUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=${limit}&sort=desc`;
+      
+      const response = await fetch(txListUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status !== '1' || !Array.isArray(data.result)) {
+        
+        
+        if (cached) {
+          return { ...cached, cursor: null };
+        }
+        return { transactions: [], hasMore: false, cursor: null };
+      }
+      
+      const transactions: any[] = data.result.map((tx: any) => {
+        const isOutgoing = tx.from.toLowerCase() === address.toLowerCase();
+        const value = BigInt(tx.value || '0');
+        const valueFormatted = Number(formatUnits(value, this.nativeDecimals));
+        
+        
+        let direction: 'sent' | 'received' | 'self' | 'unknown' = 'unknown';
+        if (isOutgoing && tx.to?.toLowerCase() === address.toLowerCase()) {
+          direction = 'self';
+        } else if (isOutgoing) {
+          direction = 'sent';
+        } else {
+          direction = 'received';
+        }
+        
+        
+        let type = 'Transfer';
+        if (tx.input && tx.input !== '0x' && tx.input.length > 2) {
+          
+          const methodId = tx.input.slice(0, 10);
+          type = this.decodeMethodType(methodId);
+        }
+        
+        
+        return {
+          hash: tx.hash,
+          timestamp: parseInt(tx.timeStamp, 10), 
+          direction,
+          type,
+          amount: valueFormatted,
+          symbol: this.nativeSymbol,
+          counterparty: isOutgoing ? tx.to : tx.from,
+          fee: tx.gasUsed ? Number(formatUnits(BigInt(tx.gasUsed) * BigInt(tx.gasPrice || '0'), 18)) : 0,
+          status: tx.txreceipt_status === '1' ? 'confirmed' : tx.txreceipt_status === '0' ? 'failed' : 'pending',
+          explorerUrl: `${explorerBase}/tx/${tx.hash}`,
+        };
+      });
+      
+      const hasMore = transactions.length >= limit;
+      
+      
+      setCachedHistory(cacheKey, transactions, hasMore);
+      
+      return {
+        transactions,
+        hasMore,
+        cursor: transactions.length > 0 ? transactions[transactions.length - 1].hash : null,
+      };
+    } catch (error) {
+      
+      const staleCache = getCachedHistory(cacheKey);
+      if (staleCache) {
+        return { ...staleCache, cursor: null };
+      }
+      
+      return { transactions: [], hasMore: false, cursor: null };
+    }
   }
   
-  // ---- Network Operations ----
+  
+  private getExplorerApiUrl(testnet: boolean): string | null {
+    
+    const apiUrls: Record<EVMChainId, { mainnet: string; testnet: string }> = {
+      ethereum: {
+        mainnet: 'https://api.etherscan.io/api',
+        testnet: 'https://api-sepolia.etherscan.io/api',
+      },
+      polygon: {
+        mainnet: 'https://api.polygonscan.com/api',
+        testnet: 'https://api-amoy.polygonscan.com/api',
+      },
+      arbitrum: {
+        mainnet: 'https://api.arbiscan.io/api',
+        testnet: 'https://api-sepolia.arbiscan.io/api',
+      },
+      optimism: {
+        mainnet: 'https://api-optimistic.etherscan.io/api',
+        testnet: 'https://api-sepolia-optimistic.etherscan.io/api',
+      },
+      base: {
+        mainnet: 'https://api.basescan.org/api',
+        testnet: 'https://api-sepolia.basescan.org/api',
+      },
+    };
+    
+    const urls = apiUrls[this.evmChainId];
+    if (!urls) return null;
+    
+    return testnet ? urls.testnet : urls.mainnet;
+  }
+  
+  
+  private decodeMethodType(methodId: string): string {
+    const methodTypes: Record<string, string> = {
+      '0xa9059cbb': 'Token Transfer', 
+      '0x23b872dd': 'Token Transfer', 
+      '0x095ea7b3': 'Token Approval', 
+      '0x38ed1739': 'Swap',          
+      '0x8803dbee': 'Swap',          
+      '0x7ff36ab5': 'Swap',          
+      '0x18cbafe5': 'Swap',          
+      '0x5c11d795': 'Swap',          
+      '0x791ac947': 'Swap',          
+      '0xfb3bdb41': 'Swap',          
+      '0xe8e33700': 'Add Liquidity', 
+      '0xf305d719': 'Add Liquidity', 
+      '0xbaa2abde': 'Remove Liquidity', 
+      '0x02751cec': 'Remove Liquidity', 
+      '0x2e1a7d4d': 'Withdraw',      
+      '0xd0e30db0': 'Deposit',       
+      '0x42842e0e': 'NFT Transfer',  
+      '0xb88d4fde': 'NFT Transfer',  
+      '0xa22cb465': 'NFT Approval',  
+    };
+    
+    return methodTypes[methodId.toLowerCase()] || 'Contract Call';
+  }
+  
+  private get nativeDecimals(): number {
+    return 18; 
+  }
+  
   
   async getNetworkStatus(): Promise<NetworkStatus> {
     const testnet = this._network === 'testnet';
@@ -490,19 +625,11 @@ export class EVMAdapter implements ChainAdapter {
   }
 }
 
-/**
- * Create an EVM adapter for a specific chain
- * 
- * @param evmChainId - Chain identifier
- * @param network - Network environment
- * @returns EVMAdapter instance
- */
+
 export function createEVMAdapter(
   evmChainId: EVMChainId,
   network: NetworkEnvironment = 'mainnet'
 ): EVMAdapter {
   return new EVMAdapter(evmChainId, network);
 }
-
-
 

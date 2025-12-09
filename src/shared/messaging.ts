@@ -1,6 +1,6 @@
 import { ExtensionMessage, MessageResponse } from './types';
 
-// Talk to the background script
+
 export async function sendToBackground<T = unknown>(
   message: ExtensionMessage
 ): Promise<MessageResponse<T>> {
@@ -15,7 +15,7 @@ export async function sendToBackground<T = unknown>(
   }
 }
 
-// Talk to a specific tab's content script
+
 export async function sendToTab<T = unknown>(
   tabId: number,
   message: ExtensionMessage
@@ -31,7 +31,7 @@ export async function sendToTab<T = unknown>(
   }
 }
 
-// Blast a message to every tab
+
 export async function broadcastToAllTabs(message: ExtensionMessage): Promise<void> {
   const tabs = await chrome.tabs.query({});
   
@@ -40,7 +40,7 @@ export async function broadcastToAllTabs(message: ExtensionMessage): Promise<voi
       try {
         await chrome.tabs.sendMessage(tab.id, message);
       } catch {
-        // Tab might not have our content script, no big deal
+        
       }
     }
   }
@@ -57,5 +57,4 @@ export function createMessageListener(handler: MessageHandler): void {
     return handler(message as ExtensionMessage, sender, sendResponse);
   });
 }
-
 

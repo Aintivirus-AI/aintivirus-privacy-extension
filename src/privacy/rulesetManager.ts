@@ -1,52 +1,80 @@
-/**
- * AINTIVIRUS Ruleset Manager
- * 
- * Manages static and dynamic DNR rulesets.
- * Static rulesets are pre-compiled and loaded from manifest.json.
- * Dynamic rulesets are managed at runtime for user customizations.
- * 
- * uBOL-style architecture:
- * - Static rulesets are enabled by default and provide base protection
- * - Dynamic rules handle site exceptions and user customizations
- * - Service worker can stay idle; Chrome handles rule matching
- */
+
 
 import { storage } from '@shared/storage';
 
-/** Available static ruleset IDs (must match manifest.json) */
-export type StaticRulesetId = 'ruleset_custom' | 'ruleset_fixes';
 
-/** Ruleset enable state stored in extension storage */
+export const ALL_UBOL_RULESETS = [
+  'ublock-filters',
+  'easylist',
+  'easyprivacy',
+  'pgl',
+  'ublock-badware',
+  'urlhaus-full',
+  'adguard-mobile',
+  'block-lan',
+  'dpollock-0',
+  'adguard-spyware-url',
+  'annoyances-cookies',
+  'annoyances-overlays',
+  'annoyances-social',
+  'annoyances-widgets',
+  'annoyances-others',
+  'annoyances-notifications',
+  'ublock-experimental',
+  'stevenblack-hosts',
+] as const;
+
+export type UbolRulesetId = typeof ALL_UBOL_RULESETS[number];
+
+
+export const DEFAULT_UBOL_RULESETS: UbolRulesetId[] = [
+  'ublock-filters',
+  'easylist',
+  'easyprivacy',
+  'pgl',
+  'ublock-badware',
+  'urlhaus-full',
+];
+
+
+export type FilteringLevel = 'off' | 'minimal' | 'basic' | 'optimal' | 'complete';
+
+
+export const FILTERING_LEVEL_RULESETS: Record<FilteringLevel, UbolRulesetId[]> = {
+  off: [],
+  minimal: ['ublock-filters'],
+  basic: ['ublock-filters', 'easylist'],
+  optimal: ['ublock-filters', 'easylist', 'easyprivacy', 'pgl', 'ublock-badware', 'urlhaus-full'],
+  complete: [...ALL_UBOL_RULESETS],
+};
+
+
 export interface RulesetState {
-  enabledRulesets: StaticRulesetId[];
+  enabledRulesets: UbolRulesetId[];
+  filteringLevel: FilteringLevel;
   lastUpdated: number;
 }
 
 export const DEFAULT_RULESET_STATE: RulesetState = {
-  enabledRulesets: ['ruleset_custom', 'ruleset_fixes'],
+  enabledRulesets: [...DEFAULT_UBOL_RULESETS],
+  filteringLevel: 'optimal',
   lastUpdated: Date.now(),
 };
 
-/**
- * Get the current state of enabled rulesets
- */
+
 export async function getRulesetState(): Promise<RulesetState> {
   const state = await storage.get('rulesetState');
   return state || DEFAULT_RULESET_STATE;
 }
 
-/**
- * Get list of enabled static rulesets
- */
-export async function getEnabledRulesets(): Promise<StaticRulesetId[]> {
+
+export async function getEnabledRulesets(): Promise<UbolRulesetId[]> {
   const state = await getRulesetState();
   return state.enabledRulesets;
 }
 
-/**
- * Enable a static ruleset
- */
-export async function enableRuleset(rulesetId: StaticRulesetId): Promise<void> {
+
+export async function enableRuleset(rulesetId: UbolRulesetId): Promise<void> {
   const state = await getRulesetState();
   
   if (!state.enabledRulesets.includes(rulesetId)) {
@@ -54,15 +82,15 @@ export async function enableRuleset(rulesetId: StaticRulesetId): Promise<void> {
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
     
-    await updateEnabledRulesets(state.enabledRulesets);
-    console.log(`[Privacy] Enabled ruleset: ${rulesetId}`);
+    await chrome.declarativeNetRequest.updateEnabledRulesets({
+      enableRulesetIds: [rulesetId],
+    });
+
   }
 }
 
-/**
- * Disable a static ruleset
- */
-export async function disableRuleset(rulesetId: StaticRulesetId): Promise<void> {
+
+export async function disableRuleset(rulesetId: UbolRulesetId): Promise<void> {
   const state = await getRulesetState();
   
   const index = state.enabledRulesets.indexOf(rulesetId);
@@ -71,15 +99,15 @@ export async function disableRuleset(rulesetId: StaticRulesetId): Promise<void> 
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
     
-    await updateEnabledRulesets(state.enabledRulesets);
-    console.log(`[Privacy] Disabled ruleset: ${rulesetId}`);
+    await chrome.declarativeNetRequest.updateEnabledRulesets({
+      disableRulesetIds: [rulesetId],
+    });
+
   }
 }
 
-/**
- * Toggle a static ruleset
- */
-export async function toggleRuleset(rulesetId: StaticRulesetId): Promise<boolean> {
+
+export async function toggleRuleset(rulesetId: UbolRulesetId): Promise<boolean> {
   const state = await getRulesetState();
   const isEnabled = state.enabledRulesets.includes(rulesetId);
   
@@ -92,165 +120,162 @@ export async function toggleRuleset(rulesetId: StaticRulesetId): Promise<boolean
   }
 }
 
-/**
- * Update Chrome's enabled rulesets
- */
-async function updateEnabledRulesets(enabledRulesets: StaticRulesetId[]): Promise<void> {
-  try {
-    // Get all available static rulesets
-    const availableRulesets = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
-    console.log(`[Privacy] Available static rule slots: ${availableRulesets}`);
-    
-    // Calculate which to enable/disable
-    const allRulesets: StaticRulesetId[] = ['ruleset_custom', 'ruleset_fixes'];
-    const disableRulesets = allRulesets.filter(id => !enabledRulesets.includes(id));
-    
+
+export async function setFilteringLevel(level: FilteringLevel): Promise<void> {
+
+  const targetRulesets = FILTERING_LEVEL_RULESETS[level];
+  const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
+  
+  
+  const toEnable = targetRulesets.filter(id => !currentlyEnabled.includes(id));
+  const toDisable = currentlyEnabled.filter(id => !(targetRulesets as string[]).includes(id));
+  
+  if (toEnable.length > 0 || toDisable.length > 0) {
     await chrome.declarativeNetRequest.updateEnabledRulesets({
-      enableRulesetIds: enabledRulesets,
-      disableRulesetIds: disableRulesets,
+      enableRulesetIds: toEnable,
+      disableRulesetIds: toDisable,
     });
-    
-    console.log(`[Privacy] Updated enabled rulesets:`, enabledRulesets);
-  } catch (error) {
-    console.error('[Privacy] Failed to update enabled rulesets:', error);
-    throw error;
   }
+  
+  
+  const state = await getRulesetState();
+  state.enabledRulesets = [...targetRulesets];
+  state.filteringLevel = level;
+  state.lastUpdated = Date.now();
+  await storage.set('rulesetState', state);
+
 }
 
-/**
- * Initialize ruleset manager
- * Called on extension startup to ensure rulesets are in expected state
- */
+
+export async function getFilteringLevel(): Promise<FilteringLevel> {
+  const state = await getRulesetState();
+  return state.filteringLevel || 'optimal';
+}
+
+
 export async function initializeRulesetManager(): Promise<void> {
-  console.log('[Privacy] Initializing ruleset manager...');
-  
+
   try {
     const state = await getRulesetState();
+    const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
     
-    // Ensure the stored state matches Chrome's actual state
-    await updateEnabledRulesets(state.enabledRulesets);
     
-    // Log ruleset statistics
-    const staticRuleCount = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
-    const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const toEnable = state.enabledRulesets.filter(id => !currentlyEnabled.includes(id));
+    const toDisable = currentlyEnabled.filter(id => 
+      ALL_UBOL_RULESETS.includes(id as UbolRulesetId) && !state.enabledRulesets.includes(id as UbolRulesetId)
+    );
     
-    console.log(`[Privacy] Ruleset manager initialized:`);
-    console.log(`  - Enabled static rulesets: ${state.enabledRulesets.join(', ')}`);
-    console.log(`  - Available static rule slots: ${staticRuleCount}`);
-    console.log(`  - Active dynamic rules: ${dynamicRules.length}`);
-    
+    if (toEnable.length > 0 || toDisable.length > 0) {
+      await chrome.declarativeNetRequest.updateEnabledRulesets({
+        enableRulesetIds: toEnable,
+        disableRulesetIds: toDisable,
+      });
+    }
+
   } catch (error) {
-    console.error('[Privacy] Failed to initialize ruleset manager:', error);
-    // Non-fatal - continue without static rulesets
+
   }
 }
 
-/**
- * Get ruleset statistics
- */
+
 export async function getRulesetStats(): Promise<{
-  staticRulesets: {
-    id: StaticRulesetId;
-    enabled: boolean;
-    ruleCount: number;
-  }[];
+  enabledRulesets: string[];
+  availableRulesets: string[];
+  filteringLevel: FilteringLevel;
   dynamicRuleCount: number;
   availableStaticSlots: number;
 }> {
   const state = await getRulesetState();
   const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
   const availableSlots = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
-  
-  // Get info about each static ruleset
-  const staticRulesets: {
-    id: StaticRulesetId;
-    enabled: boolean;
-    ruleCount: number;
-  }[] = [
-    {
-      id: 'ruleset_custom',
-      enabled: state.enabledRulesets.includes('ruleset_custom'),
-      ruleCount: 45, // Approximate, would need to read JSON to get exact
-    },
-    {
-      id: 'ruleset_fixes',
-      enabled: state.enabledRulesets.includes('ruleset_fixes'),
-      ruleCount: 26, // Approximate
-    },
-  ];
+  const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
   
   return {
-    staticRulesets,
+    enabledRulesets: currentlyEnabled,
+    availableRulesets: [...ALL_UBOL_RULESETS],
+    filteringLevel: state.filteringLevel || 'optimal',
     dynamicRuleCount: dynamicRules.length,
     availableStaticSlots: availableSlots,
   };
 }
 
-/**
- * Check if a specific ruleset is enabled
- */
-export async function isRulesetEnabled(rulesetId: StaticRulesetId): Promise<boolean> {
-  const state = await getRulesetState();
-  return state.enabledRulesets.includes(rulesetId);
+
+export async function isRulesetEnabled(rulesetId: UbolRulesetId): Promise<boolean> {
+  const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
+  return currentlyEnabled.includes(rulesetId);
 }
 
-/**
- * Reset all rulesets to default state
- */
+
 export async function resetRulesets(): Promise<void> {
-  await storage.set('rulesetState', DEFAULT_RULESET_STATE);
-  await updateEnabledRulesets(DEFAULT_RULESET_STATE.enabledRulesets);
-  console.log('[Privacy] Reset rulesets to default state');
+  await setFilteringLevel('optimal');
+
 }
 
-/**
- * Disable all static rulesets (for turning off ad blocking)
- */
-export async function disableAllStaticRulesets(): Promise<void> {
-  console.log('[Privacy] Disabling all static rulesets...');
-  
+
+export async function disableAllRulesets(): Promise<void> {
+
   try {
-    const allRulesets: StaticRulesetId[] = ['ruleset_custom', 'ruleset_fixes'];
+    const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
+
+    if (currentlyEnabled.length > 0) {
+
+      await chrome.declarativeNetRequest.updateEnabledRulesets({
+        disableRulesetIds: currentlyEnabled,
+      });
+
+    } else {
+
+    }
     
-    await chrome.declarativeNetRequest.updateEnabledRulesets({
-      disableRulesetIds: allRulesets,
-    });
     
-    // Update stored state
     const state = await getRulesetState();
     state.enabledRulesets = [];
+    state.filteringLevel = 'off';
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
+
     
-    console.log('[Privacy] All static rulesets disabled');
+    const afterDisable = await chrome.declarativeNetRequest.getEnabledRulesets();
+
+    if (afterDisable.length === 0) {
+
+    } else {
+
+    }
+
   } catch (error) {
-    console.error('[Privacy] Failed to disable static rulesets:', error);
+
     throw error;
   }
 }
 
-/**
- * Enable all static rulesets (for turning on ad blocking)
- */
-export async function enableAllStaticRulesets(): Promise<void> {
-  console.log('[Privacy] Enabling all static rulesets...');
-  
+
+export async function enableDefaultRulesets(): Promise<void> {
+
+
   try {
-    const allRulesets: StaticRulesetId[] = ['ruleset_custom', 'ruleset_fixes'];
-    
     await chrome.declarativeNetRequest.updateEnabledRulesets({
-      enableRulesetIds: allRulesets,
+      enableRulesetIds: [...DEFAULT_UBOL_RULESETS],
     });
+
     
-    // Update stored state
     const state = await getRulesetState();
-    state.enabledRulesets = [...allRulesets];
+    state.enabledRulesets = [...DEFAULT_UBOL_RULESETS];
+    state.filteringLevel = 'optimal';
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
-    
-    console.log('[Privacy] All static rulesets enabled');
+
+    const afterEnable = await chrome.declarativeNetRequest.getEnabledRulesets();
+
+
   } catch (error) {
-    console.error('[Privacy] Failed to enable static rulesets:', error);
+
     throw error;
   }
 }
+
+
+export const enableAllStaticRulesets = enableDefaultRulesets;
+export const disableAllStaticRulesets = disableAllRulesets;
+export const ALL_RULESETS = ALL_UBOL_RULESETS;
+export type StaticRulesetId = UbolRulesetId;

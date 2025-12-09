@@ -1,16 +1,4 @@
-/**
- * AINTIVIRUS dApp Connectivity - EVM Provider
- * 
- * EIP-1193 compliant Ethereum provider injected as window.ethereum.
- * Supports all major EVM chains (Ethereum, Polygon, Arbitrum, Optimism, Base).
- * 
- * SECURITY ARCHITECTURE:
- * - All signing operations route through content script -> background
- * - Private keys never exposed to this script
- * - Origin validation on all requests
- * 
- * @see https://eips.ethereum.org/EIPS/eip-1193
- */
+
 
 import {
   DAppMessage,
@@ -26,9 +14,6 @@ import {
 } from '../types';
 import { MESSAGE_SOURCE, PROVIDER_INFO, EVM_CHAIN_IDS } from '../bridge/constants';
 
-// ============================================
-// EVENT EMITTER
-// ============================================
 
 type EventListener = (...args: unknown[]) => void;
 
@@ -78,7 +63,7 @@ class SimpleEventEmitter {
       try {
         listener(...args);
       } catch (error) {
-        console.error(`[Aintivirus EVM] Event listener error for ${event}:`, error);
+
       }
     });
     return true;
@@ -89,9 +74,6 @@ class SimpleEventEmitter {
   }
 }
 
-// ============================================
-// PENDING REQUESTS
-// ============================================
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -101,35 +83,32 @@ interface PendingRequest {
 
 const pendingRequests = new Map<string, PendingRequest>();
 
-// ============================================
-// EVM PROVIDER CLASS
-// ============================================
 
 class AintivirusEVMProvider extends SimpleEventEmitter {
-  // Provider identification (EIP-1193)
+  
   readonly isMetaMask = PROVIDER_INFO.EVM.IS_METAMASK;
   readonly isAintivirus = PROVIDER_INFO.EVM.IS_AINTIVIRUS;
   
-  // Provider state
+  
   private _chainId: string = EVM_CHAIN_IDS.ETHEREUM;
   private _accounts: string[] = [];
   private _isConnected: boolean = false;
   private _networkVersion: string = '1';
   
-  // Deprecated but still used by some dApps
+  
   public selectedAddress: string | null = null;
   public networkVersion: string = '1';
 
   constructor() {
     super();
     this._setupMessageListener();
-    this._initializeState();
+    
+    this._initializeState().catch(err => {
+
+    });
   }
 
-  // ============================================
-  // PUBLIC PROPERTIES
-  // ============================================
-
+  
   get chainId(): string {
     return this._chainId;
   }
@@ -142,13 +121,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     return this._isConnected;
   }
 
-  // ============================================
-  // EIP-1193 METHODS
-  // ============================================
-
-  /**
-   * Main request method (EIP-1193)
-   */
+  
   async request(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<unknown> {
     if (!args || typeof args.method !== 'string') {
       throw this._createError(EIP1193_ERROR_CODES.INVALID_REQUEST, 'Invalid request');
@@ -156,7 +129,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
 
     const { method, params } = args;
     
-    // Handle methods that can be resolved locally
+    
     switch (method) {
       case 'eth_chainId':
         return this._chainId;
@@ -173,7 +146,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
       case 'wallet_getPermissions':
         return this._getPermissions();
 
-      // Methods that require background communication
+      
       case 'eth_requestAccounts':
       case 'personal_sign':
       case 'eth_sign':
@@ -187,7 +160,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
       case 'wallet_watchAsset':
         return this._sendToBackground(method, params);
 
-      // Read-only methods that can be forwarded to RPC
+      
       case 'eth_blockNumber':
       case 'eth_getBalance':
       case 'eth_getCode':
@@ -210,46 +183,37 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
         return this._sendToBackground(method, params);
 
       default:
-        // Forward unknown methods to background
+        
         return this._sendToBackground(method, params);
     }
   }
 
-  /**
-   * Deprecated enable method (EIP-1102)
-   * @deprecated Use request({ method: 'eth_requestAccounts' }) instead
-   */
+  
   async enable(): Promise<string[]> {
-    console.warn('[Aintivirus EVM] enable() is deprecated. Use request({ method: "eth_requestAccounts" }) instead.');
+
     return this.request({ method: 'eth_requestAccounts' }) as Promise<string[]>;
   }
 
-  /**
-   * Deprecated send method
-   * @deprecated Use request() instead
-   */
+  
   send(methodOrPayload: string | { method: string; params?: unknown[] }, paramsOrCallback?: unknown[] | ((error: Error | null, result?: unknown) => void)): unknown {
-    // Handle different call signatures
+    
     if (typeof methodOrPayload === 'string') {
       if (typeof paramsOrCallback === 'function') {
-        // send(method, callback)
+        
         this.request({ method: methodOrPayload })
           .then(result => (paramsOrCallback as (error: Error | null, result?: unknown) => void)(null, { result }))
           .catch(error => (paramsOrCallback as (error: Error | null, result?: unknown) => void)(error));
         return;
       }
-      // send(method, params)
+      
       return this.request({ method: methodOrPayload, params: paramsOrCallback as unknown[] });
     }
     
-    // send({ method, params })
+    
     return this.request(methodOrPayload);
   }
 
-  /**
-   * Deprecated sendAsync method
-   * @deprecated Use request() instead
-   */
+  
   sendAsync(
     payload: { method: string; params?: unknown[]; id?: number; jsonrpc?: string },
     callback: (error: Error | null, result?: { id?: number; jsonrpc: string; result?: unknown; error?: unknown }) => void
@@ -259,20 +223,12 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
       .catch(error => callback(null, { id: payload.id, jsonrpc: '2.0', error: { code: error.code || -32603, message: error.message } }));
   }
 
-  /**
-   * Check if connected to the network
-   */
+  
   isConnectedSync(): boolean {
     return this._isConnected;
   }
 
-  // ============================================
-  // PRIVATE METHODS
-  // ============================================
-
-  /**
-   * Initialize provider state from background
-   */
+  
   private async _initializeState(): Promise<void> {
     try {
       const state = await this._sendToBackground('_getProviderState', undefined);
@@ -290,27 +246,25 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
         }
       }
     } catch (error) {
-      console.debug('[Aintivirus EVM] Failed to initialize state:', error);
+
     }
   }
 
-  /**
-   * Set up message listener for responses from content script
-   */
+  
   private _setupMessageListener(): void {
     window.addEventListener('message', (event) => {
-      // Only accept messages from same window
+      
       if (event.source !== window) return;
       
       const data = event.data;
       if (!data || data.source !== MESSAGE_SOURCE.CONTENT) return;
       
-      // Handle response messages
+      
       if (data.type === 'DAPP_RESPONSE' || data.type === 'DAPP_ERROR') {
         this._handleResponse(data);
       }
       
-      // Handle event messages
+      
       if (data.type === 'EVM_CHAIN_CHANGED') {
         this._handleChainChanged(data.payload);
       }
@@ -326,23 +280,21 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     });
   }
 
-  /**
-   * Send request to background via content script
-   */
+  
   private _sendToBackground(method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const requestId = generateRequestId();
       
-      // Set up timeout
+      
       const timeout = setTimeout(() => {
         pendingRequests.delete(requestId);
         reject(this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Request timeout'));
       }, 30000);
       
-      // Store pending request
+      
       pendingRequests.set(requestId, { resolve, reject, timeout });
       
-      // Create message
+      
       const message: DAppMessage<EVMRequestPayload> = {
         id: requestId,
         source: DAPP_MESSAGE_SOURCE.INPAGE,
@@ -353,14 +305,12 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
         timestamp: Date.now(),
       };
       
-      // Send to content script
+      
       window.postMessage(message, '*');
     });
   }
 
-  /**
-   * Handle response from background
-   */
+  
   private _handleResponse(data: { payload: DAppResponse }): void {
     const response = data.payload;
     const pending = pendingRequests.get(response.id);
@@ -371,9 +321,9 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     pendingRequests.delete(response.id);
     
     if (response.success) {
-      // Update local state for certain responses
+      
       if (response.result && Array.isArray(response.result)) {
-        // eth_requestAccounts response
+        
         const accounts = response.result as string[];
         if (accounts.length > 0 && accounts[0].startsWith('0x')) {
           this._accounts = accounts;
@@ -388,9 +338,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     }
   }
 
-  /**
-   * Handle chain changed event
-   */
+  
   private _handleChainChanged(payload: { chainId: string }): void {
     const newChainId = toHexChainId(payload.chainId);
     if (this._chainId !== newChainId) {
@@ -401,9 +349,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     }
   }
 
-  /**
-   * Handle accounts changed event
-   */
+  
   private _handleAccountsChanged(payload: { accounts: string[] }): void {
     const newAccounts = payload.accounts || [];
     if (JSON.stringify(this._accounts) !== JSON.stringify(newAccounts)) {
@@ -413,18 +359,14 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     }
   }
 
-  /**
-   * Handle connect event
-   */
+  
   private _handleConnect(payload: { chainId: string }): void {
     this._isConnected = true;
     this._chainId = toHexChainId(payload.chainId);
     this.emit('connect', { chainId: this._chainId });
   }
 
-  /**
-   * Handle disconnect event
-   */
+  
   private _handleDisconnect(payload: { code?: number; message?: string }): void {
     this._isConnected = false;
     this._accounts = [];
@@ -435,9 +377,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     ));
   }
 
-  /**
-   * Get current permissions
-   */
+  
   private _getPermissions(): { parentCapability: string; caveats: unknown[] }[] {
     if (this._accounts.length === 0) {
       return [];
@@ -451,9 +391,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     }];
   }
 
-  /**
-   * Create an error object
-   */
+  
   private _createError(code: number, message: string): Error & { code: number } {
     const error = new Error(message) as Error & { code: number };
     error.code = code;
@@ -461,15 +399,10 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
   }
 }
 
-// ============================================
-// EXPORTS
-// ============================================
 
 export { AintivirusEVMProvider };
 
-/**
- * Create and return the EVM provider instance
- */
+
 export function createEVMProvider(): AintivirusEVMProvider {
   return new AintivirusEVMProvider();
 }

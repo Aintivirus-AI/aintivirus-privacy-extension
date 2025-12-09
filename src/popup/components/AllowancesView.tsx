@@ -1,17 +1,9 @@
-/**
- * AINTIVIRUS Wallet - EVM Token Allowances View
- * 
- * Displays and manages ERC-20 token allowances for EVM chains.
- * Allows users to view and revoke token approvals.
- */
+
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { sendToBackground } from '@shared/messaging';
 import type { EVMChainId, EVMAllowanceEntry, EVMTransactionResult, EVMRevokeFeeEstimate, EVMAllowanceDiscoveryResult } from '@shared/types';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -287,7 +279,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px',
     borderTop: '1px solid rgba(255, 255, 255, 0.08)',
   },
-  // Dialog styles
+  
   dialogOverlay: {
     position: 'fixed',
     top: 0,
@@ -375,9 +367,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// ICONS
-// ============================================
 
 const ArrowLeftIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -425,9 +414,6 @@ const VerifiedIcon = () => (
   </svg>
 );
 
-// ============================================
-// COMPONENT
-// ============================================
 
 interface AllowancesViewProps {
   chainId: EVMChainId;
@@ -447,12 +433,12 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
   const [fetchedAt, setFetchedAt] = useState<number>(0);
   const [fromCache, setFromCache] = useState(false);
   
-  // Filters
+  
   const [showInfiniteOnly, setShowInfiniteOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'amount' | 'token' | 'spender'>('amount');
   
-  // Dialog state
+  
   const [revokeDialog, setRevokeDialog] = useState<{
     allowance: EVMAllowanceEntry;
     feeEstimate: EVMRevokeFeeEstimate | null;
@@ -502,7 +488,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
   }, [fetchAllowances]);
 
   const handleRevoke = async (allowance: EVMAllowanceEntry) => {
-    // Open dialog and fetch fee estimate
+    
     setRevokeDialog({
       allowance,
       feeEstimate: null,
@@ -567,7 +553,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
           tokenSymbol: allowance.tokenSymbol,
           spenderLabel: allowance.spenderLabel || truncateAddress(allowance.spenderAddress),
         });
-        // Refresh allowances
+        
         fetchAllowances(true);
       } else {
         setRevokeDialog(prev => prev ? {
@@ -600,7 +586,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
     return new Date(timestamp).toLocaleDateString();
   };
 
-  // Filter and sort allowances
+  
   const filteredAllowances = allowances
     .filter(a => {
       if (showInfiniteOnly && !a.isInfinite) return false;
@@ -618,7 +604,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
     .sort((a, b) => {
       switch (sortBy) {
         case 'amount':
-          // Infinite first, then by amount desc
+          
           if (a.isInfinite && !b.isInfinite) return -1;
           if (!a.isInfinite && b.isInfinite) return 1;
           return b.allowanceFormatted - a.allowanceFormatted;
@@ -635,7 +621,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
     <div style={styles.container}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       
-      {/* Header */}
+      {}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
           <button 
@@ -657,7 +643,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
         </button>
       </div>
 
-      {/* Filters */}
+      {}
       {!loading && !error && allowances.length > 0 && (
         <div style={styles.filters}>
           <button
@@ -697,7 +683,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
         </div>
       )}
 
-      {/* Content */}
+      {}
       <div style={styles.content}>
         {loading ? (
           <div style={styles.loadingState}>
@@ -725,7 +711,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
           </div>
         ) : (
           <>
-            {/* Warning banner */}
+            {}
             <div style={styles.warningBanner}>
               <span style={styles.warningIcon}>
                 <WarningIcon />
@@ -736,7 +722,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
               </span>
             </div>
 
-            {/* Allowance list */}
+            {}
             <div style={styles.allowanceList}>
               {filteredAllowances.map((allowance, index) => (
                 <div key={`${allowance.tokenAddress}-${allowance.spenderAddress}`} style={styles.allowanceCard}>
@@ -806,14 +792,14 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
         )}
       </div>
 
-      {/* Last updated footer */}
+      {}
       {!loading && !error && fetchedAt > 0 && (
         <div style={styles.lastUpdated}>
           {fromCache ? 'Cached' : 'Updated'} {formatTime(fetchedAt)}
         </div>
       )}
 
-      {/* Revoke Confirmation Dialog */}
+      {}
       {revokeDialog && (
         <div style={styles.dialogOverlay} onClick={() => !revokeDialog.loading && setRevokeDialog(null)}>
           <div style={styles.dialog} onClick={(e) => e.stopPropagation()}>
@@ -874,7 +860,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
         </div>
       )}
 
-      {/* Success Dialog */}
+      {}
       {successDialog && (
         <div style={styles.dialogOverlay} onClick={() => setSuccessDialog(null)}>
           <div style={{ ...styles.dialog, ...styles.successDialog }} onClick={(e) => e.stopPropagation()}>

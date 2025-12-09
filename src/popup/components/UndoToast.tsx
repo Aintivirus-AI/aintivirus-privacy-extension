@@ -1,28 +1,4 @@
-/**
- * AINTIVIRUS - UndoToast System
- * 
- * Provides undo functionality for destructive actions:
- * - Hide token
- * - Remove custom token
- * - Remove RPC endpoint
- * - Disconnect site
- * 
- * Features:
- * - Toast with undo button + countdown
- * - Automatic execution after timeout
- * - Cancel on undo click
- * - Restores previous state without refetch
- * 
- * @example
- * const { showUndo } = useUndo();
- * 
- * // When user clicks "hide token"
- * const undoId = showUndo({
- *   message: 'Token hidden',
- *   onUndo: () => restoreToken(tokenId),
- *   onConfirm: () => permanentlyHideToken(tokenId),
- * });
- */
+
 
 import React, {
   createContext,
@@ -33,20 +9,17 @@ import React, {
   useEffect,
 } from 'react';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface UndoAction {
   id: string;
   message: string;
-  /** Called when undo is clicked - restore previous state */
+  
   onUndo: () => void;
-  /** Called when timeout expires - commit the action */
+  
   onConfirm?: () => void;
-  /** Timeout in ms before auto-confirm (default: 5000) */
+  
   duration?: number;
-  /** Icon to show */
+  
   icon?: React.ReactNode;
 }
 
@@ -56,17 +29,14 @@ interface ActiveUndo extends UndoAction {
 }
 
 export interface UndoContextValue {
-  /** Show an undo toast */
+  
   showUndo: (action: Omit<UndoAction, 'id'>) => string;
-  /** Cancel an undo action (confirm immediately) */
+  
   confirmUndo: (id: string) => void;
-  /** Dismiss an undo action (cancel without confirm) */
+  
   dismissUndo: (id: string) => void;
 }
 
-// ============================================
-// CONTEXT
-// ============================================
 
 const UndoContext = createContext<UndoContextValue | undefined>(undefined);
 
@@ -78,9 +48,6 @@ const generateUndoId = (): string => {
   return `undo-${Date.now()}-${undoCounter}`;
 };
 
-// ============================================
-// ICONS
-// ============================================
 
 function UndoIcon() {
   return (
@@ -99,9 +66,6 @@ function CloseIcon() {
   );
 }
 
-// ============================================
-// UNDO TOAST ITEM
-// ============================================
 
 interface UndoToastItemProps {
   action: ActiveUndo;
@@ -118,7 +82,7 @@ const UndoToastItem: React.FC<UndoToastItemProps> = ({
   const [progress, setProgress] = useState(100);
   const duration = action.duration || DEFAULT_DURATION;
   
-  // Update progress bar
+  
   useEffect(() => {
     const startTime = action.startTime;
     let animationFrame: number;
@@ -330,9 +294,6 @@ const UndoToastItem: React.FC<UndoToastItemProps> = ({
   );
 };
 
-// ============================================
-// UNDO CONTAINER
-// ============================================
 
 interface UndoContainerProps {
   actions: ActiveUndo[];
@@ -382,9 +343,6 @@ const UndoContainer: React.FC<UndoContainerProps> = ({
   );
 };
 
-// ============================================
-// PROVIDER
-// ============================================
 
 interface UndoProviderProps {
   children: React.ReactNode;
@@ -394,7 +352,7 @@ export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
   const [actions, setActions] = useState<ActiveUndo[]>([]);
   const timersRef = useRef<Map<string, number>>(new Map());
   
-  // Cleanup timers on unmount
+  
   useEffect(() => {
     return () => {
       timersRef.current.forEach((timer) => {
@@ -416,7 +374,7 @@ export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
     
     setActions((prev) => [...prev, activeAction]);
     
-    // Set timer for auto-confirm
+    
     const timer = window.setTimeout(() => {
       action.onConfirm?.();
       setActions((prev) => prev.filter((a) => a.id !== id));
@@ -432,17 +390,17 @@ export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
     const action = actions.find((a) => a.id === id);
     if (!action) return;
     
-    // Cancel timer
+    
     const timer = timersRef.current.get(id);
     if (timer) {
       window.clearTimeout(timer);
       timersRef.current.delete(id);
     }
     
-    // Execute undo
+    
     action.onUndo();
     
-    // Remove from list
+    
     setActions((prev) => prev.filter((a) => a.id !== id));
   }, [actions]);
   
@@ -450,22 +408,22 @@ export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
     const action = actions.find((a) => a.id === id);
     if (!action) return;
     
-    // Cancel timer
+    
     const timer = timersRef.current.get(id);
     if (timer) {
       window.clearTimeout(timer);
       timersRef.current.delete(id);
     }
     
-    // Execute confirm immediately
+    
     action.onConfirm?.();
     
-    // Remove from list
+    
     setActions((prev) => prev.filter((a) => a.id !== id));
   }, [actions]);
   
   const dismissUndo = useCallback((id: string) => {
-    // Same as confirm - dismiss means "proceed with action"
+    
     confirmUndo(id);
   }, [confirmUndo]);
   
@@ -487,9 +445,6 @@ export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
   );
 };
 
-// ============================================
-// HOOK
-// ============================================
 
 export const useUndo = (): UndoContextValue => {
   const context = useContext(UndoContext);

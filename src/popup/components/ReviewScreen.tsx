@@ -1,31 +1,4 @@
-/**
- * AINTIVIRUS - ReviewScreen Component
- * 
- * Unified review screen for Send/Transfer flows (EVM + Solana):
- * - From account (AddressChip)
- * - To address (AddressChip + first-time warning)
- * - Chain (ChainPill)
- * - Amount + fiat value
- * - Fee + fiat value
- * - Total
- * - Collapsible Details (raw fields)
- * - Post-submission: "View on explorer" + pending state
- * 
- * @example
- * <ReviewScreen
- *   fromAddress="0x1234..."
- *   toAddress="0x5678..."
- *   chain="evm"
- *   evmChainId={1}
- *   token="ETH"
- *   amount={1.5}
- *   fiatAmount={3000}
- *   fee={0.005}
- *   feeFiat={10}
- *   onConfirm={handleSend}
- *   onCancel={goBack}
- * />
- */
+
 
 import React, { useState, useMemo } from 'react';
 import { AddressChip } from './AddressChip';
@@ -37,48 +10,45 @@ import { ExplorerLinkIcon } from './ExplorerLinkIcon';
 import { GasSettingsPanel, type GasSettings } from './GasSettingsPanel';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-// ============================================
-// TYPES
-// ============================================
 
 export type ReviewState = 'review' | 'pending' | 'success' | 'error';
 
 export interface ReviewScreenProps {
-  /** Screen title */
+  
   title?: string;
-  /** From address */
+  
   fromAddress: string;
-  /** From address label */
+  
   fromLabel?: string;
-  /** To address */
+  
   toAddress: string;
-  /** To address label */
+  
   toLabel?: string;
-  /** Is this a first-time recipient? */
+  
   isFirstTime?: boolean;
-  /** Chain type */
+  
   chain: ChainType;
-  /** EVM chain ID */
+  
   evmChainId?: EVMChainId;
-  /** Is testnet */
+  
   testnet?: boolean;
-  /** Token symbol */
+  
   token: string;
-  /** Token logo URL */
+  
   tokenLogo?: string;
-  /** Amount in token units */
+  
   amount: number | string;
-  /** Fiat value of amount */
+  
   fiatAmount?: number;
-  /** Fee in native token */
+  
   fee?: number | string;
-  /** Fee in fiat */
+  
   feeFiat?: number;
-  /** Native token symbol (for fee) */
+  
   nativeSymbol?: string;
-  /** Total in fiat (amount + fee) */
+  
   totalFiat?: number;
-  /** Raw transaction details */
+  
   details?: {
     nonce?: number;
     gasLimit?: string;
@@ -88,35 +58,32 @@ export interface ReviewScreenProps {
     data?: string;
     value?: string;
   };
-  /** Current state */
+  
   state?: ReviewState;
-  /** Transaction hash (after submission) */
+  
   txHash?: string;
-  /** Error message */
+  
   error?: string;
-  /** Confirm handler */
+  
   onConfirm: () => void;
-  /** Cancel/back handler */
+  
   onCancel: () => void;
-  /** Done handler (after success) */
+  
   onDone?: () => void;
-  /** Primary button label */
+  
   confirmLabel?: string;
-  /** Loading text */
+  
   loadingText?: string;
-  /** Additional CSS class */
+  
   className?: string;
-  /** Enable custom gas settings (EVM only, hidden in Advanced) */
+  
   enableGasCustomization?: boolean;
-  /** Gas limit for gas customization */
+  
   gasLimit?: bigint;
-  /** Callback when gas settings change */
+  
   onGasSettingsChange?: (settings: GasSettings) => void;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function formatAmount(amount: number | string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -139,9 +106,6 @@ function formatFiat(value: number | undefined): string {
   }).format(value);
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   title = 'Review Transaction',
@@ -184,7 +148,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const formattedFeeFiat = useMemo(() => formatFiat(feeFiat), [feeFiat]);
   const formattedTotal = useMemo(() => formatFiat(totalFiat), [totalFiat]);
   
-  // Success/Pending state
+  
   if (state === 'success' || state === 'pending') {
     return (
       <>
@@ -366,7 +330,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     );
   }
   
-  // Error state
+  
   if (state === 'error') {
     return (
       <>
@@ -457,7 +421,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     );
   }
   
-  // Review state (default)
+  
   return (
     <>
       <StickyBottomCTA
@@ -472,12 +436,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
         <div className="review-content">
           <h2 className="review-title">{title}</h2>
           
-          {/* Chain Indicator */}
+          {}
           <div className="review-chain">
             <ChainPill chain={chain} evmChainId={evmChainId} testnet={testnet} variant="full" />
           </div>
           
-          {/* From */}
+          {}
           <div className="review-field">
             <span className="review-field-label">From</span>
             <AddressChip
@@ -490,7 +454,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             />
           </div>
           
-          {/* To */}
+          {}
           <div className="review-field">
             <span className="review-field-label">To</span>
             <AddressChip
@@ -512,7 +476,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             )}
           </div>
           
-          {/* Amount */}
+          {}
           <div className="review-amount-card">
             <div className="review-amount-row">
               <span className="review-amount-label">Amount</span>
@@ -551,7 +515,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             )}
           </div>
           
-          {/* Advanced Gas Settings (EVM only) */}
+          {}
           {enableGasCustomization && chain === 'evm' && evmChainId && onGasSettingsChange && (
             <div className="review-advanced-section">
               <button
@@ -575,7 +539,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             </div>
           )}
           
-          {/* Details Accordion */}
+          {}
           {details && Object.keys(details).length > 0 && (
             <DetailsAccordion
               title="Transaction Details"

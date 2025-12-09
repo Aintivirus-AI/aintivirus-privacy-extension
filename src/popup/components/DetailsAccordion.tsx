@@ -1,80 +1,55 @@
-/**
- * AINTIVIRUS - DetailsAccordion Component
- * 
- * Progressive disclosure accordion for:
- * - Transaction details (nonce, gas, calldata)
- * - Approval details (program IDs, raw data)
- * - Collapsed by default, expandable on demand
- * 
- * Features:
- * - Smooth height animation
- * - Keyboard accessible
- * - Respects reduced motion
- * - Copy button for raw data
- * 
- * @example
- * <DetailsAccordion title="Details">
- *   <DetailsRow label="Nonce" value="42" />
- *   <DetailsRow label="Gas Limit" value="21000" />
- * </DetailsAccordion>
- */
+
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronIcon, CopyIcon, CheckIcon } from '../Icons';
 import { useToast } from './ToastProvider';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface DetailsAccordionProps {
-  /** Accordion title/label */
+  
   title?: string;
-  /** Whether to start expanded */
+  
   defaultExpanded?: boolean;
-  /** Controlled expanded state */
+  
   expanded?: boolean;
-  /** Change handler for controlled mode */
+  
   onToggle?: (expanded: boolean) => void;
-  /** Child content */
+  
   children: React.ReactNode;
-  /** Show item count badge */
+  
   itemCount?: number;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
 export interface DetailsRowProps {
-  /** Row label */
+  
   label: string;
-  /** Row value */
+  
   value: string | React.ReactNode;
-  /** Is this a monospace value (addresses, hashes, etc.) */
+  
   mono?: boolean;
-  /** Allow copying the value */
+  
   copyable?: boolean;
-  /** Value to copy (if different from displayed value) */
+  
   copyValue?: string;
-  /** Highlight style */
+  
   highlight?: 'warning' | 'danger' | 'info';
-  /** Additional CSS class */
+  
   className?: string;
 }
 
 export interface DetailsCodeBlockProps {
-  /** Raw data to display */
+  
   data: string;
-  /** Label for the code block */
+  
   label?: string;
-  /** Max height before scrolling */
+  
   maxHeight?: number;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// DETAILS ROW COMPONENT
-// ============================================
 
 export const DetailsRow: React.FC<DetailsRowProps> = ({
   label,
@@ -205,9 +180,6 @@ export const DetailsRow: React.FC<DetailsRowProps> = ({
   );
 };
 
-// ============================================
-// DETAILS CODE BLOCK COMPONENT
-// ============================================
 
 export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
   data,
@@ -325,9 +297,6 @@ export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
   );
 };
 
-// ============================================
-// MAIN ACCORDION COMPONENT
-// ============================================
 
 export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
   title = 'Details',
@@ -345,7 +314,7 @@ export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
   
-  // Measure content height for animation
+  
   useEffect(() => {
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);

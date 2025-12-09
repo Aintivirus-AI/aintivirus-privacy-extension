@@ -1,17 +1,8 @@
-/**
- * AINTIVIRUS Decoding Module - Type Definitions
- *
- * Shared types for EVM and Solana transaction/message decoding.
- */
 
-// ============================================
-// COMMON TYPES
-// ============================================
 
-/** Warning severity levels */
 export type WarningLevel = 'info' | 'caution' | 'danger';
 
-/** Common warning structure */
+
 export interface TxWarning {
   level: WarningLevel;
   code: string;
@@ -19,18 +10,14 @@ export interface TxWarning {
   description: string;
 }
 
-// ============================================
-// EVM TRANSACTION DECODING
-// ============================================
 
-/** Function signature info for selector lookup */
 export interface FunctionSignature {
   name: string;
   params?: string[];
   category: 'token' | 'approval' | 'nft' | 'swap' | 'permit2' | 'router' | 'other';
 }
 
-/** Decoded function call */
+
 export interface DecodedFunctionCall {
   selector: string;
   name: string;
@@ -38,7 +25,7 @@ export interface DecodedFunctionCall {
   params: DecodedParam[];
 }
 
-/** Decoded parameter */
+
 export interface DecodedParam {
   name: string;
   type: string;
@@ -48,7 +35,7 @@ export interface DecodedParam {
   isAmount?: boolean;
 }
 
-/** Transaction kind for summary */
+
 export type TxKind =
   | 'transfer'
   | 'approval'
@@ -59,7 +46,7 @@ export type TxKind =
   | 'permit2'
   | 'unknown';
 
-/** Transaction details */
+
 export interface TxDetails {
   to?: string;
   value: string;
@@ -74,7 +61,7 @@ export interface TxDetails {
   maxPriorityFee?: string;
 }
 
-/** Fully decoded EVM transaction */
+
 export interface DecodedEvmTx {
   kind: TxKind;
   summary: string;
@@ -83,11 +70,7 @@ export interface DecodedEvmTx {
   decodedCall?: DecodedFunctionCall;
 }
 
-// ============================================
-// EIP-712 TYPED DATA
-// ============================================
 
-/** EIP-712 domain separator */
 export interface TypedDataDomain {
   name?: string;
   version?: string;
@@ -96,16 +79,16 @@ export interface TypedDataDomain {
   salt?: string;
 }
 
-/** EIP-712 type definition */
+
 export interface TypedDataTypeEntry {
   name: string;
   type: string;
 }
 
-/** EIP-712 types map */
+
 export type TypedDataTypes = Record<string, TypedDataTypeEntry[]>;
 
-/** Full EIP-712 typed data structure */
+
 export interface TypedDataV4 {
   types: TypedDataTypes;
   domain: TypedDataDomain;
@@ -113,7 +96,7 @@ export interface TypedDataV4 {
   message: Record<string, unknown>;
 }
 
-/** Highlighted field in display */
+
 export interface HighlightedField {
   path: string;
   name: string;
@@ -123,7 +106,7 @@ export interface HighlightedField {
   highlight: 'spender' | 'amount' | 'deadline' | 'to' | 'from' | 'nonce' | 'operator' | 'normal';
 }
 
-/** Typed data display model */
+
 export interface TypedDataDisplayModel {
   domain: TypedDataDomain;
   primaryType: string;
@@ -134,7 +117,7 @@ export interface TypedDataDisplayModel {
   }>;
 }
 
-/** Detected typed data patterns */
+
 export type TypedDataPattern =
   | 'permit'
   | 'permit2'
@@ -144,7 +127,7 @@ export type TypedDataPattern =
   | 'delegation'
   | 'unknown';
 
-/** Result of parsing typed data */
+
 export interface TypedDataParseResult {
   isValid: boolean;
   error?: string;
@@ -155,11 +138,7 @@ export interface TypedDataParseResult {
   highlightedFields: HighlightedField[];
 }
 
-// ============================================
-// SOLANA DECODING
-// ============================================
 
-/** Account role in instruction */
 export interface AccountRole {
   address: string;
   name?: string;
@@ -167,7 +146,7 @@ export interface AccountRole {
   isWallet?: boolean;
 }
 
-/** Decoded Solana instruction */
+
 export interface SolanaInstructionSummary {
   programId: string;
   programName: string;
@@ -177,7 +156,7 @@ export interface SolanaInstructionSummary {
   data?: string;
 }
 
-/** Solana transaction decode result */
+
 export interface DecodedSolanaTx {
   instructions: SolanaInstructionSummary[];
   totalSolTransfer: number;
@@ -185,11 +164,7 @@ export interface DecodedSolanaTx {
   riskLevel: 'low' | 'medium' | 'high';
 }
 
-// ============================================
-// KNOWN CONTRACTS/PROTOCOLS
-// ============================================
 
-/** Known protocol info */
 export interface KnownProtocol {
   name: string;
   icon?: string;
@@ -197,5 +172,5 @@ export interface KnownProtocol {
   verified: boolean;
 }
 
-/** Map of known contract addresses to protocol info */
+
 export type KnownContracts = Record<string, KnownProtocol>;

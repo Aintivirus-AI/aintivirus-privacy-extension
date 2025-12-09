@@ -1,11 +1,4 @@
-/**
- * AINTIVIRUS Floating Panel
- * 
- * Injects a floating panel into web pages that:
- * - Only closes via the close button
- * - Does NOT close when clicking outside
- * - Loads the popup UI in an iframe
- */
+
 
 const PANEL_ID = 'aintivirus-floating-panel';
 const PANEL_CONTAINER_ID = 'aintivirus-panel-container';
@@ -20,21 +13,19 @@ let panelState: PanelState = {
   isMinimized: true,
 };
 
-// Store direct reference to panel element (needed because shadow DOM is closed)
+
 let panelElement: HTMLElement | null = null;
 
-/**
- * Create the floating panel container and inject it into the page
- */
+
 function createFloatingPanel(): HTMLElement {
-  // Remove existing panel if any
+  
   const existing = document.getElementById(PANEL_CONTAINER_ID);
   if (existing) {
     existing.remove();
     panelElement = null;
   }
 
-  // Create shadow host for style isolation
+  
   const container = document.createElement('div');
   container.id = PANEL_CONTAINER_ID;
   container.style.cssText = `
@@ -48,10 +39,10 @@ function createFloatingPanel(): HTMLElement {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
-  // Create shadow DOM for style isolation
+  
   const shadow = container.attachShadow({ mode: 'closed' });
 
-  // Inject styles
+  
   const styles = document.createElement('style');
   styles.textContent = `
     * {
@@ -180,7 +171,6 @@ function createFloatingPanel(): HTMLElement {
       background: #0a0a0f;
     }
 
-    /* Dragging state */
     .panel-wrapper.dragging {
       cursor: move;
       user-select: none;
@@ -192,16 +182,16 @@ function createFloatingPanel(): HTMLElement {
   `;
   shadow.appendChild(styles);
 
-  // Create panel wrapper
+  
   const panelWrapper = document.createElement('div');
   panelWrapper.className = 'panel-wrapper minimized';
   panelWrapper.id = PANEL_ID;
 
-  // Create header
+  
   const header = document.createElement('div');
   header.className = 'panel-header';
 
-  // Brand (logo + title)
+  
   const brand = document.createElement('div');
   brand.className = 'panel-brand';
 
@@ -220,7 +210,7 @@ function createFloatingPanel(): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
 
-  // Settings button
+  
   const settingsBtn = document.createElement('button');
   settingsBtn.className = 'panel-btn settings-btn';
   settingsBtn.title = 'Settings';
@@ -235,7 +225,7 @@ function createFloatingPanel(): HTMLElement {
     chrome.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
   });
 
-  // Close button
+  
   const closeBtn = document.createElement('button');
   closeBtn.className = 'panel-btn close-btn';
   closeBtn.title = 'Close';
@@ -248,13 +238,13 @@ function createFloatingPanel(): HTMLElement {
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log('[AINTIVIRUS] Close button clicked');
-    // Directly manipulate panelWrapper (closure reference) instead of relying on module variable
+
+    
     panelWrapper.classList.remove('visible');
     panelWrapper.classList.add('minimized');
     panelState.isVisible = false;
     panelState.isMinimized = true;
-    console.log('[AINTIVIRUS] Panel closed');
+
   });
 
   actions.appendChild(settingsBtn);
@@ -262,7 +252,7 @@ function createFloatingPanel(): HTMLElement {
   header.appendChild(brand);
   header.appendChild(actions);
 
-  // Create content area with iframe
+  
   const content = document.createElement('div');
   content.className = 'panel-content';
 
@@ -276,20 +266,18 @@ function createFloatingPanel(): HTMLElement {
   panelWrapper.appendChild(content);
   shadow.appendChild(panelWrapper);
 
-  // Add drag functionality
+  
   setupDragging(panelWrapper, header);
 
   document.body.appendChild(container);
 
-  // Store reference for later access (shadow DOM is closed)
+  
   panelElement = panelWrapper;
 
   return panelWrapper;
 }
 
-/**
- * Setup drag functionality for the panel
- */
+
 function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
   let isDragging = false;
   let startX = 0;
@@ -298,7 +286,7 @@ function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
   let startTop = 16;
 
   handle.addEventListener('mousedown', (e: MouseEvent) => {
-    // Don't start drag if clicking a button
+    
     if ((e.target as HTMLElement).closest('button')) return;
 
     isDragging = true;
@@ -334,9 +322,7 @@ function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
   });
 }
 
-/**
- * Show the floating panel
- */
+
 function showPanel(): void {
   if (!panelElement) {
     createFloatingPanel();
@@ -350,9 +336,7 @@ function showPanel(): void {
   }
 }
 
-/**
- * Close (hide) the floating panel
- */
+
 function closePanel(): void {
   if (panelElement) {
     panelElement.classList.remove('visible');
@@ -362,9 +346,7 @@ function closePanel(): void {
   }
 }
 
-/**
- * Toggle the panel visibility
- */
+
 function togglePanel(): void {
   if (panelState.isMinimized) {
     showPanel();
@@ -373,11 +355,9 @@ function togglePanel(): void {
   }
 }
 
-/**
- * Initialize the floating panel system
- */
+
 export function initializeFloatingPanel(): void {
-  // Listen for messages from background to toggle panel
+  
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'TOGGLE_PANEL') {
       togglePanel();
@@ -397,9 +377,8 @@ export function initializeFloatingPanel(): void {
     return false;
   });
 
-  console.log('[AINTIVIRUS] Floating panel system initialized');
 }
 
-// Export for use in content script
+
 export { showPanel, closePanel, togglePanel };
 

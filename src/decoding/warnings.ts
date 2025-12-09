@@ -1,41 +1,30 @@
-/**
- * AINTIVIRUS Decoding Module - Warning Rules
- *
- * Warning thresholds, rules, and helper functions for transaction analysis.
- */
+
 
 import { TxWarning, WarningLevel } from './types';
 import { isVerifiedContract } from './selectors';
 
-// ============================================
-// THRESHOLDS
-// ============================================
 
-/** Maximum uint256 value */
 export const MAX_UINT256 = BigInt(
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
 
-/** Half of MaxUint256 - used for detecting "unlimited" approvals */
+
 export const HALF_MAX_UINT256 = MAX_UINT256 / 2n;
 
 export const WARNING_THRESHOLDS = {
-  /** Amount >= this is considered "infinite" approval */
+  
   INFINITE_APPROVAL: HALF_MAX_UINT256,
 
-  /** ETH value >= this triggers large transfer warning (in wei) */
-  LARGE_ETH_VALUE: 10n * 10n ** 18n, // 10 ETH
+  
+  LARGE_ETH_VALUE: 10n * 10n ** 18n, 
 
-  /** Deadline more than this many years from now is suspicious */
+  
   SUSPICIOUS_DEADLINE_YEARS: 10,
 
-  /** Gas limit above this is unusual */
+  
   HIGH_GAS_LIMIT: 1_000_000,
 };
 
-// ============================================
-// WARNING CODES
-// ============================================
 
 export const WARNING_CODES = {
   INFINITE_APPROVAL: 'INFINITE_APPROVAL',
@@ -54,13 +43,7 @@ export const WARNING_CODES = {
   EMPTY_DATA: 'EMPTY_DATA',
 } as const;
 
-// ============================================
-// WARNING GENERATORS
-// ============================================
 
-/**
- * Create a warning object
- */
 export function createWarning(
   level: WarningLevel,
   code: string,
@@ -70,25 +53,21 @@ export function createWarning(
   return { level, code, title, description };
 }
 
-/**
- * Check if amount is an "infinite" approval
- */
+
 export function isInfiniteApproval(amount: bigint): boolean {
   return amount >= WARNING_THRESHOLDS.INFINITE_APPROVAL;
 }
 
-/**
- * Check if deadline is suspicious (too far in future or no expiration)
- */
+
 export function isSuspiciousDeadline(deadline: bigint | number): 'none' | 'long' | 'ok' {
   const deadlineNum = typeof deadline === 'bigint' ? Number(deadline) : deadline;
 
-  // Max uint256 or similar means no expiration
+  
   if (deadlineNum > Number.MAX_SAFE_INTEGER || deadline === MAX_UINT256) {
     return 'none';
   }
 
-  // Check if deadline is more than 10 years from now
+  
   const nowSeconds = Math.floor(Date.now() / 1000);
   const yearsFromNow = (deadlineNum - nowSeconds) / (365.25 * 24 * 60 * 60);
 
@@ -99,9 +78,7 @@ export function isSuspiciousDeadline(deadline: bigint | number): 'none' | 'long'
   return 'ok';
 }
 
-/**
- * Format deadline for display
- */
+
 export function formatDeadline(deadline: bigint | number): string {
   const deadlineNum = typeof deadline === 'bigint' ? Number(deadline) : deadline;
 
@@ -109,7 +86,7 @@ export function formatDeadline(deadline: bigint | number): string {
     return 'Never expires';
   }
 
-  // Check if it's a timestamp (> year 2000)
+  
   if (deadlineNum > 946684800) {
     const date = new Date(deadlineNum * 1000);
     return date.toLocaleDateString('en-US', {
@@ -121,13 +98,11 @@ export function formatDeadline(deadline: bigint | number): string {
     });
   }
 
-  // Might be a block number or relative time
+  
   return deadlineNum.toLocaleString();
 }
 
-/**
- * Generate warning for infinite approval
- */
+
 export function warnInfiniteApproval(): TxWarning {
   return createWarning(
     'danger',
@@ -137,9 +112,7 @@ export function warnInfiniteApproval(): TxWarning {
   );
 }
 
-/**
- * Generate warning for unknown spender
- */
+
 export function warnUnknownSpender(address: string): TxWarning {
   return createWarning(
     'caution',
@@ -149,9 +122,7 @@ export function warnUnknownSpender(address: string): TxWarning {
   );
 }
 
-/**
- * Generate warning for contract creation
- */
+
 export function warnContractCreation(): TxWarning {
   return createWarning(
     'caution',
@@ -161,9 +132,7 @@ export function warnContractCreation(): TxWarning {
   );
 }
 
-/**
- * Generate warning for value sent with contract call
- */
+
 export function warnValueWithCall(ethValue: string): TxWarning {
   return createWarning(
     'caution',
@@ -173,9 +142,7 @@ export function warnValueWithCall(ethValue: string): TxWarning {
   );
 }
 
-/**
- * Generate warning for unverified contract
- */
+
 export function warnUnverifiedContract(): TxWarning {
   return createWarning(
     'caution',
@@ -185,9 +152,7 @@ export function warnUnverifiedContract(): TxWarning {
   );
 }
 
-/**
- * Generate warning for large value transfer
- */
+
 export function warnLargeValue(ethValue: string): TxWarning {
   return createWarning(
     'caution',
@@ -197,9 +162,7 @@ export function warnLargeValue(ethValue: string): TxWarning {
   );
 }
 
-/**
- * Generate warning for long/no deadline
- */
+
 export function warnDeadline(type: 'none' | 'long'): TxWarning {
   if (type === 'none') {
     return createWarning(
@@ -217,9 +180,7 @@ export function warnDeadline(type: 'none' | 'long'): TxWarning {
   );
 }
 
-/**
- * Generate warning for Permit signature
- */
+
 export function warnPermitSignature(): TxWarning {
   return createWarning(
     'info',
@@ -229,9 +190,7 @@ export function warnPermitSignature(): TxWarning {
   );
 }
 
-/**
- * Generate warning for Permit2
- */
+
 export function warnPermit2(): TxWarning {
   return createWarning(
     'info',
@@ -241,9 +200,7 @@ export function warnPermit2(): TxWarning {
   );
 }
 
-/**
- * Generate warning for setApprovalForAll
- */
+
 export function warnNftApprovalForAll(): TxWarning {
   return createWarning(
     'danger',
@@ -253,13 +210,7 @@ export function warnNftApprovalForAll(): TxWarning {
   );
 }
 
-// ============================================
-// ANALYSIS HELPERS
-// ============================================
 
-/**
- * Analyze an approval amount and generate appropriate warnings
- */
 export function analyzeApprovalAmount(amount: bigint, spender: string): TxWarning[] {
   const warnings: TxWarning[] = [];
 
@@ -274,9 +225,7 @@ export function analyzeApprovalAmount(amount: bigint, spender: string): TxWarnin
   return warnings;
 }
 
-/**
- * Analyze ETH value and generate appropriate warnings
- */
+
 export function analyzeEthValue(valueWei: bigint, hasData: boolean): TxWarning[] {
   const warnings: TxWarning[] = [];
 
@@ -293,9 +242,7 @@ export function analyzeEthValue(valueWei: bigint, hasData: boolean): TxWarning[]
   return warnings;
 }
 
-/**
- * Format amount for display, handling large numbers
- */
+
 export function formatAmount(amount: bigint, decimals: number = 18): string {
   if (isInfiniteApproval(amount)) {
     return 'UNLIMITED';
@@ -313,9 +260,7 @@ export function formatAmount(amount: bigint, decimals: number = 18): string {
   return `${whole.toLocaleString()}.${fractionStr}`;
 }
 
-/**
- * Format ETH value for display
- */
+
 export function formatEthValue(weiValue: bigint | string): string {
   const wei = typeof weiValue === 'string' ? BigInt(weiValue) : weiValue;
 

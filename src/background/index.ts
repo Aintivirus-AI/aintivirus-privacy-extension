@@ -324,8 +324,6 @@ async function handleMessage(
     case 'WALLET_RENAME':
     case 'WALLET_DELETE_ONE':
     case 'WALLET_EXPORT_ONE':
-    case 'WALLET_IMPORT_PRIVATE_KEY':
-    case 'WALLET_EXPORT_PRIVATE_KEY':
     case 'WALLET_GET_ACTIVE':
     // Multi-chain support
     case 'WALLET_SET_CHAIN':
@@ -537,7 +535,7 @@ async function handleGetRulesetStats(): Promise<MessageResponse> {
 }
 
 async function handleEnableRuleset(
-  payload: { rulesetId: 'ruleset_custom' | 'ruleset_fixes' }
+  payload: { rulesetId: string }
 ): Promise<MessageResponse> {
   try {
     await enableRuleset(payload.rulesetId);
@@ -552,7 +550,7 @@ async function handleEnableRuleset(
 }
 
 async function handleDisableRuleset(
-  payload: { rulesetId: 'ruleset_custom' | 'ruleset_fixes' }
+  payload: { rulesetId: string }
 ): Promise<MessageResponse> {
   try {
     await disableRuleset(payload.rulesetId);
@@ -567,7 +565,7 @@ async function handleDisableRuleset(
 }
 
 async function handleToggleRuleset(
-  payload: { rulesetId: 'ruleset_custom' | 'ruleset_fixes' }
+  payload: { rulesetId: string }
 ): Promise<MessageResponse> {
   try {
     const enabled = await toggleRuleset(payload.rulesetId);

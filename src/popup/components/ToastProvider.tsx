@@ -8,10 +8,10 @@ import React, {
 } from 'react';
 import { CheckIcon, CloseIcon, AlertIcon } from '../Icons';
 
-// Toast variant types
+
 export type ToastVariant = 'success' | 'error' | 'info';
 
-// Single toast item
+
 export interface Toast {
   id: string;
   message: string;
@@ -19,26 +19,26 @@ export interface Toast {
   duration: number;
 }
 
-// Context value type
+
 export interface ToastContextValue {
   addToast: (message: string, variant?: ToastVariant, duration?: number) => void;
 }
 
-// Create context with undefined default
+
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
-// Default duration in ms
+
 const DEFAULT_DURATION = 2500;
 const MAX_TOASTS = 3;
 
-// Generate unique ID
+
 let toastCounter = 0;
 const generateToastId = (): string => {
   toastCounter += 1;
   return `toast-${Date.now()}-${toastCounter}`;
 };
 
-// Get icon for variant
+
 const getVariantIcon = (variant: ToastVariant): React.ReactNode => {
   switch (variant) {
     case 'success':
@@ -51,7 +51,7 @@ const getVariantIcon = (variant: ToastVariant): React.ReactNode => {
   }
 };
 
-// Single Toast Item Component
+
 interface ToastItemProps {
   toast: Toast;
   onDismiss: (id: string) => void;
@@ -63,14 +63,14 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
 
   const handleDismiss = useCallback(() => {
     setIsExiting(true);
-    // Wait for exit animation before removing
+    
     setTimeout(() => {
       onDismiss(toast.id);
     }, 200);
   }, [onDismiss, toast.id]);
 
   useEffect(() => {
-    // Set auto-dismiss timer
+    
     timerRef.current = window.setTimeout(() => {
       handleDismiss();
     }, toast.duration);
@@ -105,7 +105,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
   );
 };
 
-// Toast Container Component
+
 interface ToastContainerProps {
   toasts: Toast[];
   onDismiss: (id: string) => void;
@@ -123,7 +123,7 @@ const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) =>
   );
 };
 
-// Toast Provider Component
+
 interface ToastProviderProps {
   children: React.ReactNode;
 }
@@ -141,7 +141,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       };
 
       setToasts((prev) => {
-        // Keep only the most recent MAX_TOASTS - 1 toasts, then add the new one
+        
         const trimmed = prev.slice(-(MAX_TOASTS - 1));
         return [...trimmed, newToast];
       });
@@ -165,7 +165,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   );
 };
 
-// Custom hook to use toast
+
 export const useToast = (): ToastContextValue => {
   const context = useContext(ToastContext);
   if (context === undefined) {

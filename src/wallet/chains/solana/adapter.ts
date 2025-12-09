@@ -1,14 +1,4 @@
-/**
- * AINTIVIRUS Wallet - Solana Chain Adapter
- * 
- * This adapter wraps the existing Solana wallet functionality
- * and implements the ChainAdapter interface for multi-chain support.
- * 
- * SECURITY:
- * - All private key operations are delegated to keychain.ts
- * - Transaction signing verifies chain context
- * - No changes to existing Solana security model
- */
+
 
 import { Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import type {
@@ -53,16 +43,7 @@ import { getTransactionHistory as getSolanaHistory } from '../../history';
 import { getTokenBalances as getSPLTokenBalances } from '../../tokens';
 import type { SolanaNetwork, TransactionHistoryItem } from '../../types';
 
-// ============================================
-// SOLANA ADAPTER IMPLEMENTATION
-// ============================================
 
-/**
- * Solana Chain Adapter
- * 
- * Implements ChainAdapter interface by wrapping existing Solana functionality.
- * This preserves backward compatibility while enabling multi-chain support.
- */
 export class SolanaAdapter implements ChainAdapter {
   readonly chainType = 'solana' as const;
   readonly chainName = 'Solana';
@@ -72,7 +53,7 @@ export class SolanaAdapter implements ChainAdapter {
   
   constructor(network: NetworkEnvironment = 'mainnet') {
     this._network = network;
-    // Sync with existing Solana network setting
+    
     const solanaNetwork: SolanaNetwork = network === 'mainnet' ? 'mainnet-beta' : 'devnet';
     setSolanaNetwork(solanaNetwork);
   }
@@ -81,13 +62,11 @@ export class SolanaAdapter implements ChainAdapter {
     return this._network;
   }
   
-  // ---- Account Operations ----
   
   async deriveAddress(mnemonic: string, index: number = 0): Promise<string> {
-    // Solana currently uses single derivation (index 0)
-    // Future: support multiple accounts
+    
+    
     if (index !== 0) {
-      console.warn('Solana adapter currently only supports index 0');
     }
     
     const normalized = normalizeMnemonic(mnemonic);
@@ -104,7 +83,6 @@ export class SolanaAdapter implements ChainAdapter {
   
   async getKeypair(mnemonic: string, index: number = 0): Promise<ChainKeypair> {
     if (index !== 0) {
-      console.warn('Solana adapter currently only supports index 0');
     }
     
     const keypair = deriveKeypair(mnemonic);
@@ -121,7 +99,6 @@ export class SolanaAdapter implements ChainAdapter {
     return isValidSolanaAddress(address);
   }
   
-  // ---- Balance Operations ----
   
   async getBalance(address: string): Promise<ChainBalance> {
     if (!this.isValidAddress(address)) {
@@ -181,7 +158,6 @@ export class SolanaAdapter implements ChainAdapter {
     }
   }
   
-  // ---- Transaction Operations ----
   
   async createTransfer(from: string, to: string, amount: bigint): Promise<UnsignedChainTx> {
     if (!this.isValidAddress(from)) {
@@ -191,8 +167,7 @@ export class SolanaAdapter implements ChainAdapter {
       throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid recipient address', 'solana');
     }
     
-    // For Solana, we don't pre-create the transaction
-    // It's created at send time with fresh blockhash
+    
     return {
       chainType: 'solana',
       to,
@@ -207,9 +182,7 @@ export class SolanaAdapter implements ChainAdapter {
     tokenAddress: string,
     amount: bigint
   ): Promise<UnsignedChainTx> {
-    // SPL token transfers require associated token accounts
-    // This is a simplified implementation - full SPL transfer logic
-    // is in the existing tokens.ts
+    
     
     if (!this.isValidAddress(from)) {
       throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'solana');
@@ -242,7 +215,7 @@ export class SolanaAdapter implements ChainAdapter {
         priorityFee: BigInt(feeEstimate.priorityFee),
       };
     } catch (error) {
-      // Return default estimate on error
+      
       return {
         fee: BigInt(5000),
         feeFormatted: 0.000005,
@@ -252,7 +225,7 @@ export class SolanaAdapter implements ChainAdapter {
   }
   
   async signTransaction(tx: UnsignedChainTx, keypair: ChainKeypair): Promise<SignedChainTx> {
-    // Verify chain type
+    
     if (tx.chainType !== 'solana' || keypair.chainType !== 'solana') {
       throw new ChainError(
         ChainErrorCode.CHAIN_MISMATCH,
@@ -261,9 +234,6 @@ export class SolanaAdapter implements ChainAdapter {
       );
     }
     
-    // Solana transactions are signed at broadcast time in the existing implementation
-    // This is because they need a fresh blockhash
-    // We store the keypair reference for the broadcast step
     
     return {
       chainType: 'solana',
@@ -272,7 +242,7 @@ export class SolanaAdapter implements ChainAdapter {
         amount: tx.amount.toString(),
         tokenAddress: tx.tokenAddress,
       }),
-      hash: '', // Will be set after broadcast
+      hash: '', 
       _raw: { tx, keypair },
     };
   }
@@ -286,12 +256,11 @@ export class SolanaAdapter implements ChainAdapter {
       );
     }
     
-    // Extract transaction details
+    
     const rawData = signedTx._raw as { tx: UnsignedChainTx; keypair: ChainKeypair };
     const { tx } = rawData;
     
-    // Use existing sendSol function which handles signing and broadcast
-    // This requires the wallet to be unlocked (keypair in memory)
+    
     const amountSol = Number(tx.amount) / LAMPORTS_PER_SOL;
     
     try {
@@ -356,7 +325,6 @@ export class SolanaAdapter implements ChainAdapter {
     }
   }
   
-  // ---- Network Operations ----
   
   async getNetworkStatus(): Promise<NetworkStatus> {
     try {
@@ -398,15 +366,8 @@ export class SolanaAdapter implements ChainAdapter {
   }
 }
 
-/**
- * Create a Solana adapter instance
- * 
- * @param network - Network environment
- * @returns SolanaAdapter instance
- */
+
 export function createSolanaAdapter(network: NetworkEnvironment = 'mainnet'): SolanaAdapter {
   return new SolanaAdapter(network);
 }
-
-
 

@@ -1,25 +1,17 @@
-/**
- * AINTIVIRUS Decoding Module
- *
- * Re-exports all public APIs for EVM and Solana transaction/message decoding.
- */
 
-// ============================================
-// TYPES
-// ============================================
 
 export type {
-  // Common
+  
   WarningLevel,
   TxWarning,
-  // EVM Transaction
+  
   FunctionSignature,
   DecodedFunctionCall,
   DecodedParam,
   TxKind,
   TxDetails,
   DecodedEvmTx,
-  // EIP-712 Typed Data
+  
   TypedDataDomain,
   TypedDataTypes,
   TypedDataTypeEntry,
@@ -28,18 +20,15 @@ export type {
   TypedDataParseResult,
   TypedDataDisplayModel,
   HighlightedField,
-  // Solana
+  
   AccountRole,
   SolanaInstructionSummary,
   DecodedSolanaTx,
-  // Protocols
+  
   KnownProtocol,
   KnownContracts,
 } from './types';
 
-// ============================================
-// EVM DECODER
-// ============================================
 
 export {
   decodeEvmTx,
@@ -47,13 +36,11 @@ export {
   decodeUint256,
   decodeBytes,
   parseHexBigInt,
+  clearDecodingCache,
 } from './evmDecoder';
 
 export type { EvmTxInput } from './evmDecoder';
 
-// ============================================
-// TYPED DATA PARSER
-// ============================================
 
 export {
   decodeTypedData,
@@ -61,9 +48,6 @@ export {
   formatDomain,
 } from './typedDataParser';
 
-// ============================================
-// SOLANA DECODER
-// ============================================
 
 export {
   decodeSolanaInstruction,
@@ -75,9 +59,6 @@ export {
   SYSTEM_INSTRUCTION_NAMES,
 } from './solanaDecoder';
 
-// ============================================
-// SELECTORS & CONTRACTS
-// ============================================
 
 export {
   KNOWN_SELECTORS,
@@ -86,19 +67,18 @@ export {
   lookupContract,
   isVerifiedContract,
   getContractDisplayName,
+  preloadCommonSelectors,
+  clearSelectorCaches,
 } from './selectors';
 
-// ============================================
-// WARNINGS
-// ============================================
 
 export {
-  // Thresholds
+  
   MAX_UINT256,
   HALF_MAX_UINT256,
   WARNING_THRESHOLDS,
   WARNING_CODES,
-  // Warning generators
+  
   createWarning,
   isInfiniteApproval,
   isSuspiciousDeadline,
@@ -113,7 +93,7 @@ export {
   warnPermitSignature,
   warnPermit2,
   warnNftApprovalForAll,
-  // Analysis helpers
+  
   analyzeApprovalAmount,
   analyzeEthValue,
   formatAmount,

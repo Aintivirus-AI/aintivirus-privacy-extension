@@ -1,19 +1,4 @@
-/**
- * AINTIVIRUS Wallet - EVM RPC Client
- * 
- * This module provides an ethers.js-based RPC client with failover support
- * for all EVM-compatible chains.
- * 
- * Features:
- * - Automatic RPC failover on errors
- * - Connection caching with LRU eviction
- * - Health tracking per endpoint
- * - Request timeout handling
- * 
- * SECURITY:
- * - Uses public RPC endpoints (no API keys in code)
- * - No sensitive data sent to RPCs except signed transactions
- */
+
 
 import {
   JsonRpcProvider,
@@ -33,14 +18,14 @@ import {
   MAX_RPC_RETRIES,
   RPC_TIMEOUT,
 } from '../config';
+import {
+  BalanceCache,
+  NonceCache,
+  GasPriceCache,
+  BlockNumberCache,
+} from './rpcCache';
 
-// ============================================
-// TYPES
-// ============================================
 
-/**
- * RPC endpoint health tracking
- */
 interface RpcEndpointHealth {
   url: string;
   latencyMs: number;
@@ -50,9 +35,7 @@ interface RpcEndpointHealth {
   consecutiveFailures: number;
 }
 
-/**
- * Cached provider entry
- */
+
 interface CachedProvider {
   provider: JsonRpcProvider;
   lastAccess: number;
@@ -60,51 +43,29 @@ interface CachedProvider {
   testnet: boolean;
 }
 
-// ============================================
-// STATE
-// ============================================
 
-/**
- * Provider cache (LRU-style)
- */
 const providerCache: Map<string, CachedProvider> = new Map();
 
-/**
- * Health tracking per RPC endpoint
- */
+
 const rpcHealth: Map<string, RpcEndpointHealth> = new Map();
 
-/**
- * Maximum cached providers
- */
+
 const MAX_CACHE_SIZE = 20;
 
-/**
- * Currently working RPC URL per chain
- */
+
 const workingRpcUrls: Map<string, string> = new Map();
 
-// ============================================
-// PROVIDER MANAGEMENT
-// ============================================
 
-/**
- * Get cache key for provider
- */
 function getProviderCacheKey(chainId: EVMChainId, testnet: boolean, rpcUrl: string): string {
   return `${chainId}-${testnet ? 'testnet' : 'mainnet'}-${rpcUrl}`;
 }
 
-/**
- * Get chain cache key (without specific RPC)
- */
+
 function getChainCacheKey(chainId: EVMChainId, testnet: boolean): string {
   return `${chainId}-${testnet ? 'testnet' : 'mainnet'}`;
 }
 
-/**
- * Evict oldest cache entries
- */
+
 function evictOldestProviders(): void {
   if (providerCache.size <= MAX_CACHE_SIZE) {
     return;
@@ -120,35 +81,25 @@ function evictOldestProviders(): void {
   }
 }
 
-/**
- * Create a new JsonRpcProvider with timeout
- * 
- * @param rpcUrl - RPC endpoint URL
- * @param chainId - Numeric chain ID
- * @returns Configured provider
- */
+
 function createProvider(rpcUrl: string, chainId: number): JsonRpcProvider {
-  // Create fetch request with timeout
+  
   const fetchRequest = new FetchRequest(rpcUrl);
   fetchRequest.timeout = RPC_TIMEOUT;
   
-  // Create static network to avoid unnecessary chainId calls
+  
   const network = Network.from(chainId);
   
   return new JsonRpcProvider(fetchRequest, network, {
     staticNetwork: network,
-    batchMaxCount: 1, // Disable batching for simpler error handling
+    
+    
+    batchMaxCount: 10,
+    batchStallTime: 10, 
   });
 }
 
-/**
- * Get or create a provider for a specific RPC URL
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param rpcUrl - Specific RPC URL
- * @returns JsonRpcProvider
- */
+
 export function getProvider(
   chainId: EVMChainId,
   testnet: boolean,
@@ -156,21 +107,21 @@ export function getProvider(
 ): JsonRpcProvider {
   const cacheKey = getProviderCacheKey(chainId, testnet, rpcUrl);
   
-  // Check cache
+  
   const cached = providerCache.get(cacheKey);
   if (cached) {
     cached.lastAccess = Date.now();
     return cached.provider;
   }
   
-  // Evict old entries
+  
   evictOldestProviders();
   
-  // Create new provider
+  
   const numericChainId = getNumericChainId(chainId, testnet);
   const provider = createProvider(rpcUrl, numericChainId);
   
-  // Cache it
+  
   providerCache.set(cacheKey, {
     provider,
     lastAccess: Date.now(),
@@ -181,37 +132,27 @@ export function getProvider(
   return provider;
 }
 
-/**
- * Get the best available provider for a chain
- * 
- * Uses working RPC if known, otherwise returns primary RPC provider
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @returns JsonRpcProvider
- */
+
 export function getBestProvider(chainId: EVMChainId, testnet: boolean): JsonRpcProvider {
   const chainKey = getChainCacheKey(chainId, testnet);
   
-  // Check for known working RPC
+  
   const workingUrl = workingRpcUrls.get(chainKey);
   if (workingUrl) {
     return getProvider(chainId, testnet, workingUrl);
   }
   
-  // Use primary RPC
+  
   const rpcUrls = getEVMRpcUrls(chainId, testnet);
   return getProvider(chainId, testnet, rpcUrls[0]);
 }
 
-/**
- * Mark an RPC endpoint as working
- */
+
 function markRpcWorking(chainId: EVMChainId, testnet: boolean, rpcUrl: string, latencyMs: number): void {
   const chainKey = getChainCacheKey(chainId, testnet);
   workingRpcUrls.set(chainKey, rpcUrl);
   
-  // Update health tracking
+  
   const health = rpcHealth.get(rpcUrl) || {
     url: rpcUrl,
     latencyMs: -1,
@@ -228,9 +169,7 @@ function markRpcWorking(chainId: EVMChainId, testnet: boolean, rpcUrl: string, l
   rpcHealth.set(rpcUrl, health);
 }
 
-/**
- * Mark an RPC endpoint as failed
- */
+
 function markRpcFailed(rpcUrl: string): void {
   const health = rpcHealth.get(rpcUrl) || {
     url: rpcUrl,
@@ -247,7 +186,7 @@ function markRpcFailed(rpcUrl: string): void {
   
   rpcHealth.set(rpcUrl, health);
   
-  // Remove from provider cache on repeated failures
+  
   if (health.consecutiveFailures >= 3) {
     for (const [key, entry] of providerCache.entries()) {
       if (key.includes(rpcUrl)) {
@@ -258,21 +197,7 @@ function markRpcFailed(rpcUrl: string): void {
   }
 }
 
-// ============================================
-// FAILOVER OPERATIONS
-// ============================================
 
-/**
- * Execute an operation with RPC failover
- * 
- * Tries each RPC endpoint in sequence until one succeeds.
- * Updates health tracking based on results.
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param operation - Async operation to perform with provider
- * @returns Result of the operation
- */
 export async function withFailover<T>(
   chainId: EVMChainId,
   testnet: boolean,
@@ -281,12 +206,12 @@ export async function withFailover<T>(
   const rpcUrls = getEVMRpcUrls(chainId, testnet);
   const chainKey = getChainCacheKey(chainId, testnet);
   
-  // Try working RPC first if available
+  
   const workingUrl = workingRpcUrls.get(chainKey);
   if (workingUrl && !rpcUrls.includes(workingUrl)) {
     rpcUrls.unshift(workingUrl);
   } else if (workingUrl) {
-    // Move working URL to front
+    
     const idx = rpcUrls.indexOf(workingUrl);
     if (idx > 0) {
       rpcUrls.splice(idx, 1);
@@ -303,23 +228,22 @@ export async function withFailover<T>(
       const provider = getProvider(chainId, testnet, rpcUrl);
       const result = await operation(provider);
       
-      // Mark as working
+      
       const latency = Math.round(performance.now() - startTime);
       markRpcWorking(chainId, testnet, rpcUrl, latency);
       
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn(`[EVM Client] RPC ${rpcUrl} failed:`, lastError.message);
-      
+
       markRpcFailed(rpcUrl);
       
-      // Continue to next RPC
+      
       continue;
     }
   }
   
-  // All RPCs failed
+  
   throw new ChainError(
     ChainErrorCode.NETWORK_ERROR,
     `All RPC endpoints failed for ${chainId}. Last error: ${lastError?.message || 'Unknown error'}`,
@@ -327,15 +251,7 @@ export async function withFailover<T>(
   );
 }
 
-/**
- * Execute with retry logic (single RPC, multiple attempts)
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param operation - Async operation to perform
- * @param maxRetries - Maximum retry attempts
- * @returns Result of the operation
- */
+
 export async function withRetry<T>(
   chainId: EVMChainId,
   testnet: boolean,
@@ -350,7 +266,7 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      // Wait before retry (exponential backoff)
+      
       if (attempt < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
       }
@@ -364,13 +280,7 @@ export async function withRetry<T>(
   );
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
 
-/**
- * Clear all cached providers
- */
 export function clearProviderCache(): void {
   for (const entry of providerCache.values()) {
     entry.provider.destroy();
@@ -379,9 +289,7 @@ export function clearProviderCache(): void {
   workingRpcUrls.clear();
 }
 
-/**
- * Clear cache for a specific chain
- */
+
 export function clearChainCache(chainId: EVMChainId, testnet: boolean): void {
   const chainKey = getChainCacheKey(chainId, testnet);
   workingRpcUrls.delete(chainKey);
@@ -394,42 +302,74 @@ export function clearChainCache(chainId: EVMChainId, testnet: boolean): void {
   }
 }
 
-/**
- * Get RPC health statistics
- */
+
 export function getRpcHealthStats(): Map<string, RpcEndpointHealth> {
   return new Map(rpcHealth);
 }
 
-// ============================================
-// HIGH-LEVEL RPC OPERATIONS
-// ============================================
 
-/**
- * Get current block number
- */
 export async function getBlockNumber(chainId: EVMChainId, testnet: boolean): Promise<number> {
   return withFailover(chainId, testnet, async (provider) => {
     return await provider.getBlockNumber();
   });
 }
 
-/**
- * Get native balance for an address
- */
+
+interface BalanceCacheEntry {
+  balance: bigint;
+  timestamp: number;
+}
+
+const balanceCache: Map<string, BalanceCacheEntry> = new Map();
+const BALANCE_CACHE_TTL = 30000; 
+const balanceRequests: Map<string, Promise<bigint>> = new Map();
+
+function getBalanceCacheKey(chainId: EVMChainId, testnet: boolean, address: string): string {
+  return `${chainId}:${testnet}:${address.toLowerCase()}`;
+}
+
+
 export async function getBalance(
   chainId: EVMChainId,
   testnet: boolean,
   address: string
 ): Promise<bigint> {
-  return withFailover(chainId, testnet, async (provider) => {
+  const cacheKey = getBalanceCacheKey(chainId, testnet, address);
+  
+  
+  const cached = balanceCache.get(cacheKey);
+  if (cached) {
+    const age = Date.now() - cached.timestamp;
+    if (age < BALANCE_CACHE_TTL) {
+      return cached.balance;
+    }
+  }
+  
+  
+  const inFlight = balanceRequests.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+  
+  
+  const request = withFailover(chainId, testnet, async (provider) => {
     return await provider.getBalance(address);
+  }).then((balance) => {
+    
+    balanceCache.set(cacheKey, {
+      balance,
+      timestamp: Date.now(),
+    });
+    return balance;
+  }).finally(() => {
+    balanceRequests.delete(cacheKey);
   });
+  
+  balanceRequests.set(cacheKey, request);
+  return request;
 }
 
-/**
- * Get transaction count (nonce) for an address
- */
+
 export async function getTransactionCount(
   chainId: EVMChainId,
   testnet: boolean,
@@ -441,9 +381,7 @@ export async function getTransactionCount(
   });
 }
 
-/**
- * Get current gas price
- */
+
 export async function getGasPrice(chainId: EVMChainId, testnet: boolean): Promise<bigint> {
   return withFailover(chainId, testnet, async (provider) => {
     const feeData = await provider.getFeeData();
@@ -451,9 +389,7 @@ export async function getGasPrice(chainId: EVMChainId, testnet: boolean): Promis
   });
 }
 
-/**
- * Get fee data (EIP-1559 compatible)
- */
+
 export async function getFeeData(
   chainId: EVMChainId,
   testnet: boolean
@@ -472,9 +408,7 @@ export async function getFeeData(
   });
 }
 
-/**
- * Estimate gas for a transaction
- */
+
 export async function estimateGas(
   chainId: EVMChainId,
   testnet: boolean,
@@ -490,9 +424,7 @@ export async function estimateGas(
   });
 }
 
-/**
- * Send a signed transaction
- */
+
 export async function sendTransaction(
   chainId: EVMChainId,
   testnet: boolean,
@@ -503,9 +435,7 @@ export async function sendTransaction(
   });
 }
 
-/**
- * Wait for transaction confirmation
- */
+
 export async function waitForTransaction(
   chainId: EVMChainId,
   testnet: boolean,
@@ -518,9 +448,7 @@ export async function waitForTransaction(
   });
 }
 
-/**
- * Get transaction receipt
- */
+
 export async function getTransactionReceipt(
   chainId: EVMChainId,
   testnet: boolean,
@@ -531,9 +459,7 @@ export async function getTransactionReceipt(
   });
 }
 
-/**
- * Get latest block
- */
+
 export async function getBlock(
   chainId: EVMChainId,
   testnet: boolean,
@@ -544,9 +470,7 @@ export async function getBlock(
   });
 }
 
-/**
- * Call a contract method (read-only)
- */
+
 export async function call(
   chainId: EVMChainId,
   testnet: boolean,
@@ -560,9 +484,7 @@ export async function call(
   });
 }
 
-/**
- * Get code at an address (to check if it's a contract)
- */
+
 export async function getCode(
   chainId: EVMChainId,
   testnet: boolean,
@@ -572,6 +494,4 @@ export async function getCode(
     return await provider.getCode(address);
   });
 }
-
-
 

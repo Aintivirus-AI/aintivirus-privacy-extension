@@ -1,22 +1,4 @@
-/**
- * AINTIVIRUS - AddressChip Component
- * 
- * Premium address display component with:
- * - Identicon (deterministic from address)
- * - Optional label (contact/known address name)
- * - Truncated address
- * - Click-to-copy with visual feedback
- * - Explorer link button
- * - EVM + Solana support
- * 
- * @example
- * <AddressChip 
- *   address="0x1234...5678"
- *   chain="evm"
- *   label="Uniswap Router"
- *   onCopy={() => toast('Copied!')}
- * />
- */
+
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { ExplorerLinkIcon } from './ExplorerLinkIcon';
@@ -24,59 +6,48 @@ import { CopyIcon, CheckIcon } from '../Icons';
 import { useToast } from './ToastProvider';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface AddressChipProps {
-  /** The blockchain address */
+  
   address: string;
-  /** Chain type for explorer links */
+  
   chain: ChainType;
-  /** EVM chain ID (required for EVM addresses) */
+  
   evmChainId?: EVMChainId;
-  /** Optional human-readable label */
+  
   label?: string;
-  /** Whether this is a testnet address */
+  
   testnet?: boolean;
-  /** Size variant */
+  
   size?: 'sm' | 'md' | 'lg';
-  /** Show explorer link button */
+  
   showExplorer?: boolean;
-  /** Show copy button explicitly (default: whole chip is clickable) */
+  
   showCopyButton?: boolean;
-  /** Custom copy callback */
+  
   onCopy?: () => void;
-  /** Whether to show the full address on hover tooltip */
+  
   showFullOnHover?: boolean;
-  /** First-time recipient warning */
+  
   isFirstTime?: boolean;
-  /** Additional CSS class */
+  
   className?: string;
-  /** Inline style */
+  
   style?: React.CSSProperties;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
-/**
- * Truncate address for display
- */
 function truncateAddress(address: string, startChars = 6, endChars = 4): string {
   if (!address) return '';
   if (address.length <= startChars + endChars + 3) return address;
   return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
 }
 
-/**
- * Generate a deterministic color from address for identicon
- */
+
 function getAddressColor(address: string): string {
   if (!address) return '#5b5fc7';
   
-  // Simple hash function
+  
   let hash = 0;
   for (let i = 0; i < address.length; i++) {
     const char = address.charCodeAt(i);
@@ -84,15 +55,12 @@ function getAddressColor(address: string): string {
     hash = hash & hash;
   }
   
-  // Convert to hue (0-360)
+  
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 65%, 55%)`;
 }
 
-/**
- * Generate identicon pattern from address
- * Returns a 5x5 grid of boolean values for rendering
- */
+
 function generateIdenticonPattern(address: string): boolean[][] {
   if (!address) return Array(5).fill(Array(5).fill(false));
   
@@ -106,7 +74,7 @@ function generateIdenticonPattern(address: string): boolean[][] {
       const charCode = normalized.charCodeAt(idx);
       row.push(charCode % 2 === 0);
     }
-    // Mirror for symmetry
+    
     row.push(row[1]);
     row.push(row[0]);
     pattern.push(row);
@@ -115,9 +83,6 @@ function generateIdenticonPattern(address: string): boolean[][] {
   return pattern;
 }
 
-// ============================================
-// IDENTICON COMPONENT
-// ============================================
 
 interface IdenticonProps {
   address: string;
@@ -158,9 +123,6 @@ const Identicon: React.FC<IdenticonProps> = ({ address, size, className = '' }) 
   );
 };
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 export const AddressChip: React.FC<AddressChipProps> = ({
   address,
@@ -189,14 +151,14 @@ export const AddressChip: React.FC<AddressChipProps> = ({
       addToast('Address copied', 'success');
       onCopy?.();
       
-      // Reset after feedback duration
+      
       setTimeout(() => setCopied(false), 800);
     } catch (err) {
       addToast('Failed to copy', 'error');
     }
   }, [address, addToast, onCopy]);
   
-  // Size configurations
+  
   const sizeConfig = {
     sm: {
       height: 28,
@@ -242,10 +204,10 @@ export const AddressChip: React.FC<AddressChipProps> = ({
         title={showFullOnHover ? address : undefined}
         aria-label={`${label || 'Address'}: ${address}${!showCopyButton ? '. Click to copy' : ''}`}
       >
-        {/* Identicon */}
+        {}
         <Identicon address={address} size={config.iconSize} />
         
-        {/* Label & Address */}
+        {}
         <div className="address-chip-text">
           {label && (
             <span className="address-chip-label">{label}</span>
@@ -253,7 +215,7 @@ export const AddressChip: React.FC<AddressChipProps> = ({
           <span className="address-chip-address">{truncated}</span>
         </div>
         
-        {/* Copy button (if explicit) */}
+        {}
         {showCopyButton && (
           <button
             className="address-chip-copy"
@@ -265,7 +227,7 @@ export const AddressChip: React.FC<AddressChipProps> = ({
           </button>
         )}
         
-        {/* Explorer link */}
+        {}
         {showExplorer && (
           <ExplorerLinkIcon
             type="address"
@@ -278,7 +240,7 @@ export const AddressChip: React.FC<AddressChipProps> = ({
           />
         )}
         
-        {/* First-time warning indicator */}
+        {}
         {isFirstTime && (
           <span className="address-chip-warning" aria-label="First time sending to this address">
             ⚠
@@ -374,7 +336,6 @@ export const AddressChip: React.FC<AddressChipProps> = ({
           text-overflow: ellipsis;
         }
         
-        /* If no label, address is primary */
         .address-chip-text:not(:has(.address-chip-label)) .address-chip-address {
           color: var(--text-primary);
           font-size: inherit;
@@ -420,7 +381,6 @@ export const AddressChip: React.FC<AddressChipProps> = ({
           flex-shrink: 0;
         }
         
-        /* Animation for copy feedback */
         @keyframes chip-copied {
           0% {
             transform: scale(1);

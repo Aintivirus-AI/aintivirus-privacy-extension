@@ -1,17 +1,4 @@
-/**
- * AINTIVIRUS Wallet - Chain Adapter Factory
- * 
- * This module provides the entry point for multi-chain support.
- * Use the factory functions to create adapters for specific chains.
- * 
- * Supported chains:
- * - Solana (mainnet-beta, devnet)
- * - Ethereum (mainnet, sepolia)
- * - Polygon (mainnet, amoy)
- * - Arbitrum (one, sepolia)
- * - Optimism (mainnet, sepolia)
- * - Base (mainnet, sepolia)
- */
+
 
 import type {
   ChainAdapter,
@@ -24,19 +11,10 @@ import { createSolanaAdapter, SolanaAdapter } from './solana';
 import { createEVMAdapter, EVMAdapter } from './evm';
 import { getSupportedEVMChains } from './config';
 
-// ============================================
-// ADAPTER FACTORY
-// ============================================
 
-/**
- * Chain adapter cache
- * Reuses adapter instances to maintain state
- */
 const adapterCache: Map<string, ChainAdapter> = new Map();
 
-/**
- * Get cache key for adapter
- */
+
 function getAdapterCacheKey(
   chainType: ChainType,
   evmChainId?: EVMChainId,
@@ -48,14 +26,7 @@ function getAdapterCacheKey(
   return `evm-${evmChainId}-${network || 'mainnet'}`;
 }
 
-/**
- * Create or get a chain adapter
- * 
- * @param chainType - Chain type ('solana' or 'evm')
- * @param evmChainId - EVM chain ID (required for EVM)
- * @param network - Network environment
- * @returns Chain adapter instance
- */
+
 export function getChainAdapter(
   chainType: ChainType,
   evmChainId?: EVMChainId,
@@ -63,17 +34,17 @@ export function getChainAdapter(
 ): ChainAdapter {
   const cacheKey = getAdapterCacheKey(chainType, evmChainId, network);
   
-  // Check cache
+  
   const cached = adapterCache.get(cacheKey);
   if (cached) {
-    // Update network if changed
+    
     if (cached.network !== network) {
       cached.setNetwork(network);
     }
     return cached;
   }
   
-  // Create new adapter
+  
   let adapter: ChainAdapter;
   
   if (chainType === 'solana') {
@@ -103,33 +74,18 @@ export function getChainAdapter(
     );
   }
   
-  // Cache it
+  
   adapterCache.set(cacheKey, adapter);
   
   return adapter;
 }
 
-/**
- * Get Solana adapter
- * 
- * Convenience function for Solana-specific access.
- * 
- * @param network - Network environment
- * @returns Solana adapter
- */
+
 export function getSolanaAdapter(network: NetworkEnvironment = 'mainnet'): SolanaAdapter {
   return getChainAdapter('solana', undefined, network) as SolanaAdapter;
 }
 
-/**
- * Get EVM adapter for a specific chain
- * 
- * Convenience function for EVM-specific access.
- * 
- * @param evmChainId - EVM chain identifier
- * @param network - Network environment
- * @returns EVM adapter
- */
+
 export function getEVMAdapter(
   evmChainId: EVMChainId,
   network: NetworkEnvironment = 'mainnet'
@@ -137,18 +93,12 @@ export function getEVMAdapter(
   return getChainAdapter('evm', evmChainId, network) as EVMAdapter;
 }
 
-/**
- * Clear adapter cache
- * 
- * Useful when switching accounts or resetting state.
- */
+
 export function clearAdapterCache(): void {
   adapterCache.clear();
 }
 
-/**
- * Get all supported chain identifiers
- */
+
 export function getSupportedChains(): {
   solana: true;
   evm: EVMChainId[];
@@ -159,14 +109,10 @@ export function getSupportedChains(): {
   };
 }
 
-// ============================================
-// RE-EXPORTS
-// ============================================
 
-// Types
 export * from './types';
 
-// Config
+
 export {
   EVM_CHAINS,
   SOLANA_CHAINS,
@@ -186,14 +132,14 @@ export {
   ERC20_GAS_LIMIT,
 } from './config';
 
-// Solana adapter
+
 export { SolanaAdapter, createSolanaAdapter } from './solana';
 
-// EVM adapter and utilities
+
 export {
   EVMAdapter,
   createEVMAdapter,
-  // Client
+  
   getProvider,
   getBestProvider,
   withFailover,
@@ -201,13 +147,13 @@ export {
   getTransactionCount,
   sendTransaction,
   waitForTransaction,
-  // Gas
+  
   estimateTransactionGas,
   estimateNativeTransferGas,
   estimateTokenTransferGas,
   formatGasPrice,
   formatFee,
-  // Transactions
+  
   sendNativeToken,
   sendToken,
   parseAmount,
@@ -215,12 +161,12 @@ export {
   signTransaction,
   broadcastTransaction,
   confirmTransaction,
-  // Tokens
+  
   getTokenBalance,
   getTokenMetadata,
   getPopularTokenBalances,
   POPULAR_TOKENS,
-  // Allowances
+  
   discoverAllowances,
   getTokenAllowance,
   createRevokeTransaction,
@@ -232,7 +178,7 @@ export {
   formatAllowance,
   MAX_UINT256,
   INFINITE_THRESHOLD,
-  // Known Spenders
+  
   getKnownSpenders,
   getSpenderLabel,
   isVerifiedSpender,
@@ -243,6 +189,4 @@ export {
   type UnsignedRevokeTransaction,
   type SpenderInfo,
 } from './evm';
-
-
 

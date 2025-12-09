@@ -1,21 +1,4 @@
-/**
- * AINTIVIRUS Wallet - EVM Transaction Operations
- * 
- * This module handles ETH and ERC-20 token transfers for all
- * supported EVM chains.
- * 
- * Features:
- * - Native ETH/token transfers
- * - ERC-20 token transfers
- * - EIP-1559 transaction support
- * - Nonce management
- * - Transaction confirmation polling
- * 
- * SECURITY:
- * - Chain ID is always verified in transactions (EIP-155)
- * - Transactions are signed locally, never sent unsigned
- * - Nonce is fetched fresh to prevent replay
- */
+
 
 import {
   Wallet,
@@ -52,13 +35,7 @@ import {
 } from './gas';
 import { evmKeypairToWallet, isValidEVMAddress } from '../../keychain';
 
-// ============================================
-// TYPES
-// ============================================
 
-/**
- * Native transfer parameters
- */
 export interface NativeTransferParams {
   from: string;
   to: string;
@@ -66,9 +43,7 @@ export interface NativeTransferParams {
   gasEstimate?: GasEstimate;
 }
 
-/**
- * ERC-20 transfer parameters
- */
+
 export interface TokenTransferParams {
   from: string;
   to: string;
@@ -77,9 +52,7 @@ export interface TokenTransferParams {
   gasEstimate?: GasEstimate;
 }
 
-/**
- * Transaction result
- */
+
 export interface EVMTransactionResult {
   hash: string;
   explorerUrl: string;
@@ -88,9 +61,7 @@ export interface EVMTransactionResult {
   error?: string;
 }
 
-/**
- * Unsigned transaction data
- */
+
 export interface UnsignedEVMTransaction {
   chainId: number;
   to: string;
@@ -104,32 +75,13 @@ export interface UnsignedEVMTransaction {
   type: number;
 }
 
-// ============================================
-// CONSTANTS
-// ============================================
 
-/**
- * ERC-20 transfer function signature
- */
 const ERC20_TRANSFER_ABI = ['function transfer(address to, uint256 amount) returns (bool)'];
 
-/**
- * ERC-20 interface for encoding
- */
+
 const erc20Interface = new Interface(ERC20_TRANSFER_ABI);
 
-// ============================================
-// TRANSACTION CREATION
-// ============================================
 
-/**
- * Create an unsigned native token transfer transaction
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param params - Transfer parameters
- * @returns Unsigned transaction
- */
 export async function createNativeTransfer(
   chainId: EVMChainId,
   testnet: boolean,
@@ -137,7 +89,7 @@ export async function createNativeTransfer(
 ): Promise<UnsignedEVMTransaction> {
   const { from, to, amount } = params;
   
-  // Validate addresses
+  
   if (!isValidEVMAddress(from)) {
     throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'evm');
   }
@@ -145,17 +97,17 @@ export async function createNativeTransfer(
     throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid recipient address', 'evm');
   }
   
-  // Get gas estimate
+  
   const gasEstimate = params.gasEstimate || 
     await estimateNativeTransferGas(chainId, testnet, from, to, amount);
   
-  // Get nonce
+  
   const nonce = await getTransactionCount(chainId, testnet, from, 'pending');
   
-  // Get numeric chain ID
+  
   const numericChainId = getNumericChainId(chainId, testnet);
   
-  // Create transaction
+  
   if (gasEstimate.isEIP1559) {
     return {
       chainId: numericChainId,
@@ -166,7 +118,7 @@ export async function createNativeTransfer(
       maxFeePerGas: gasEstimate.gasPrice,
       maxPriorityFeePerGas: gasEstimate.maxPriorityFee,
       nonce,
-      type: 2, // EIP-1559
+      type: 2, 
     };
   } else {
     return {
@@ -177,19 +129,12 @@ export async function createNativeTransfer(
       gasLimit: gasEstimate.gasLimit,
       gasPrice: gasEstimate.gasPrice,
       nonce,
-      type: 0, // Legacy
+      type: 0, 
     };
   }
 }
 
-/**
- * Create an unsigned ERC-20 token transfer transaction
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param params - Transfer parameters
- * @returns Unsigned transaction
- */
+
 export async function createTokenTransfer(
   chainId: EVMChainId,
   testnet: boolean,
@@ -197,7 +142,7 @@ export async function createTokenTransfer(
 ): Promise<UnsignedEVMTransaction> {
   const { from, to, tokenAddress, amount } = params;
   
-  // Validate addresses
+  
   if (!isValidEVMAddress(from)) {
     throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'evm');
   }
@@ -208,20 +153,20 @@ export async function createTokenTransfer(
     throw new ChainError(ChainErrorCode.INVALID_TOKEN, 'Invalid token address', 'evm');
   }
   
-  // Encode transfer call
+  
   const data = erc20Interface.encodeFunctionData('transfer', [to, amount]);
   
-  // Get gas estimate
+  
   const gasEstimate = params.gasEstimate ||
     await estimateTokenTransferGas(chainId, testnet, from, to, tokenAddress, amount);
   
-  // Get nonce
+  
   const nonce = await getTransactionCount(chainId, testnet, from, 'pending');
   
-  // Get numeric chain ID
+  
   const numericChainId = getNumericChainId(chainId, testnet);
   
-  // Create transaction (to token contract, not recipient)
+  
   if (gasEstimate.isEIP1559) {
     return {
       chainId: numericChainId,
@@ -248,28 +193,13 @@ export async function createTokenTransfer(
   }
 }
 
-// ============================================
-// TRANSACTION SIGNING
-// ============================================
 
-/**
- * Sign an unsigned transaction
- * 
- * SECURITY: 
- * - Verifies chain ID matches expected chain
- * - Signs locally, private key never leaves memory
- * 
- * @param tx - Unsigned transaction
- * @param keypair - EVM keypair
- * @param expectedChainId - Expected chain ID for verification
- * @returns Signed transaction hex string
- */
 export function signTransaction(
   tx: UnsignedEVMTransaction,
   keypair: EVMKeypair,
   expectedChainId: number
 ): string {
-  // SECURITY: Verify chain ID matches
+  
   if (tx.chainId !== expectedChainId) {
     throw new ChainError(
       ChainErrorCode.CHAIN_MISMATCH,
@@ -278,10 +208,10 @@ export function signTransaction(
     );
   }
   
-  // Create wallet from keypair
+  
   const wallet = evmKeypairToWallet(keypair);
   
-  // Create Transaction object
+  
   const transaction = Transaction.from({
     chainId: tx.chainId,
     to: tx.to,
@@ -298,25 +228,14 @@ export function signTransaction(
     }),
   });
   
-  // Sign and serialize
+  
   const signedTx = wallet.signingKey.sign(transaction.unsignedHash);
   transaction.signature = signedTx;
   
   return transaction.serialized;
 }
 
-// ============================================
-// TRANSACTION BROADCASTING
-// ============================================
 
-/**
- * Broadcast a signed transaction
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param signedTx - Signed transaction hex
- * @returns Transaction response
- */
 export async function broadcastTransaction(
   chainId: EVMChainId,
   testnet: boolean,
@@ -327,7 +246,7 @@ export async function broadcastTransaction(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     
-    // Parse common errors
+    
     if (message.includes('insufficient funds')) {
       throw new ChainError(ChainErrorCode.INSUFFICIENT_FUNDS, 'Insufficient funds for gas', 'evm');
     }
@@ -342,15 +261,7 @@ export async function broadcastTransaction(
   }
 }
 
-/**
- * Wait for transaction confirmation
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param txHash - Transaction hash
- * @param confirmations - Required confirmations (default 1)
- * @returns Transaction receipt or null if timeout
- */
+
 export async function confirmTransaction(
   chainId: EVMChainId,
   testnet: boolean,
@@ -366,10 +277,8 @@ export async function confirmTransaction(
       TX_CONFIRMATION_TIMEOUT
     );
   } catch (error) {
-    // Timeout - transaction may still succeed
-    console.warn('[EVM Tx] Confirmation timeout for:', txHash);
     
-    // Try to get receipt one more time
+    
     try {
       return await getTransactionReceipt(chainId, testnet, txHash);
     } catch {
@@ -378,22 +287,7 @@ export async function confirmTransaction(
   }
 }
 
-// ============================================
-// HIGH-LEVEL TRANSFER FUNCTIONS
-// ============================================
 
-/**
- * Send native tokens (ETH, MATIC, etc.)
- * 
- * Full send flow: create -> sign -> broadcast -> confirm
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param keypair - Sender's keypair
- * @param to - Recipient address
- * @param amount - Amount in wei
- * @returns Transaction result
- */
 export async function sendNativeToken(
   chainId: EVMChainId,
   testnet: boolean,
@@ -405,25 +299,21 @@ export async function sendNativeToken(
   const numericChainId = getNumericChainId(chainId, testnet);
   const explorerBase = getEVMExplorerUrl(chainId, testnet);
   
-  // Create unsigned transaction
+  
   const unsignedTx = await createNativeTransfer(chainId, testnet, {
     from: keypair.address,
     to,
     amount,
   });
   
-  // Sign transaction
+  
   const signedTx = signTransaction(unsignedTx, keypair, numericChainId);
   
-  // Broadcast
+  
   const txResponse = await broadcastTransaction(chainId, testnet, signedTx);
   const hash = txResponse.hash;
   const explorerUrl = `${explorerBase}/tx/${hash}`;
   
-  console.log(`[EVM Tx] Sent ${formatUnits(amount, config.decimals)} ${config.symbol} to ${to}`);
-  console.log(`[EVM Tx] Hash: ${hash}`);
-  
-  // Wait for confirmation
   const receipt = await confirmTransaction(chainId, testnet, hash);
   
   if (receipt) {
@@ -445,17 +335,7 @@ export async function sendNativeToken(
   };
 }
 
-/**
- * Send ERC-20 tokens
- * 
- * @param chainId - EVM chain identifier
- * @param testnet - Whether testnet
- * @param keypair - Sender's keypair
- * @param to - Recipient address
- * @param tokenAddress - Token contract address
- * @param amount - Amount in smallest units
- * @returns Transaction result
- */
+
 export async function sendToken(
   chainId: EVMChainId,
   testnet: boolean,
@@ -467,7 +347,7 @@ export async function sendToken(
   const numericChainId = getNumericChainId(chainId, testnet);
   const explorerBase = getEVMExplorerUrl(chainId, testnet);
   
-  // Create unsigned transaction
+  
   const unsignedTx = await createTokenTransfer(chainId, testnet, {
     from: keypair.address,
     to,
@@ -475,18 +355,14 @@ export async function sendToken(
     amount,
   });
   
-  // Sign transaction
+  
   const signedTx = signTransaction(unsignedTx, keypair, numericChainId);
   
-  // Broadcast
+  
   const txResponse = await broadcastTransaction(chainId, testnet, signedTx);
   const hash = txResponse.hash;
   const explorerUrl = `${explorerBase}/tx/${hash}`;
   
-  console.log(`[EVM Tx] Sent token ${tokenAddress} to ${to}`);
-  console.log(`[EVM Tx] Hash: ${hash}`);
-  
-  // Wait for confirmation
   const receipt = await confirmTransaction(chainId, testnet, hash);
   
   if (receipt) {
@@ -508,30 +384,13 @@ export async function sendToken(
   };
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
 
-/**
- * Parse amount from user input to wei
- * 
- * @param input - User input string (e.g., "1.5")
- * @param decimals - Token decimals (default 18)
- * @returns Amount in smallest units
- */
 export function parseAmount(input: string, decimals: number = 18): bigint {
   const cleaned = input.trim().replace(/,/g, '');
   return parseUnits(cleaned, decimals);
 }
 
-/**
- * Format amount from wei to display string
- * 
- * @param amount - Amount in smallest units
- * @param decimals - Token decimals (default 18)
- * @param maxDecimals - Maximum display decimals (default 6)
- * @returns Formatted amount string
- */
+
 export function formatAmount(
   amount: bigint,
   decimals: number = 18,
@@ -549,12 +408,7 @@ export function formatAmount(
   });
 }
 
-/**
- * Validate transaction parameters
- * 
- * @param params - Transaction parameters to validate
- * @returns Validation result
- */
+
 export function validateTransferParams(params: {
   to: string;
   amount: bigint;
@@ -583,17 +437,9 @@ export function validateTransferParams(params: {
   return { valid: true };
 }
 
-/**
- * Calculate maximum sendable amount
- * 
- * @param balance - Current balance
- * @param estimatedFee - Estimated transaction fee
- * @returns Maximum sendable amount
- */
+
 export function calculateMaxSend(balance: bigint, estimatedFee: bigint): bigint {
   const max = balance - estimatedFee;
   return max > 0n ? max : 0n;
 }
-
-
 

@@ -1,13 +1,8 @@
-/**
- * AINTIVIRUS Wallet - EVM Chain Module
- * 
- * Re-exports EVM chain functionality for multi-chain support.
- */
 
-// Adapter
+
 export { EVMAdapter, createEVMAdapter } from './adapter';
 
-// Client
+
 export {
   getProvider,
   getBestProvider,
@@ -29,7 +24,7 @@ export {
   getCode,
 } from './client';
 
-// Gas estimation
+
 export {
   estimateTransactionGas,
   estimateNativeTransferGas,
@@ -42,7 +37,7 @@ export {
   type GasEstimateParams,
 } from './gas';
 
-// Transactions
+
 export {
   createNativeTransfer,
   createTokenTransfer,
@@ -61,7 +56,7 @@ export {
   type UnsignedEVMTransaction,
 } from './transactions';
 
-// Tokens
+
 export {
   getTokenBalance,
   getTokenMetadata,
@@ -76,7 +71,7 @@ export {
   type ERC20Balance,
 } from './tokens';
 
-// Pending Transaction Store
+
 export {
   loadPendingTxStore,
   getPendingTxsForAccount,
@@ -95,7 +90,7 @@ export {
   type TxStatusUpdate,
 } from './pendingTxStore';
 
-// Nonce Management
+
 export {
   getOnChainNonce,
   getConfirmedNonce,
@@ -110,7 +105,7 @@ export {
   type NonceStatus,
 } from './nonce';
 
-// Transaction Replacement (Speed Up / Cancel)
+
 export {
   calculateSpeedUpFees,
   getMinimumReplacementFees,
@@ -131,7 +126,7 @@ export {
   type FeeValidation,
 } from './replacement';
 
-// Allowances
+
 export {
   discoverAllowances,
   getTokenAllowance,
@@ -150,7 +145,7 @@ export {
   type UnsignedRevokeTransaction,
 } from './allowances';
 
-// Known Spenders
+
 export {
   getKnownSpenders,
   getSpenderLabel,
@@ -158,6 +153,4 @@ export {
   KNOWN_SPENDERS,
   type SpenderInfo,
 } from './knownSpenders';
-
-
 

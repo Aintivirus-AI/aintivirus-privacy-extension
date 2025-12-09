@@ -8,7 +8,7 @@ export interface FeatureFlagMeta {
   icon: string;
 }
 
-// The toggleable features and their UI info
+
 export const FEATURE_FLAG_META: FeatureFlagMeta[] = [
   {
     id: 'privacy',

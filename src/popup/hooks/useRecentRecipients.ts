@@ -1,11 +1,4 @@
-/**
- * useRecentRecipients Hook
- * 
- * Manages recent transaction recipients per chain with:
- * - Last 10 recipients stored per chain
- * - Deduplication and timestamp updates on reuse
- * - Fuzzy search/filtering capability
- */
+
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { sendToBackground } from '@shared/messaging';
@@ -19,9 +12,7 @@ import type {
 } from '@shared/types';
 import { MAX_RECENT_RECIPIENTS } from '@shared/types';
 
-/**
- * Chain configurations for deriving chain IDs
- */
+
 const EVM_CHAIN_IDS: Record<EVMChainId, number> = {
   ethereum: 1,
   polygon: 137,
@@ -30,9 +21,7 @@ const EVM_CHAIN_IDS: Record<EVMChainId, number> = {
   base: 8453,
 };
 
-/**
- * Build a chain identifier string for storage key
- */
+
 export function buildChainId(
   chainType: ChainType,
   solanaNetwork?: SolanaNetwork,
@@ -45,10 +34,7 @@ export function buildChainId(
   return `evm:${numericChainId}`;
 }
 
-/**
- * Simple fuzzy match for recipient search
- * Matches if all characters in the query appear in order in the target
- */
+
 export function fuzzyMatch(query: string, target: string): boolean {
   if (!query) return true;
   const lowerQuery = query.toLowerCase();
@@ -63,50 +49,45 @@ export function fuzzyMatch(query: string, target: string): boolean {
   return queryIndex === lowerQuery.length;
 }
 
-/**
- * Score a recipient for fuzzy matching (higher = better match)
- */
+
 export function fuzzyScore(query: string, recipient: RecentRecipient): number {
-  if (!query) return recipient.lastUsedAt; // Sort by recency when no query
+  if (!query) return recipient.lastUsedAt; 
   
   const lowerQuery = query.toLowerCase();
   let score = 0;
   
-  // Check address match
+  
   const lowerAddress = recipient.address.toLowerCase();
   if (lowerAddress.startsWith(lowerQuery)) {
-    score += 1000; // Prefix match bonus
+    score += 1000; 
   } else if (lowerAddress.includes(lowerQuery)) {
-    score += 500; // Substring match
+    score += 500; 
   } else if (fuzzyMatch(query, recipient.address)) {
-    score += 100; // Fuzzy match
+    score += 100; 
   }
   
-  // Check label match (if exists)
+  
   if (recipient.label) {
     const lowerLabel = recipient.label.toLowerCase();
     if (lowerLabel.startsWith(lowerQuery)) {
-      score += 2000; // Label prefix match (highest priority)
+      score += 2000; 
     } else if (lowerLabel.includes(lowerQuery)) {
-      score += 1500; // Label substring match
+      score += 1500; 
     } else if (fuzzyMatch(query, recipient.label)) {
-      score += 200; // Label fuzzy match
+      score += 200; 
     }
   }
   
-  // Add recency bonus (more recent = higher score)
-  score += recipient.lastUsedAt / 1e12; // Normalize timestamp contribution
   
-  // Add use count bonus
+  score += recipient.lastUsedAt / 1e12; 
+  
+  
   score += recipient.useCount * 10;
   
   return score;
 }
 
-/**
- * Add or update a recipient in the list
- * Handles deduplication and cap at MAX_RECENT_RECIPIENTS
- */
+
 export function upsertRecipient(
   recipients: RecentRecipient[],
   address: string,
@@ -115,7 +96,7 @@ export function upsertRecipient(
   const normalizedAddress = address.toLowerCase();
   const now = Date.now();
   
-  // Find existing recipient (case-insensitive)
+  
   const existingIndex = recipients.findIndex(
     r => r.address.toLowerCase() === normalizedAddress
   );
@@ -123,24 +104,24 @@ export function upsertRecipient(
   let updated: RecentRecipient[];
   
   if (existingIndex >= 0) {
-    // Update existing recipient
+    
     const existing = recipients[existingIndex];
     const updatedRecipient: RecentRecipient = {
       ...existing,
-      address: address, // Preserve original casing from latest use
-      label: label || existing.label, // Keep existing label if no new one provided
+      address: address, 
+      label: label || existing.label, 
       lastUsedAt: now,
       useCount: existing.useCount + 1,
     };
     
-    // Remove from current position and add to front
+    
     updated = [
       updatedRecipient,
       ...recipients.slice(0, existingIndex),
       ...recipients.slice(existingIndex + 1),
     ];
   } else {
-    // Add new recipient at the front
+    
     const newRecipient: RecentRecipient = {
       address,
       label,
@@ -150,23 +131,21 @@ export function upsertRecipient(
     updated = [newRecipient, ...recipients];
   }
   
-  // Cap at MAX_RECENT_RECIPIENTS
+  
   return updated.slice(0, MAX_RECENT_RECIPIENTS);
 }
 
-/**
- * Filter recipients by query (fuzzy search after 2+ chars)
- */
+
 export function filterRecipients(
   recipients: RecentRecipient[],
   query: string
 ): RecentRecipient[] {
-  // If query is less than 2 chars, return as-is (sorted by recency)
+  
   if (query.length < 2) {
     return [...recipients].sort((a, b) => b.lastUsedAt - a.lastUsedAt);
   }
   
-  // Filter and sort by fuzzy score
+  
   return recipients
     .filter(r => {
       const matchesAddress = fuzzyMatch(query, r.address);
@@ -176,29 +155,25 @@ export function filterRecipients(
     .sort((a, b) => fuzzyScore(query, b) - fuzzyScore(query, a));
 }
 
-/**
- * Hook return type
- */
+
 export interface UseRecentRecipientsResult {
-  /** Recent recipients for current chain (filtered if query provided) */
+  
   recipients: RecentRecipient[];
-  /** Loading state */
+  
   loading: boolean;
-  /** Error message if any */
+  
   error: string | null;
-  /** Add or update a recipient after successful send */
+  
   addRecipient: (address: string, label?: string) => Promise<void>;
-  /** Update the label for an existing recipient */
+  
   updateLabel: (address: string, label: string) => Promise<void>;
-  /** Remove a recipient from history */
+  
   removeRecipient: (address: string) => Promise<void>;
-  /** Refresh recipients from storage */
+  
   refresh: () => Promise<void>;
 }
 
-/**
- * Hook to manage recent recipients for the current chain
- */
+
 export function useRecentRecipients(
   chainType: ChainType,
   solanaNetwork?: SolanaNetwork,
@@ -209,25 +184,25 @@ export function useRecentRecipients(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Build chain identifier
+  
   const chainIdKey = useMemo(
     () => buildChainId(chainType, solanaNetwork, evmChainId),
     [chainType, solanaNetwork, evmChainId]
   );
   
-  // Get recipients for current chain
+  
   const chainRecipients = useMemo(
     () => allRecipients[chainIdKey] || [],
     [allRecipients, chainIdKey]
   );
   
-  // Filter recipients based on query
+  
   const filteredRecipients = useMemo(
     () => filterRecipients(chainRecipients, filterQuery || ''),
     [chainRecipients, filterQuery]
   );
   
-  // Fetch recipients from storage
+  
   const fetchRecipients = useCallback(async () => {
     try {
       setLoading(true);
@@ -251,7 +226,7 @@ export function useRecentRecipients(
     }
   }, []);
   
-  // Save recipients to storage
+  
   const saveRecipients = useCallback(async (updated: RecentRecipientsMap) => {
     try {
       const response = await sendToBackground({
@@ -270,7 +245,7 @@ export function useRecentRecipients(
     }
   }, []);
   
-  // Add or update a recipient
+  
   const addRecipient = useCallback(async (address: string, label?: string) => {
     const currentChainRecipients = allRecipients[chainIdKey] || [];
     const updatedChainRecipients = upsertRecipient(currentChainRecipients, address, label);
@@ -283,7 +258,7 @@ export function useRecentRecipients(
     await saveRecipients(updatedAll);
   }, [allRecipients, chainIdKey, saveRecipients]);
   
-  // Update label for an existing recipient
+  
   const updateLabel = useCallback(async (address: string, label: string) => {
     const currentChainRecipients = allRecipients[chainIdKey] || [];
     const normalizedAddress = address.toLowerCase();
@@ -302,7 +277,7 @@ export function useRecentRecipients(
     await saveRecipients(updatedAll);
   }, [allRecipients, chainIdKey, saveRecipients]);
   
-  // Remove a recipient
+  
   const removeRecipient = useCallback(async (address: string) => {
     const currentChainRecipients = allRecipients[chainIdKey] || [];
     const normalizedAddress = address.toLowerCase();
@@ -319,7 +294,7 @@ export function useRecentRecipients(
     await saveRecipients(updatedAll);
   }, [allRecipients, chainIdKey, saveRecipients]);
   
-  // Initial fetch
+  
   useEffect(() => {
     fetchRecipients();
   }, [fetchRecipients]);
@@ -336,3 +311,4 @@ export function useRecentRecipients(
 }
 
 export default useRecentRecipients;
+

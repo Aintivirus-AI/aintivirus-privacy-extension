@@ -1,64 +1,39 @@
-/**
- * AINTIVIRUS - StickyBottomCTA Component
- * 
- * Layout wrapper for flows (Send, Approve, Sign) with:
- * - Scrollable content area
- * - Sticky bottom CTA buttons
- * - Clean loading/disabled states
- * - Smooth animations
- * 
- * @example
- * <StickyBottomCTA
- *   primaryLabel="Send"
- *   onPrimary={handleSend}
- *   secondaryLabel="Cancel"
- *   onSecondary={handleCancel}
- *   loading={isSending}
- * >
- *   <SendForm />
- * </StickyBottomCTA>
- */
+
 
 import React from 'react';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface StickyBottomCTAProps {
-  /** Scrollable content */
+  
   children: React.ReactNode;
-  /** Primary button label */
+  
   primaryLabel: string;
-  /** Primary button click handler */
+  
   onPrimary: () => void;
-  /** Primary button disabled state */
+  
   primaryDisabled?: boolean;
-  /** Primary button loading state */
+  
   loading?: boolean;
-  /** Loading text (replaces primaryLabel when loading) */
+  
   loadingText?: string;
-  /** Secondary/cancel button label */
+  
   secondaryLabel?: string;
-  /** Secondary button click handler */
+  
   onSecondary?: () => void;
-  /** Secondary button disabled state */
+  
   secondaryDisabled?: boolean;
-  /** Whether to show a danger-styled primary button */
+  
   danger?: boolean;
-  /** Additional CSS class for the container */
+  
   className?: string;
-  /** Additional CSS class for the footer */
+  
   footerClassName?: string;
-  /** Max height of the content area */
+  
   maxContentHeight?: string;
-  /** Show shadow on footer */
+  
   showShadow?: boolean;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export const StickyBottomCTA: React.FC<StickyBottomCTAProps> = ({
   children,
@@ -131,7 +106,6 @@ export const StickyBottomCTA: React.FC<StickyBottomCTAProps> = ({
           max-height: ${maxContentHeight};
           padding-bottom: var(--space-4, 16px);
           
-          /* Custom scrollbar */
           scrollbar-width: thin;
           scrollbar-color: var(--border-default) transparent;
         }

@@ -1,22 +1,7 @@
-/**
- * AINTIVIRUS - StatusChip Component
- * 
- * Displays status with:
- * - Color-coded background
- * - Status icon (for accessibility - not color-only)
- * - Optional pulse animation for pending
- * - Respects prefers-reduced-motion
- * 
- * @example
- * <StatusChip status="pending" />
- * <StatusChip status="confirmed" size="sm" />
- */
+
 
 import React from 'react';
 
-// ============================================
-// TYPES
-// ============================================
 
 export type StatusType = 
   | 'pending'
@@ -28,21 +13,18 @@ export type StatusType =
   | 'replaced';
 
 export interface StatusChipProps {
-  /** Status to display */
+  
   status: StatusType;
-  /** Size variant */
+  
   size?: 'xs' | 'sm' | 'md';
-  /** Custom label override */
+  
   label?: string;
-  /** Show icon only (no label) */
+  
   iconOnly?: boolean;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// STATUS CONFIG
-// ============================================
 
 interface StatusConfig {
   label: string;
@@ -104,9 +86,6 @@ const STATUS_CONFIG: Record<StatusType, StatusConfig> = {
   },
 };
 
-// ============================================
-// ICONS
-// ============================================
 
 function PendingIcon() {
   return (
@@ -170,9 +149,6 @@ function ReplacedIcon() {
   );
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export const StatusChip: React.FC<StatusChipProps> = ({
   status,
@@ -264,7 +240,6 @@ export const StatusChip: React.FC<StatusChipProps> = ({
           line-height: 1;
         }
         
-        /* Subtle pulse animation for pending states */
         .status-chip.animate {
           animation: status-pulse 2s ease-in-out infinite;
         }
@@ -278,7 +253,6 @@ export const StatusChip: React.FC<StatusChipProps> = ({
           }
         }
         
-        /* Spin animation for confirming icon */
         .status-chip.animate .status-chip-icon svg {
           animation: status-spin 3s linear infinite;
         }
@@ -292,7 +266,6 @@ export const StatusChip: React.FC<StatusChipProps> = ({
           }
         }
         
-        /* Respect reduced motion */
         @media (prefers-reduced-motion: reduce) {
           .status-chip.animate,
           .status-chip.animate .status-chip-icon svg {

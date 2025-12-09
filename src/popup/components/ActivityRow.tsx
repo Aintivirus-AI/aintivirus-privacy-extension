@@ -1,35 +1,10 @@
-/**
- * AINTIVIRUS - ActivityRow Component
- * 
- * Redesigned two-line activity row:
- * - Line 1: Action description ("Sent USDC", "Received SOL", "Approved USDC")
- * - Line 2: Counterparty + relative time
- * - Right side: Fiat value + native amount
- * - StatusChip + ChainPill integrated
- * 
- * @example
- * <ActivityRow
- *   action="Sent"
- *   token="USDC"
- *   amount={100}
- *   fiatValue={100}
- *   counterparty="0x1234...5678"
- *   timestamp={Date.now() - 3600000}
- *   status="confirmed"
- *   chain="evm"
- *   evmChainId={1}
- *   onClick={() => openDetails(tx)}
- * />
- */
+
 
 import React, { useMemo } from 'react';
 import { StatusChip, StatusType } from './StatusChip';
 import { ChainPill } from './ChainPill';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-// ============================================
-// TYPES
-// ============================================
 
 export type ActivityAction = 
   | 'sent'
@@ -45,45 +20,42 @@ export type ActivityAction =
   | 'unknown';
 
 export interface ActivityRowProps {
-  /** Transaction action type */
+  
   action: ActivityAction;
-  /** Token symbol */
+  
   token: string;
-  /** Token logo URL */
+  
   tokenLogo?: string;
-  /** Amount (in token units) */
+  
   amount?: number | string;
-  /** Fiat value in USD */
+  
   fiatValue?: number;
-  /** Native token amount (e.g., fee in ETH) */
+  
   nativeAmount?: number;
-  /** Native token symbol */
+  
   nativeSymbol?: string;
-  /** Counterparty address or label */
+  
   counterparty?: string;
-  /** Counterparty label if known */
+  
   counterpartyLabel?: string;
-  /** Transaction timestamp */
+  
   timestamp: number;
-  /** Transaction status */
+  
   status: StatusType;
-  /** Chain type */
+  
   chain: ChainType;
-  /** EVM chain ID */
+  
   evmChainId?: EVMChainId;
-  /** Is testnet */
+  
   testnet?: boolean;
-  /** Click handler */
+  
   onClick?: () => void;
-  /** Transaction hash for key */
+  
   txHash?: string;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function truncateAddress(address: string, chars = 4): string {
   if (!address) return '';
@@ -169,9 +141,6 @@ function getActionColor(action: ActivityAction): string {
   }
 }
 
-// ============================================
-// ACTION ICON
-// ============================================
 
 interface ActionIconProps {
   action: ActivityAction;
@@ -294,7 +263,6 @@ const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
           height: 12px;
         }
         
-        /* If no token logo, just show icon centered */
         .activity-icon:not(:has(.activity-token-logo)) {
           background: var(--bg-tertiary);
           border-radius: 50%;
@@ -320,9 +288,6 @@ const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
   );
 };
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 export const ActivityRow: React.FC<ActivityRowProps> = ({
   action,

@@ -1,45 +1,34 @@
-/**
- * AINTIVIRUS Wallet - Explorer Link Icon Component
- * 
- * A reusable component for displaying clickable explorer links
- * with consistent styling and secure window.open behavior.
- */
+
 
 import React from 'react';
 import { ExternalLinkIcon } from '../Icons';
 import { getExplorerUrl, type ExplorerType } from '@shared/explorer';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface ExplorerLinkIconProps {
-  /** Type of explorer page */
+  
   type: ExplorerType;
-  /** Transaction hash, address, or token address */
+  
   id: string;
-  /** Chain type */
+  
   chain: ChainType;
-  /** For EVM chains, the specific chain */
+  
   evmChainId?: EVMChainId;
-  /** Whether this is a testnet */
+  
   testnet?: boolean;
-  /** Icon size in pixels */
+  
   size?: number;
-  /** Additional CSS class */
+  
   className?: string;
-  /** Show as inline link vs icon button */
+  
   variant?: 'icon' | 'button' | 'link';
-  /** Label for link/button variant */
+  
   label?: string;
-  /** Tooltip text */
+  
   title?: string;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
   type,
@@ -106,7 +95,7 @@ export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
     );
   }
 
-  // Default: icon only
+  
   return (
     <button
       onClick={handleClick}
@@ -121,9 +110,6 @@ export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
   );
 };
 
-// ============================================
-// STYLES
-// ============================================
 
 const explorerIconStyles = `
   .explorer-icon-btn {
@@ -186,3 +172,4 @@ const explorerButtonStyles = `
 `;
 
 export default ExplorerLinkIcon;
+

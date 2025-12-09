@@ -1,31 +1,7 @@
-/**
- * AINTIVIRUS - EmptyState Component
- * 
- * Premium empty state with:
- * - Icon or illustration
- * - Title + description
- * - Primary CTA button
- * - Optional secondary CTA
- * 
- * Preset variants for common empty states:
- * - Tokens: "No tokens yet" → CTA: Receive
- * - Activity: "No transactions" → CTA: Send
- * - Connected Sites: "No connections" → CTA: Learn/Connect
- * 
- * @example
- * <EmptyState
- *   icon={<TokenIcon />}
- *   title="No tokens yet"
- *   description="Receive tokens to get started"
- *   primaryAction={{ label: 'Receive', onClick: handleReceive }}
- * />
- */
+
 
 import React from 'react';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface EmptyStateAction {
   label: string;
@@ -35,23 +11,23 @@ export interface EmptyStateAction {
 }
 
 export interface EmptyStateProps {
-  /** Icon or illustration to display */
+  
   icon?: React.ReactNode;
-  /** Title text */
+  
   title: string;
-  /** Description/help text */
+  
   description?: string;
-  /** Primary CTA button */
+  
   primaryAction?: EmptyStateAction;
-  /** Secondary CTA button */
+  
   secondaryAction?: EmptyStateAction;
-  /** Size variant */
+  
   size?: 'sm' | 'md' | 'lg';
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// Preset empty states
+
 export type EmptyStatePreset = 'tokens' | 'activity' | 'sites' | 'allowances' | 'nfts';
 
 export interface EmptyStatePresetProps {
@@ -61,9 +37,6 @@ export interface EmptyStatePresetProps {
   className?: string;
 }
 
-// ============================================
-// PRESET ICONS
-// ============================================
 
 function TokensIcon() {
   return (
@@ -113,9 +86,6 @@ function NftsIcon() {
   );
 }
 
-// ============================================
-// PRESET CONFIGURATIONS
-// ============================================
 
 const PRESETS: Record<EmptyStatePreset, {
   icon: React.ReactNode;
@@ -157,9 +127,6 @@ const PRESETS: Record<EmptyStatePreset, {
   },
 };
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
@@ -339,9 +306,6 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   );
 };
 
-// ============================================
-// PRESET COMPONENT
-// ============================================
 
 export const EmptyStatePreset: React.FC<EmptyStatePresetProps> = ({
   preset,

@@ -1,15 +1,8 @@
-/**
- * AINTIVIRUS dApp Connectivity - Pending Requests Component
- * 
- * Shows list of pending dApp requests waiting for user approval.
- */
+
 
 import React, { useState, useEffect } from 'react';
 import { QueuedRequest, ApprovalType } from '../../dapp/types';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -157,17 +150,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// PROPS
-// ============================================
 
 interface Props {
   onViewRequest?: (requestId: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function PendingRequests({ onViewRequest }: Props) {
   const [requests, setRequests] = useState<QueuedRequest[]>([]);
@@ -176,7 +163,7 @@ export function PendingRequests({ onViewRequest }: Props) {
   useEffect(() => {
     loadPendingRequests();
     
-    // Poll for updates
+    
     const interval = setInterval(loadPendingRequests, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -192,7 +179,7 @@ export function PendingRequests({ onViewRequest }: Props) {
         setRequests(response.data as QueuedRequest[]);
       }
     } catch (error) {
-      console.error('Failed to load pending requests:', error);
+
     } finally {
       setLoading(false);
     }
@@ -205,15 +192,15 @@ export function PendingRequests({ onViewRequest }: Props) {
         payload: { requestId },
       });
 
-      // Refresh list
+      
       loadPendingRequests();
     } catch (error) {
-      console.error('Failed to cancel request:', error);
+
     }
   }
 
   function handleView(requestId: string) {
-    // Open approval window for this request
+    
     chrome.windows.create({
       url: chrome.runtime.getURL(`approval.html?requestId=${requestId}`),
       type: 'popup',

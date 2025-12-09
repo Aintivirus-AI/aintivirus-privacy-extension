@@ -1,16 +1,4 @@
-/**
- * AINTIVIRUS Wallet Module - Main Entry Point
- * 
- * This module provides the public API for the wallet functionality.
- * It handles message routing from the background script and exposes
- * the necessary functions for wallet operations.
- * 
- * SECURITY ARCHITECTURE:
- * - All private key operations happen in the background script context
- * - UI components only receive public information
- * - Messages are validated before processing
- * - No sensitive data is logged or exposed
- */
+
 
 import { Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 import {
@@ -29,7 +17,7 @@ import {
   FeeEstimate,
   TransactionHistoryResult,
   SPLTokenBalance,
-  // Multi-chain types
+  
   ChainType,
   EVMChainId,
   EVMBalance,
@@ -38,7 +26,7 @@ import {
   EVMTransactionResult,
   EVMSendParams,
   EVMTokenSendParams,
-  // EVM Pending Transaction types
+  
   EVMPendingTxInfo,
   EVMGasPresets,
   EVMReplacementFeeEstimate,
@@ -59,7 +47,7 @@ import {
   getWalletSettings,
   saveWalletSettings,
   resetAutoLockTimer,
-  // Multi-wallet functions
+  
   listWallets,
   addWallet,
   importAdditionalWallet,
@@ -68,12 +56,12 @@ import {
   deleteOneWallet,
   exportWalletMnemonic,
   getActiveWallet,
-  // Private key import/export
+  
   importWalletFromPrivateKey,
   exportPrivateKey,
 } from './storage';
 
-// Multi-chain imports
+
 import {
   getEVMAdapter,
   getEVMChainConfig,
@@ -82,7 +70,7 @@ import {
   formatAmount,
 } from './chains';
 
-// EVM Pending Transaction imports
+
 import {
   getAllPendingTxs,
   getPendingTxsForAccount,
@@ -109,6 +97,7 @@ import {
 import {
   getBalance,
   getBalanceWithRetry,
+  clearBalanceCache,
   setNetwork,
   getCurrentNetwork,
   getNetworkStatus,
@@ -120,7 +109,7 @@ import { generateAddressQR } from './qr';
 import { validateMnemonic } from './keychain';
 import bs58 from 'bs58';
 
-// Phase 6 imports
+
 import {
   sendSol,
   sendSPLToken,
@@ -136,10 +125,14 @@ import {
   removeCustomToken,
   fetchPopularTokens,
   fetchJupiterTokenMetadata,
+  clearTokenCache,
   type PopularToken,
 } from './tokens';
 
-// RPC Health imports
+
+import { balanceDedup } from './requestDedup';
+
+
 import {
   getRpcHealthSummary,
   addCustomRpcUrl,
@@ -148,32 +141,18 @@ import {
   initializeRpcHealth,
 } from './rpcHealth';
 
-// ============================================
-// MESSAGE HANDLER
-// ============================================
 
-/**
- * Handle incoming wallet messages from popup/settings UI
- * 
- * SECURITY: This is the single entry point for all wallet operations.
- * Each message type is validated and processed appropriately.
- * Sensitive data never leaves this module unencrypted.
- * 
- * @param type - Message type
- * @param payload - Message payload
- * @returns Response data
- */
 export async function handleWalletMessage(
   type: WalletMessageType,
   payload: unknown
 ): Promise<unknown> {
-  // Reset auto-lock timer on any activity
+  
   if (isWalletUnlocked()) {
     await resetAutoLockTimer();
   }
 
   switch (type) {
-    // ========== Wallet Lifecycle ==========
+    
     
     case 'WALLET_CREATE':
       return handleCreateWallet(payload as WalletMessagePayloads['WALLET_CREATE']);
@@ -198,7 +177,6 @@ export async function handleWalletMessage(
       await handleDeleteWallet(payload as WalletMessagePayloads['WALLET_DELETE']);
       return undefined;
     
-    // ========== Multi-Wallet Management ==========
     
     case 'WALLET_LIST':
       return handleListWallets();
@@ -232,10 +210,9 @@ export async function handleWalletMessage(
     case 'WALLET_GET_ACTIVE':
       return handleGetActiveWallet();
     
-    // ========== Balance and Account ==========
     
     case 'WALLET_GET_BALANCE':
-      return handleGetBalance();
+      return handleGetBalance(payload as { forceRefresh?: boolean } | undefined);
     
     case 'WALLET_GET_ADDRESS':
       return handleGetAddress();
@@ -243,7 +220,6 @@ export async function handleWalletMessage(
     case 'WALLET_GET_ADDRESS_QR':
       return handleGetAddressQR(payload as WalletMessagePayloads['WALLET_GET_ADDRESS_QR']);
     
-    // ========== Network ==========
     
     case 'WALLET_SET_NETWORK':
       await handleSetNetwork(payload as WalletMessagePayloads['WALLET_SET_NETWORK']);
@@ -255,7 +231,6 @@ export async function handleWalletMessage(
     case 'WALLET_GET_NETWORK_STATUS':
       return handleGetNetworkStatus();
     
-    // ========== Transaction Signing ==========
     
     case 'WALLET_SIGN_TRANSACTION':
       return handleSignTransaction(payload as WalletMessagePayloads['WALLET_SIGN_TRANSACTION']);
@@ -263,7 +238,6 @@ export async function handleWalletMessage(
     case 'WALLET_SIGN_MESSAGE':
       return handleSignMessage(payload as WalletMessagePayloads['WALLET_SIGN_MESSAGE']);
     
-    // ========== Settings ==========
     
     case 'WALLET_GET_SETTINGS':
       return await getWalletSettings();
@@ -272,7 +246,6 @@ export async function handleWalletMessage(
       await saveWalletSettings(payload as WalletMessagePayloads['WALLET_SET_SETTINGS']);
       return undefined;
     
-    // ========== Phase 6: Transactions ==========
     
     case 'WALLET_SEND_SOL':
       return handleSendSol(payload as WalletMessagePayloads['WALLET_SEND_SOL']);
@@ -283,15 +256,13 @@ export async function handleWalletMessage(
     case 'WALLET_ESTIMATE_FEE':
       return handleEstimateFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_FEE']);
     
-    // ========== Phase 6: History ==========
     
     case 'WALLET_GET_HISTORY':
       return handleGetHistory(payload as WalletMessagePayloads['WALLET_GET_HISTORY']);
     
-    // ========== Phase 6: Tokens ==========
     
     case 'WALLET_GET_TOKENS':
-      return handleGetTokens();
+      return handleGetTokens(payload as { forceRefresh?: boolean } | undefined);
     
     case 'WALLET_ADD_TOKEN':
       return handleAddToken(payload as WalletMessagePayloads['WALLET_ADD_TOKEN']);
@@ -305,7 +276,6 @@ export async function handleWalletMessage(
     case 'WALLET_GET_TOKEN_METADATA':
       return handleGetTokenMetadata(payload as WalletMessagePayloads['WALLET_GET_TOKEN_METADATA']);
     
-    // ========== RPC Health & Configuration ==========
     
     case 'WALLET_GET_RPC_HEALTH':
       return handleGetRpcHealth();
@@ -319,7 +289,6 @@ export async function handleWalletMessage(
     case 'WALLET_TEST_RPC':
       return handleTestRpc(payload as WalletMessagePayloads['WALLET_TEST_RPC']);
     
-    // ========== Multi-Chain Support ==========
     
     case 'WALLET_SET_CHAIN':
       return handleSetChain(payload as WalletMessagePayloads['WALLET_SET_CHAIN']);
@@ -348,7 +317,6 @@ export async function handleWalletMessage(
     case 'WALLET_GET_EVM_ADDRESS':
       return handleGetEVMAddress();
     
-    // ========== EVM Pending Transaction Controls ==========
     
     case 'EVM_GET_PENDING_TXS':
       return handleGetPendingTxs(payload as WalletMessagePayloads['EVM_GET_PENDING_TXS']);
@@ -373,16 +341,7 @@ export async function handleWalletMessage(
   }
 }
 
-// ============================================
-// HANDLER IMPLEMENTATIONS
-// ============================================
 
-/**
- * Handle wallet creation
- * 
- * SECURITY: Returns mnemonic ONCE for user backup.
- * This is the only time the mnemonic should be displayed.
- */
 async function handleCreateWallet(
   payload: WalletMessagePayloads['WALLET_CREATE']
 ): Promise<WalletMessageResponses['WALLET_CREATE']> {
@@ -397,14 +356,10 @@ async function handleCreateWallet(
   
   const result = await createWallet(password);
   
-  console.log('[AINTIVIRUS Wallet] Wallet created successfully');
-  
   return result;
 }
 
-/**
- * Handle wallet import from mnemonic
- */
+
 async function handleImportWallet(
   payload: WalletMessagePayloads['WALLET_IMPORT']
 ): Promise<WalletMessageResponses['WALLET_IMPORT']> {
@@ -426,14 +381,10 @@ async function handleImportWallet(
   
   const result = await importWallet(mnemonic, password);
   
-  console.log('[AINTIVIRUS Wallet] Wallet imported successfully');
-  
   return result;
 }
 
-/**
- * Handle wallet unlock
- */
+
 async function handleUnlockWallet(
   payload: WalletMessagePayloads['WALLET_UNLOCK']
 ): Promise<WalletMessageResponses['WALLET_UNLOCK']> {
@@ -448,22 +399,15 @@ async function handleUnlockWallet(
   
   const result = await unlockWallet(password);
   
-  console.log('[AINTIVIRUS Wallet] Wallet unlocked');
-  
   return result;
 }
 
-/**
- * Handle wallet lock
- */
+
 function handleLockWallet(): void {
   lockWallet();
-  console.log('[AINTIVIRUS Wallet] Wallet locked');
 }
 
-/**
- * Handle wallet deletion
- */
+
 async function handleDeleteWallet(
   payload: WalletMessagePayloads['WALLET_DELETE']
 ): Promise<void> {
@@ -477,46 +421,26 @@ async function handleDeleteWallet(
   }
   
   await deleteWallet(password);
-  
-  console.log('[AINTIVIRUS Wallet] Wallet deleted');
 }
 
-// ============================================
-// MULTI-WALLET HANDLERS
-// ============================================
 
-/**
- * Handle listing all wallets
- */
 async function handleListWallets(): Promise<WalletEntry[]> {
   return await listWallets();
 }
 
-/**
- * Handle adding a new wallet (create)
- */
+
 async function handleAddWallet(
   payload: WalletMessagePayloads['WALLET_ADD']
 ): Promise<WalletMessageResponses['WALLET_ADD']> {
   const { password, label } = payload;
   
-  if (!password) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Password is required'
-    );
-  }
   
   const result = await addWallet(password, label);
-  
-  console.log('[AINTIVIRUS Wallet] New wallet added:', result.walletId);
   
   return result;
 }
 
-/**
- * Handle importing an additional wallet
- */
+
 async function handleImportAddWallet(
   payload: WalletMessagePayloads['WALLET_IMPORT_ADD']
 ): Promise<WalletMessageResponses['WALLET_IMPORT_ADD']> {
@@ -529,23 +453,13 @@ async function handleImportAddWallet(
     );
   }
   
-  if (!password) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Password is required'
-    );
-  }
   
   const result = await importAdditionalWallet(mnemonic, password, label);
-  
-  console.log('[AINTIVIRUS Wallet] Wallet imported:', result.walletId);
   
   return result;
 }
 
-/**
- * Handle switching active wallet
- */
+
 async function handleSwitchWallet(
   payload: WalletMessagePayloads['WALLET_SWITCH']
 ): Promise<WalletMessageResponses['WALLET_SWITCH']> {
@@ -558,23 +472,13 @@ async function handleSwitchWallet(
     );
   }
   
-  if (!password) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Password is required to switch wallets'
-    );
-  }
   
   const result = await switchWallet(walletId, password);
-  
-  console.log('[AINTIVIRUS Wallet] Switched to wallet:', walletId);
   
   return result;
 }
 
-/**
- * Handle renaming a wallet
- */
+
 async function handleRenameWallet(
   payload: WalletMessagePayloads['WALLET_RENAME']
 ): Promise<void> {
@@ -595,13 +499,9 @@ async function handleRenameWallet(
   }
   
   await renameWallet(walletId, label);
-  
-  console.log('[AINTIVIRUS Wallet] Wallet renamed:', walletId);
 }
 
-/**
- * Handle deleting a specific wallet
- */
+
 async function handleDeleteOneWallet(
   payload: WalletMessagePayloads['WALLET_DELETE_ONE']
 ): Promise<void> {
@@ -622,16 +522,9 @@ async function handleDeleteOneWallet(
   }
   
   await deleteOneWallet(walletId, password);
-  
-  console.log('[AINTIVIRUS Wallet] Wallet deleted:', walletId);
 }
 
-/**
- * Handle exporting wallet mnemonic
- * 
- * SECURITY: Returns mnemonic for backup purposes.
- * WARNING: This is extremely sensitive data.
- */
+
 async function handleExportWallet(
   payload: WalletMessagePayloads['WALLET_EXPORT_ONE']
 ): Promise<WalletMessageResponses['WALLET_EXPORT_ONE']> {
@@ -653,17 +546,11 @@ async function handleExportWallet(
   
   const result = await exportWalletMnemonic(walletId, password);
   
-  // SECURITY: Do not log mnemonic-related operations
-  // Export audit trail could be added to secure storage if needed
   
   return result;
 }
 
-/**
- * Handle importing wallet from private key
- * 
- * SECURITY: Imports a wallet from a raw private key.
- */
+
 async function handleImportPrivateKey(
   payload: WalletMessagePayloads['WALLET_IMPORT_PRIVATE_KEY']
 ): Promise<WalletMessageResponses['WALLET_IMPORT_PRIVATE_KEY']> {
@@ -676,24 +563,13 @@ async function handleImportPrivateKey(
     );
   }
   
-  if (!password) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Password is required'
-    );
-  }
   
   const result = await importWalletFromPrivateKey(privateKey, password, label);
   
   return result;
 }
 
-/**
- * Handle exporting private key
- * 
- * SECURITY: Returns private key for export purposes.
- * WARNING: This is extremely sensitive data.
- */
+
 async function handleExportPrivateKey(
   payload: WalletMessagePayloads['WALLET_EXPORT_PRIVATE_KEY']
 ): Promise<WalletMessageResponses['WALLET_EXPORT_PRIVATE_KEY']> {
@@ -725,17 +601,15 @@ async function handleExportPrivateKey(
   return result;
 }
 
-/**
- * Handle getting active wallet info
- */
+
 async function handleGetActiveWallet(): Promise<WalletMessageResponses['WALLET_GET_ACTIVE']> {
   return await getActiveWallet();
 }
 
-/**
- * Handle balance retrieval
- */
-async function handleGetBalance(): Promise<WalletBalance> {
+
+async function handleGetBalance(
+  payload?: { forceRefresh?: boolean }
+): Promise<WalletBalance> {
   const address = await getPublicAddress();
   
   if (!address) {
@@ -745,12 +619,18 @@ async function handleGetBalance(): Promise<WalletBalance> {
     );
   }
   
+  const forceRefresh = payload?.forceRefresh ?? false;
+  
+  
+  if (forceRefresh) {
+    clearBalanceCache(); 
+    balanceDedup.invalidate(/^balance:solana:/);
+  }
+  
   return await getBalanceWithRetry(address);
 }
 
-/**
- * Handle address retrieval
- */
+
 async function handleGetAddress(): Promise<string> {
   const address = await getPublicAddress();
   
@@ -764,9 +644,7 @@ async function handleGetAddress(): Promise<string> {
   return address;
 }
 
-/**
- * Handle QR code generation
- */
+
 async function handleGetAddressQR(
   payload: WalletMessagePayloads['WALLET_GET_ADDRESS_QR']
 ): Promise<string> {
@@ -782,27 +660,20 @@ async function handleGetAddressQR(
   return await generateAddressQR(address, { size: payload?.size });
 }
 
-/**
- * Handle network switch
- */
+
 async function handleSetNetwork(
   payload: WalletMessagePayloads['WALLET_SET_NETWORK']
 ): Promise<void> {
   await setNetwork(payload.network);
-  console.log(`[AINTIVIRUS Wallet] Switched to ${payload.network}`);
 }
 
-/**
- * Handle network retrieval
- */
+
 async function handleGetNetwork(): Promise<SolanaNetwork> {
   const config = await getCurrentNetwork();
   return config.name;
 }
 
-/**
- * Handle network status check
- */
+
 async function handleGetNetworkStatus(): Promise<{ connected: boolean; latency: number }> {
   const status = await getNetworkStatus();
   return {
@@ -811,13 +682,7 @@ async function handleGetNetworkStatus(): Promise<{ connected: boolean; latency: 
   };
 }
 
-/**
- * Handle transaction signing
- * 
- * SECURITY: This is where the private key is used.
- * The keypair must be unlocked and only exists in memory.
- * The signed transaction is returned, but the private key never leaves.
- */
+
 async function handleSignTransaction(
   payload: WalletMessagePayloads['WALLET_SIGN_TRANSACTION']
 ): Promise<SignedTransaction> {
@@ -833,11 +698,11 @@ async function handleSignTransaction(
   try {
     const transaction = deserializeTransaction(payload.serializedTransaction);
     
-    // Sign based on transaction type
+    
     if (transaction instanceof VersionedTransaction) {
       transaction.sign([keypair]);
       
-      // Get signature
+      
       const signature = bs58.encode(transaction.signatures[0]);
       
       return {
@@ -845,13 +710,13 @@ async function handleSignTransaction(
         signature,
       };
     } else {
-      // Legacy transaction
+      
       const { blockhash } = await getRecentBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = keypair.publicKey;
       transaction.sign(keypair);
       
-      // Get signature
+      
       const signature = transaction.signature ? bs58.encode(transaction.signature) : '';
       
       return {
@@ -870,12 +735,7 @@ async function handleSignTransaction(
   }
 }
 
-/**
- * Handle message signing
- * 
- * SECURITY: Signs an arbitrary message with the private key.
- * Used for authentication/verification purposes.
- */
+
 async function handleSignMessage(
   payload: WalletMessagePayloads['WALLET_SIGN_MESSAGE']
 ): Promise<{ signature: string }> {
@@ -889,10 +749,10 @@ async function handleSignMessage(
   }
   
   try {
-    // Convert message to bytes
+    
     const messageBytes = new TextEncoder().encode(payload.message);
     
-    // Sign using nacl (tweetnacl is bundled with @solana/web3.js)
+    
     const nacl = await import('tweetnacl');
     const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
     
@@ -907,15 +767,7 @@ async function handleSignMessage(
   }
 }
 
-// ============================================
-// PHASE 6: TRANSACTION HANDLERS
-// ============================================
 
-/**
- * Handle sending SOL
- * 
- * SECURITY: Requires unlocked wallet. Creates, signs, and broadcasts transaction.
- */
 async function handleSendSol(
   payload: WalletMessagePayloads['WALLET_SEND_SOL']
 ): Promise<SendTransactionResult> {
@@ -937,20 +789,16 @@ async function handleSendSol(
   
   const result = await sendSol({ recipient, amountSol, memo });
   
-  // Clear history cache so new transaction appears immediately on refresh
-  clearHistoryCache();
   
-  console.log(`[AINTIVIRUS Wallet] Sent ${amountSol} SOL to ${recipient}`);
-  console.log(`[AINTIVIRUS Wallet] Signature: ${result.signature}`);
+  clearHistoryCache();
+  clearTokenCache();
+  
+  balanceDedup.invalidate(/^balance:solana:/);
   
   return result;
 }
 
-/**
- * Handle sending SPL tokens
- * 
- * SECURITY: Requires unlocked wallet. Creates, signs, and broadcasts token transfer.
- */
+
 async function handleSendSPLToken(
   payload: WalletMessagePayloads['WALLET_SEND_SPL_TOKEN']
 ): Promise<SendTransactionResult> {
@@ -979,18 +827,16 @@ async function handleSendSPLToken(
   
   const result = await sendSPLToken({ recipient, amount, mint, decimals, tokenAccount });
   
-  // Clear history cache so new transaction appears immediately on refresh
-  clearHistoryCache();
   
-  console.log(`[AINTIVIRUS Wallet] Sent ${amount} tokens (${mint}) to ${recipient}`);
-  console.log(`[AINTIVIRUS Wallet] Signature: ${result.signature}`);
+  clearHistoryCache();
+  clearTokenCache();
+  
+  balanceDedup.invalidate(/^balance:solana:/);
   
   return result;
 }
 
-/**
- * Handle fee estimation
- */
+
 async function handleEstimateFee(
   payload: WalletMessagePayloads['WALLET_ESTIMATE_FEE']
 ): Promise<FeeEstimate> {
@@ -1006,38 +852,33 @@ async function handleEstimateFee(
   return await estimateTransactionFee(recipient, amountSol);
 }
 
-// ============================================
-// PHASE 6: HISTORY HANDLERS
-// ============================================
 
-/**
- * Handle transaction history retrieval
- */
 async function handleGetHistory(
   payload: WalletMessagePayloads['WALLET_GET_HISTORY']
 ): Promise<TransactionHistoryResult> {
-  const { limit, before } = payload || {};
-  return await getTransactionHistory({ limit, before });
+  const { limit, before, forceRefresh } = payload || {};
+  return await getTransactionHistory({ limit, before, forceRefresh });
 }
 
-// ============================================
-// PHASE 6: TOKEN HANDLERS
-// ============================================
 
-/**
- * Handle token balance retrieval
- */
-async function handleGetTokens(): Promise<SPLTokenBalance[]> {
-  return await getTokenBalances();
+async function handleGetTokens(
+  payload?: { forceRefresh?: boolean }
+): Promise<SPLTokenBalance[]> {
+  const forceRefresh = payload?.forceRefresh ?? false;
+  
+  
+  if (forceRefresh) {
+    clearTokenCache();
+  }
+  
+  return await getTokenBalances(forceRefresh);
 }
 
-/**
- * Handle adding a custom token
- */
+
 async function handleAddToken(
   payload: WalletMessagePayloads['WALLET_ADD_TOKEN']
 ): Promise<void> {
-  const { mint, symbol, name } = payload;
+  const { mint, symbol, name, logoUri } = payload;
   
   if (!mint) {
     throw new WalletError(
@@ -1046,13 +887,10 @@ async function handleAddToken(
     );
   }
   
-  await addCustomToken(mint, symbol, name);
-  console.log(`[AINTIVIRUS Wallet] Added custom token: ${mint}`);
+  await addCustomToken(mint, symbol, name, logoUri);
 }
 
-/**
- * Handle removing a custom token
- */
+
 async function handleRemoveToken(
   payload: WalletMessagePayloads['WALLET_REMOVE_TOKEN']
 ): Promise<void> {
@@ -1066,12 +904,9 @@ async function handleRemoveToken(
   }
   
   await removeCustomToken(mint);
-  console.log(`[AINTIVIRUS Wallet] Removed custom token: ${mint}`);
 }
 
-/**
- * Handle getting popular/top tokens
- */
+
 async function handleGetPopularTokens(
   payload?: WalletMessagePayloads['WALLET_GET_POPULAR_TOKENS']
 ): Promise<PopularToken[]> {
@@ -1079,9 +914,7 @@ async function handleGetPopularTokens(
   return await fetchPopularTokens(chainType);
 }
 
-/**
- * Handle getting token metadata by mint address
- */
+
 async function handleGetTokenMetadata(
   payload: WalletMessagePayloads['WALLET_GET_TOKEN_METADATA']
 ): Promise<{ symbol: string; name: string; logoUri?: string } | null> {
@@ -1090,6 +923,38 @@ async function handleGetTokenMetadata(
   if (!mint) {
     return null;
   }
+  
+  
+  const isEVMAddress = mint.startsWith('0x') && mint.length === 42;
+  
+  if (isEVMAddress) {
+    
+    try {
+      const settings = await getWalletSettings();
+      const chainId = settings.activeEVMChain || 'ethereum';
+      const testnet = settings.networkEnvironment === 'testnet';
+      
+      
+      const { getTokenMetadata: getEVMTokenMetadata } = await import('./chains/evm/tokens');
+      const metadata = await getEVMTokenMetadata(chainId, testnet, mint);
+      
+      if (metadata) {
+        
+        const chainSlug = chainId === 'ethereum' ? 'ethereum' : chainId;
+        const logoUri = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainSlug}/assets/${mint}/logo.png`;
+        
+        return {
+          symbol: metadata.symbol,
+          name: metadata.name,
+          logoUri: logoUri,
+        };
+      }
+    } catch (error) {
+      
+    }
+    return null;
+  }
+  
   
   const metadata = await fetchJupiterTokenMetadata(mint);
   if (metadata) {
@@ -1103,21 +968,13 @@ async function handleGetTokenMetadata(
   return null;
 }
 
-// ============================================
-// RPC HEALTH HANDLERS
-// ============================================
 
-/**
- * Handle RPC health retrieval
- */
 async function handleGetRpcHealth(): Promise<WalletMessageResponses['WALLET_GET_RPC_HEALTH']> {
   const settings = await getWalletSettings();
   return await getRpcHealthSummary(settings.network);
 }
 
-/**
- * Handle adding a custom RPC endpoint
- */
+
 async function handleAddRpc(
   payload: WalletMessagePayloads['WALLET_ADD_RPC']
 ): Promise<WalletMessageResponses['WALLET_ADD_RPC']> {
@@ -1129,16 +986,10 @@ async function handleAddRpc(
   
   const result = await addCustomRpcUrl(network, url);
   
-  if (result.success) {
-    console.log(`[AINTIVIRUS Wallet] Added custom RPC for ${network}: ${url}`);
-  }
-  
   return result;
 }
 
-/**
- * Handle removing a custom RPC endpoint
- */
+
 async function handleRemoveRpc(
   payload: WalletMessagePayloads['WALLET_REMOVE_RPC']
 ): Promise<void> {
@@ -1152,12 +1003,9 @@ async function handleRemoveRpc(
   }
   
   await removeCustomRpcUrl(network, url);
-  console.log(`[AINTIVIRUS Wallet] Removed custom RPC for ${network}: ${url}`);
 }
 
-/**
- * Handle testing an RPC endpoint
- */
+
 async function handleTestRpc(
   payload: WalletMessagePayloads['WALLET_TEST_RPC']
 ): Promise<WalletMessageResponses['WALLET_TEST_RPC']> {
@@ -1170,35 +1018,19 @@ async function handleTestRpc(
   return await testRpcEndpoint(url);
 }
 
-// ============================================
-// MULTI-CHAIN HANDLERS
-// ============================================
 
-/**
- * Handle setting the active chain
- */
 async function handleSetChain(
   payload: WalletMessagePayloads['WALLET_SET_CHAIN']
 ): Promise<void> {
   const { chain, evmChainId } = payload;
   
-  console.log(`[handleSetChain] Received: chain=${chain}, evmChainId=${evmChainId}`);
-  
   await saveWalletSettings({
     activeChain: chain,
     activeEVMChain: evmChainId,
   });
-  
-  // Verify settings were saved
-  const settings = await getWalletSettings();
-  console.log(`[handleSetChain] Saved settings: activeChain=${settings.activeChain}, activeEVMChain=${settings.activeEVMChain}`);
-  
-  console.log(`[AINTIVIRUS Wallet] Switched to ${chain}${evmChainId ? ` (${evmChainId})` : ''}`);
 }
 
-/**
- * Handle setting the active EVM chain
- */
+
 async function handleSetEVMChain(
   payload: WalletMessagePayloads['WALLET_SET_EVM_CHAIN']
 ): Promise<void> {
@@ -1208,20 +1040,16 @@ async function handleSetEVMChain(
     activeChain: 'evm',
     activeEVMChain: evmChainId,
   });
-  
-  console.log(`[AINTIVIRUS Wallet] Switched to EVM chain: ${evmChainId}`);
 }
 
-/**
- * Handle getting EVM balance
- */
+
 async function handleGetEVMBalance(
   payload: WalletMessagePayloads['WALLET_GET_EVM_BALANCE']
 ): Promise<EVMBalance> {
   const evmAddress = getEVMAddress();
   
   if (!evmAddress) {
-    // Return zero balance for wallets without EVM address (e.g., Solana-only imports)
+    
     return {
       wei: '0',
       formatted: 0,
@@ -1245,9 +1073,7 @@ async function handleGetEVMBalance(
   };
 }
 
-/**
- * Handle sending ETH/native tokens
- */
+
 async function handleSendETH(
   payload: WalletMessagePayloads['WALLET_SEND_ETH']
 ): Promise<EVMTransactionResult> {
@@ -1268,10 +1094,10 @@ async function handleSendETH(
   
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
   
-  // Parse amount to wei
+  
   const amountWei = parseAmount(amount, config.decimals);
   
-  // Create and sign transaction
+  
   const unsignedTx = await adapter.createTransfer(evmKeypair.address, recipient, amountWei);
   const signedTx = await adapter.signTransaction(unsignedTx, {
     chainType: 'evm',
@@ -1280,10 +1106,10 @@ async function handleSendETH(
     _raw: evmKeypair,
   });
   
-  // Broadcast
+  
   const result = await adapter.broadcastTransaction(signedTx);
   
-  // Track pending transaction for speed up / cancel support
+  
   if (!result.confirmed && !result.error) {
     try {
       const rawTx = unsignedTx._raw as UnsignedEVMTransaction | undefined;
@@ -1303,13 +1129,9 @@ async function handleSendETH(
         }));
       }
     } catch (err) {
-      // Don't fail the transaction if tracking fails
-      console.warn('[AINTIVIRUS Wallet] Failed to track pending tx:', err);
+      
     }
   }
-  
-  console.log(`[AINTIVIRUS Wallet] Sent ${amount} ${config.symbol} to ${recipient}`);
-  console.log(`[AINTIVIRUS Wallet] Hash: ${result.hash}`);
   
   return {
     hash: result.hash,
@@ -1319,9 +1141,7 @@ async function handleSendETH(
   };
 }
 
-/**
- * Handle sending ERC-20 tokens
- */
+
 async function handleSendERC20(
   payload: WalletMessagePayloads['WALLET_SEND_ERC20']
 ): Promise<EVMTransactionResult> {
@@ -1341,10 +1161,10 @@ async function handleSendERC20(
   
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
   
-  // Parse amount
+  
   const amountSmallest = parseAmount(amount, decimals);
   
-  // Create and sign transaction
+  
   const unsignedTx = await adapter.createTokenTransfer(
     evmKeypair.address,
     recipient,
@@ -1358,10 +1178,10 @@ async function handleSendERC20(
     _raw: evmKeypair,
   });
   
-  // Broadcast
+  
   const result = await adapter.broadcastTransaction(signedTx);
   
-  // Track pending transaction for speed up / cancel support
+  
   if (!result.confirmed && !result.error) {
     try {
       const rawTx = unsignedTx._raw as UnsignedEVMTransaction | undefined;
@@ -1371,8 +1191,8 @@ async function handleSendERC20(
           nonce: rawTx.nonce,
           chainId: chainId,
           from: evmKeypair.address,
-          to: tokenAddress, // For ERC20, 'to' is the token contract
-          value: 0n, // ERC20 transfers have 0 ETH value
+          to: tokenAddress, 
+          value: 0n, 
           data: rawTx.data,
           gasLimit: rawTx.gasLimit,
           maxFeePerGas: rawTx.maxFeePerGas || rawTx.gasPrice || 0n,
@@ -1381,13 +1201,9 @@ async function handleSendERC20(
         }));
       }
     } catch (err) {
-      // Don't fail the transaction if tracking fails
-      console.warn('[AINTIVIRUS Wallet] Failed to track pending tx:', err);
+      
     }
   }
-  
-  console.log(`[AINTIVIRUS Wallet] Sent ${amount} tokens to ${recipient}`);
-  console.log(`[AINTIVIRUS Wallet] Hash: ${result.hash}`);
   
   return {
     hash: result.hash,
@@ -1397,47 +1213,90 @@ async function handleSendERC20(
   };
 }
 
-/**
- * Handle getting EVM token balances
- */
+
 async function handleGetEVMTokens(
   payload: WalletMessagePayloads['WALLET_GET_EVM_TOKENS']
 ): Promise<EVMTokenBalance[]> {
   const evmAddress = getEVMAddress();
   
   if (!evmAddress) {
-    // Return empty array for wallets without EVM address
     return [];
   }
+  
+  const { invalidateSettingsCache } = await import('./storage');
+  invalidateSettingsCache();
   
   const settings = await getWalletSettings();
   const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
   const testnet = settings.networkEnvironment === 'testnet';
   
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
+  
+  const customTokens = settings.customTokens || [];
+  const hiddenTokens = new Set((settings.hiddenTokens || []).map(t => t.toLowerCase()));
+  const customTokenMints = new Set(
+    customTokens
+      .filter(t => t.mint.startsWith('0x'))
+      .map(t => t.mint.toLowerCase())
+  );
+  const customTokenMap = new Map<string, { symbol?: string; name?: string; logoUri?: string }>();
+  
+  for (const token of customTokens) {
+    if (token.mint.startsWith('0x')) {
+      adapter.addCustomToken(token.mint);
+      customTokenMap.set(token.mint.toLowerCase(), {
+        symbol: token.symbol,
+        name: token.name,
+        logoUri: token.logoUri,
+      });
+    }
+  }
+  
   const tokens = await adapter.getTokenBalances(evmAddress);
   
-  return tokens.map(t => ({
-    address: t.address,
-    symbol: t.symbol,
-    name: t.name,
-    decimals: t.decimals,
-    rawBalance: t.rawBalance,
-    uiBalance: t.uiBalance,
-    logoUri: t.logoUri,
-  }));
+  
+  const tokensToUnhide = new Set<string>();
+  for (const token of tokens) {
+    const normalizedAddress = token.address.toLowerCase();
+    
+    if (hiddenTokens.has(normalizedAddress) && !customTokenMints.has(normalizedAddress) && token.uiBalance > 0) {
+      tokensToUnhide.add(normalizedAddress);
+      hiddenTokens.delete(normalizedAddress); 
+    }
+  }
+
+  
+  if (tokensToUnhide.size > 0) {
+    const newHiddenTokens = Array.from(hiddenTokens);
+    const { saveWalletSettings } = await import('./storage');
+    await saveWalletSettings({ hiddenTokens: newHiddenTokens });
+  }
+  
+  
+  return tokens
+    .filter(t => !hiddenTokens.has(t.address.toLowerCase()) || customTokenMints.has(t.address.toLowerCase()))
+    .map(t => {
+      const customMeta = customTokenMap.get(t.address.toLowerCase());
+      return {
+        address: t.address,
+        symbol: customMeta?.symbol || t.symbol,
+        name: customMeta?.name || t.name,
+        decimals: t.decimals,
+        rawBalance: t.rawBalance,
+        uiBalance: t.uiBalance,
+        logoUri: customMeta?.logoUri || t.logoUri,
+      };
+    });
 }
 
-/**
- * Handle getting EVM transaction history
- */
+
 async function handleGetEVMHistory(
   payload: WalletMessagePayloads['WALLET_GET_EVM_HISTORY']
 ): Promise<{ transactions: any[]; hasMore: boolean }> {
   const evmAddress = getEVMAddress();
   
   if (!evmAddress) {
-    // Return empty history for wallets without EVM address
+    
     return { transactions: [], hasMore: false };
   }
   
@@ -1446,9 +1305,6 @@ async function handleGetEVMHistory(
   const testnet = settings.networkEnvironment === 'testnet';
   
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
-  
-  // Note: Transaction history requires indexer API (Etherscan, etc.)
-  // For now, return empty and show "View on Explorer" link in UI
   const result = await adapter.getTransactionHistory(evmAddress, payload?.limit || 20);
   
   return {
@@ -1457,16 +1313,14 @@ async function handleGetEVMHistory(
   };
 }
 
-/**
- * Handle estimating EVM transaction fee
- */
+
 async function handleEstimateEVMFee(
   payload: WalletMessagePayloads['WALLET_ESTIMATE_EVM_FEE']
 ): Promise<EVMFeeEstimate> {
   const evmAddress = getEVMAddress();
   
   if (!evmAddress) {
-    // Return zero fee estimate for wallets without EVM address
+    
     return {
       gasLimit: '21000',
       gasPriceGwei: 0,
@@ -1483,10 +1337,10 @@ async function handleEstimateEVMFee(
   
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
   
-  // Parse amount
+  
   const amount = parseAmount(payload.amount, config.decimals);
   
-  // Create transaction to estimate
+  
   let tx;
   if (payload.tokenAddress) {
     tx = await adapter.createTokenTransfer(evmAddress, payload.recipient, payload.tokenAddress, amount);
@@ -1506,23 +1360,15 @@ async function handleEstimateEVMFee(
   };
 }
 
-/**
- * Handle getting EVM address
- */
+
 async function handleGetEVMAddress(): Promise<string> {
   const evmAddress = getEVMAddress();
   
-  // Return empty string if no EVM address (e.g., Solana-only private key import)
+  
   return evmAddress || '';
 }
 
-// ============================================
-// EVM PENDING TRANSACTION HANDLERS
-// ============================================
 
-/**
- * Handle getting pending EVM transactions
- */
 async function handleGetPendingTxs(
   payload: WalletMessagePayloads['EVM_GET_PENDING_TXS']
 ): Promise<EVMPendingTxInfo[]> {
@@ -1536,7 +1382,7 @@ async function handleGetPendingTxs(
     txs = await getAllPendingTxs();
   }
   
-  // Convert to EVMPendingTxInfo format
+  
   return txs
     .filter(tx => tx.testnet === testnet)
     .map(tx => {
@@ -1563,9 +1409,7 @@ async function handleGetPendingTxs(
     });
 }
 
-/**
- * Handle speeding up a pending transaction
- */
+
 async function handleSpeedUpTx(
   payload: WalletMessagePayloads['EVM_SPEED_UP_TX']
 ): Promise<EVMTransactionResult> {
@@ -1579,7 +1423,7 @@ async function handleSpeedUpTx(
     );
   }
   
-  // Find the original transaction
+  
   const originalTx = await getPendingTxByHash(txHash);
   if (!originalTx) {
     throw new WalletError(
@@ -1595,7 +1439,7 @@ async function handleSpeedUpTx(
     );
   }
   
-  // Create speed up transaction
+  
   const speedUpTx = createSpeedUpTx({
     originalTx,
     bumpPercent,
@@ -1603,21 +1447,21 @@ async function handleSpeedUpTx(
     customMaxPriorityFeePerGas: customMaxPriorityFeePerGas ? BigInt(customMaxPriorityFeePerGas) : undefined,
   });
   
-  // Sign the transaction
+  
   const signedTx = signEVMTransaction(
     speedUpTx,
     evmKeypair,
     speedUpTx.chainId
   );
   
-  // Broadcast
+  
   const txResponse = await broadcastTransaction(
     originalTx.chainId,
     originalTx.testnet,
     signedTx
   );
   
-  // Add new tx to pending store
+  
   await addPendingTx(createPendingTxRecord({
     hash: txResponse.hash,
     nonce: speedUpTx.nonce,
@@ -1632,8 +1476,6 @@ async function handleSpeedUpTx(
     testnet: originalTx.testnet,
   }));
   
-  console.log(`[AINTIVIRUS Wallet] Speed up tx ${txHash} -> ${txResponse.hash}`);
-  
   return {
     hash: txResponse.hash,
     explorerUrl: `${getEVMExplorerUrl(originalTx.chainId, originalTx.testnet)}/tx/${txResponse.hash}`,
@@ -1641,9 +1483,7 @@ async function handleSpeedUpTx(
   };
 }
 
-/**
- * Handle canceling a pending transaction
- */
+
 async function handleCancelTx(
   payload: WalletMessagePayloads['EVM_CANCEL_TX']
 ): Promise<EVMTransactionResult> {
@@ -1657,7 +1497,7 @@ async function handleCancelTx(
     );
   }
   
-  // Find the original transaction
+  
   const originalTx = await getPendingTxByHash(txHash);
   if (!originalTx) {
     throw new WalletError(
@@ -1673,27 +1513,27 @@ async function handleCancelTx(
     );
   }
   
-  // Create cancel transaction (0-value self-send)
+  
   const cancelTx = createCancelTx({
     originalTx,
     bumpPercent,
   });
   
-  // Sign the transaction
+  
   const signedTx = signEVMTransaction(
     cancelTx,
     evmKeypair,
     cancelTx.chainId
   );
   
-  // Broadcast
+  
   const txResponse = await broadcastTransaction(
     originalTx.chainId,
     originalTx.testnet,
     signedTx
   );
   
-  // Add cancel tx to pending store
+  
   await addPendingTx(createPendingTxRecord({
     hash: txResponse.hash,
     nonce: cancelTx.nonce,
@@ -1708,8 +1548,6 @@ async function handleCancelTx(
     testnet: originalTx.testnet,
   }));
   
-  console.log(`[AINTIVIRUS Wallet] Cancel tx ${txHash} -> ${txResponse.hash}`);
-  
   return {
     hash: txResponse.hash,
     explorerUrl: `${getEVMExplorerUrl(originalTx.chainId, originalTx.testnet)}/tx/${txResponse.hash}`,
@@ -1717,9 +1555,7 @@ async function handleCancelTx(
   };
 }
 
-/**
- * Handle getting gas presets for replacement
- */
+
 async function handleGetGasPresets(
   payload: WalletMessagePayloads['EVM_GET_GAS_PRESETS']
 ): Promise<EVMGasPresets> {
@@ -1765,9 +1601,7 @@ async function handleGetGasPresets(
   };
 }
 
-/**
- * Handle estimating replacement fee
- */
+
 async function handleEstimateReplacementFee(
   payload: WalletMessagePayloads['EVM_ESTIMATE_REPLACEMENT_FEE']
 ): Promise<EVMReplacementFeeEstimate> {
@@ -1806,45 +1640,26 @@ async function handleEstimateReplacementFee(
   };
 }
 
-// ============================================
-// INITIALIZATION
-// ============================================
 
-/**
- * Initialize the wallet module
- * 
- * Called when the background script starts.
- * Restores any necessary state.
- */
 export async function initializeWalletModule(): Promise<void> {
-  console.log('[AINTIVIRUS Wallet] Initializing wallet module...');
+  await walletExists();
+  await getWalletSettings();
   
-  const exists = await walletExists();
-  const settings = await getWalletSettings();
   
-  console.log(`[AINTIVIRUS Wallet] Wallet exists: ${exists}`);
-  console.log(`[AINTIVIRUS Wallet] Current network: ${settings.network}`);
-  
-  // Initialize RPC health tracking
   await initializeRpcHealth();
   
-  // Wallet starts locked on initialization
-  // User must explicitly unlock with password
+  
 }
 
-// ============================================
-// EXPORTS
-// ============================================
 
-// Re-export types for external use
 export * from './types';
 
-// Re-export specific functions that might be needed
+
 export { validateMnemonic } from './keychain';
 export { validatePasswordStrength, getPasswordStrengthFeedback } from './crypto';
 export { getAddressExplorerUrl, getTransactionExplorerUrl } from './rpc';
 
-// Multi-wallet exports
+
 export {
   listWallets,
   addWallet,
@@ -1856,13 +1671,13 @@ export {
   getActiveWallet,
 } from './storage';
 
-// Migration exports
+
 export {
   detectVaultVersion,
   checkMigrationStatus,
 } from './migration';
 
-// Phase 6 exports
+
 export {
   sendSol,
   estimateTransactionFee,
@@ -1891,7 +1706,7 @@ export {
   clearTokenCache,
 } from './tokens';
 
-// Price service exports
+
 export {
   getSolPrice,
   getEthPrice,
@@ -1923,7 +1738,7 @@ export type {
   Result,
 } from './errors';
 
-// RPC Health exports
+
 export {
   getRpcHealthSummary,
   addCustomRpcUrl,
@@ -1935,7 +1750,7 @@ export {
   calculateHealthScore,
 } from './rpcHealth';
 
-// Solana Client exports
+
 export {
   executeWithFailover,
   getConnection,
@@ -1945,34 +1760,34 @@ export {
   getRpcHealth,
 } from './solanaClient';
 
-// Transaction Status exports
+
 export {
-  // Types
+  
   type TxDisplayStatus,
   type SolanaCommitment,
   type TxConfirmationProgress,
   type SolanaConfirmationProgress,
   type EVMConfirmationProgress,
   type TxStatusBadgeConfig,
-  // Solana mapping
+  
   mapSolanaStatus,
   getSolanaProgress,
   getSolanaCommitmentDescription,
-  // EVM mapping
+  
   mapEVMStatus,
   getEVMProgress,
   getEVMConfirmationTarget,
   calculateEVMConfirmations,
-  // Badge config
+  
   getStatusBadgeConfig,
   STATUS_BADGE_CONFIGS,
-  // Utilities
+  
   isInProgress,
   isTerminal,
   mightBeStuck,
   getEstimatedTimeRemaining,
   getStatusActionSuggestion,
-  // Constants
+  
   EVM_CONFIRMATION_TARGETS,
   DEFAULT_EVM_CONFIRMATIONS,
   STUCK_THRESHOLD_MS,

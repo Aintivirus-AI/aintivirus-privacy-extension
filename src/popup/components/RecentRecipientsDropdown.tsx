@@ -1,63 +1,46 @@
-/**
- * RecentRecipientsDropdown Component
- * 
- * Dropdown showing recent transaction recipients with:
- * - Identicon + label (if available) + truncated address
- * - Fuzzy filter after 2+ chars typed
- * - Keyboard navigation (up/down/enter, ESC closes, click-away dismiss)
- * - Shows last 5 recipients max in dropdown
- */
+
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RecentRecipient, ChainType, EVMChainId, SolanaNetwork } from '@shared/types';
 import { useRecentRecipients } from '../hooks/useRecentRecipients';
 
-// ============================================
-// TYPES
-// ============================================
 
 interface RecentRecipientsDropdownProps {
-  /** Current input value (recipient address) */
+  
   value: string;
-  /** Called when a recipient is selected */
+  
   onSelect: (address: string) => void;
-  /** Called when input value changes */
+  
   onChange: (value: string) => void;
-  /** Current chain type */
+  
   chainType: ChainType;
-  /** Solana network (for Solana chain) */
+  
   solanaNetwork?: SolanaNetwork;
-  /** EVM chain ID (for EVM chains) */
+  
   evmChainId?: EVMChainId | null;
-  /** Placeholder text */
+  
   placeholder?: string;
-  /** Additional className for input */
+  
   className?: string;
-  /** Whether the input has an error state */
+  
   hasError?: boolean;
-  /** Whether the dropdown is disabled */
+  
   disabled?: boolean;
 }
 
-// ============================================
-// IDENTICON GENERATION (deterministic from address)
-// ============================================
 
-/**
- * Generate a simple deterministic color from an address
- */
 function generateIdenticonColors(address: string): { bg: string; fg: string } {
-  // Simple hash from address
+  
   let hash = 0;
   for (let i = 0; i < address.length; i++) {
     hash = ((hash << 5) - hash) + address.charCodeAt(i);
     hash = hash & hash;
   }
   
-  // Generate hue from hash (0-360)
+  
   const hue = Math.abs(hash % 360);
-  const saturation = 65 + (Math.abs(hash >> 8) % 20); // 65-85%
-  const lightness = 55 + (Math.abs(hash >> 16) % 15); // 55-70%
+  const saturation = 65 + (Math.abs(hash >> 8) % 20); 
+  const lightness = 55 + (Math.abs(hash >> 16) % 15); 
   
   return {
     bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
@@ -65,9 +48,7 @@ function generateIdenticonColors(address: string): { bg: string; fg: string } {
   };
 }
 
-/**
- * Get initials from label or address
- */
+
 function getInitials(recipient: RecentRecipient): string {
   if (recipient.label) {
     const words = recipient.label.trim().split(/\s+/);
@@ -76,16 +57,13 @@ function getInitials(recipient: RecentRecipient): string {
     }
     return recipient.label.slice(0, 2).toUpperCase();
   }
-  // Use first 2 chars of address (after 0x if present)
+  
   const addr = recipient.address.startsWith('0x') 
     ? recipient.address.slice(2) 
     : recipient.address;
   return addr.slice(0, 2).toUpperCase();
 }
 
-// ============================================
-// IDENTICON COMPONENT
-// ============================================
 
 interface IdenticonProps {
   recipient: RecentRecipient;
@@ -121,18 +99,12 @@ const Identicon: React.FC<IdenticonProps> = ({ recipient, size = 32 }) => {
   );
 };
 
-// ============================================
-// TRUNCATE ADDRESS
-// ============================================
 
 function truncateAddress(address: string, chars = 6): string {
   if (address.length <= chars * 2 + 3) return address;
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-// ============================================
-// DROPDOWN ITEM
-// ============================================
 
 interface DropdownItemProps {
   recipient: RecentRecipient;
@@ -173,9 +145,6 @@ const DropdownItem: React.FC<DropdownItemProps> = ({
   );
 };
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 const MAX_VISIBLE_RECIPIENTS = 5;
 
@@ -196,32 +165,32 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // Get recent recipients with filtering
+  
   const { recipients, loading } = useRecentRecipients(
     chainType,
     solanaNetwork,
     evmChainId,
-    value // Pass value as filter query
+    value 
   );
   
-  // Limit visible recipients
+  
   const visibleRecipients = useMemo(
     () => recipients.slice(0, MAX_VISIBLE_RECIPIENTS),
     [recipients]
   );
   
-  // Determine if dropdown should show
+  
   const shouldShowDropdown = useMemo(() => {
     if (disabled || loading) return false;
     if (!isOpen) return false;
     if (visibleRecipients.length === 0) return false;
-    // If there's a value, only show if fuzzy filtering (2+ chars)
+    
     if (value.length >= 2) return true;
-    // Show when focused with no/short input
+    
     return value.length < 2;
   }, [disabled, loading, isOpen, visibleRecipients.length, value.length]);
   
-  // Handle click outside to close dropdown
+  
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -234,15 +203,15 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // Reset selection when recipients change
+  
   useEffect(() => {
     setSelectedIndex(-1);
   }, [visibleRecipients]);
   
-  // Handle keyboard navigation
+  
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (!shouldShowDropdown) {
-      // Open dropdown on arrow down when closed
+      
       if (event.key === 'ArrowDown' && visibleRecipients.length > 0) {
         setIsOpen(true);
         setSelectedIndex(0);
@@ -287,28 +256,28 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
     }
   }, [shouldShowDropdown, visibleRecipients, selectedIndex, onSelect]);
   
-  // Handle input change
+  
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value);
     setIsOpen(true);
   }, [onChange]);
   
-  // Handle input focus
+  
   const handleFocus = useCallback(() => {
     if (visibleRecipients.length > 0) {
       setIsOpen(true);
     }
   }, [visibleRecipients.length]);
   
-  // Handle item selection
+  
   const handleItemClick = useCallback((recipient: RecentRecipient) => {
     onSelect(recipient.address);
     setIsOpen(false);
     setSelectedIndex(-1);
-    // Don't refocus input as it would reopen the dropdown
+    
   }, [onSelect]);
   
-  // Handle item hover
+  
   const handleItemHover = useCallback((index: number) => {
     setSelectedIndex(index);
   }, []);
@@ -359,12 +328,8 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
   );
 };
 
-// ============================================
-// STYLES (to be added to global.css)
-// ============================================
 
 export const recentRecipientsStyles = `
-/* Recent Recipients Dropdown */
 .recent-recipients-dropdown {
   position: relative;
   width: 100%;

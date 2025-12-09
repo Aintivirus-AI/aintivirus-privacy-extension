@@ -2,9 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { sendToBackground } from '@shared/messaging';
 import type { EVMPendingTxInfo, EVMReplacementFeeEstimate, EVMTransactionResult } from '@shared/types';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface CancelModalProps {
   tx: EVMPendingTxInfo;
@@ -12,9 +9,6 @@ export interface CancelModalProps {
   onSuccess: (newHash: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
   const [feeEstimate, setFeeEstimate] = useState<EVMReplacementFeeEstimate | null>(null);
@@ -22,7 +16,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  // Load fee estimate for cancellation
+  
   useEffect(() => {
     async function loadEstimate() {
       try {
@@ -35,7 +29,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
           setFeeEstimate(response.data);
         }
       } catch (err) {
-        console.error('Failed to load fee estimate:', err);
+
       }
     }
 
@@ -64,7 +58,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
     }
   }, [tx.hash, onSuccess]);
 
-  // Calculate cancellation fee (21000 gas for self-transfer)
+  
   const cancellationFee = feeEstimate
     ? (feeEstimate.maxFeeGwei * 21000) / 1e9
     : null;
@@ -78,7 +72,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
         </div>
 
         <div className="cancel-body">
-          {/* Warning Section */}
+          {}
           <div className="warning-section">
             <div className="warning-icon">⚠️</div>
             <p>
@@ -87,7 +81,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             </p>
           </div>
 
-          {/* Transaction Info */}
+          {}
           <div className="tx-info-section">
             <h3>Transaction to Cancel</h3>
             <div className="info-row">
@@ -110,7 +104,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             </div>
           </div>
 
-          {/* Cancellation Cost */}
+          {}
           <div className="cost-section">
             <h3>Cancellation Cost</h3>
             <div className="cost-amount">
@@ -119,7 +113,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             </div>
           </div>
 
-          {/* Confirmation Checkbox */}
+          {}
           <label className="confirm-checkbox">
             <input
               type="checkbox"
@@ -129,7 +123,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             <span>I understand this will cost gas and cannot be undone</span>
           </label>
 
-          {/* Error */}
+          {}
           {error && (
             <div className="error-box">
               ❌ {error}
@@ -137,7 +131,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
           )}
         </div>
 
-        {/* Actions */}
+        {}
         <div className="modal-actions">
           <button className="btn secondary" onClick={onClose} disabled={loading}>
             Keep Transaction

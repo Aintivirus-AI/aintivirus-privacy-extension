@@ -1,18 +1,17 @@
-// Fingerprint protection settings
-// Each one can be toggled if it breaks sites
+
 
 export interface FingerprintSettings {
-  enabled: boolean;             // master switch
-  canvasNoise: boolean;         // add noise to canvas output
-  webglMask: boolean;           // hide GPU info
-  screenMask: boolean;          // fake screen size
-  audioNoise: boolean;          // mess with audio context
-  clientHintsMask: boolean;     // hide browser details
-  hardwareConcurrencyMask: boolean;  // fake CPU count
-  deviceMemoryMask: boolean;    // fake RAM amount
-  languagesMask: boolean;       // everyone speaks english
-  pluginsMask: boolean;         // hide plugins
-  timezoneMask: boolean;        // fake timezone
+  enabled: boolean;             
+  canvasNoise: boolean;         
+  webglMask: boolean;           
+  screenMask: boolean;          
+  audioNoise: boolean;          
+  clientHintsMask: boolean;     
+  hardwareConcurrencyMask: boolean;  
+  deviceMemoryMask: boolean;    
+  languagesMask: boolean;       
+  pluginsMask: boolean;         
+  timezoneMask: boolean;        
 }
 
 export const DEFAULT_FINGERPRINT_SETTINGS: FingerprintSettings = {
@@ -29,7 +28,7 @@ export const DEFAULT_FINGERPRINT_SETTINGS: FingerprintSettings = {
   timezoneMask: true,
 };
 
-// What we pass to the injected script (must be JSON-serializable)
+
 export interface InjectedScriptConfig {
   noiseSeed: number;
   protections: {
@@ -55,7 +54,7 @@ export interface InjectedScriptConfig {
   trackerDomains: string[];
 }
 
-// Common resolutions - most people have one of these
+
 export const COMMON_RESOLUTIONS = [
   { width: 1920, height: 1080 },
   { width: 1366, height: 768 },
@@ -64,7 +63,7 @@ export const COMMON_RESOLUTIONS = [
   { width: 1280, height: 720 },
 ] as const;
 
-// Fake GPU info - Intel integrated is super common so we blend in
+
 export const MASKED_WEBGL = {
   RENDERER: 'WebKit WebGL',
   VENDOR: 'WebKit',
@@ -88,5 +87,4 @@ export interface FingerprintStatus {
   };
   injectedTabCount: number;
 }
-
 

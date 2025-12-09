@@ -1,6 +1,6 @@
 import { StorageSchema, DEFAULT_STORAGE } from './types';
 
-// Typed wrapper for chrome.storage.local
+
 export const storage = {
   async get<K extends keyof StorageSchema>(key: K): Promise<StorageSchema[K]> {
     const result = await chrome.storage.local.get(key);
@@ -31,7 +31,7 @@ export const storage = {
     await chrome.storage.local.clear();
   },
 
-  // Returns unsubscribe function
+  
   onChange(callback: (changes: { [K in keyof StorageSchema]?: { oldValue?: StorageSchema[K]; newValue?: StorageSchema[K] } }) => void): () => void {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -49,7 +49,7 @@ export const storage = {
   },
 };
 
-// Set up storage with defaults on first run
+
 export async function initializeStorage(): Promise<void> {
   const current = await storage.get('initialized');
   
@@ -60,5 +60,4 @@ export async function initializeStorage(): Promise<void> {
     });
   }
 }
-
 

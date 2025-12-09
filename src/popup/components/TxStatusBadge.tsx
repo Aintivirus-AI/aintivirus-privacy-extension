@@ -1,15 +1,4 @@
-/**
- * AINTIVIRUS Wallet - Transaction Status Badge Component
- * 
- * Displays transaction status with appropriate styling:
- * - Pending: Pulsing amber badge
- * - Confirming: Animated blue badge
- * - Confirmed: Green checkmark badge
- * - Failed: Red X badge
- * - Unknown/Stuck: Gray question mark badge
- * - Dropped: Gray trash badge
- * - Replaced: Blue replace badge
- */
+
 
 import React from 'react';
 import {
@@ -18,26 +7,20 @@ import {
   TxConfirmationProgress,
 } from '@wallet/txStatus';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface TxStatusBadgeProps {
-  /** Transaction status */
+  
   status: TxDisplayStatus;
-  /** Optional size variant */
+  
   size?: 'sm' | 'md' | 'lg';
-  /** Show full label or just icon */
+  
   showLabel?: boolean;
-  /** Optional progress info for tooltip */
+  
   progress?: TxConfirmationProgress;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// ICONS
-// ============================================
 
 const PendingIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -97,9 +80,6 @@ const StatusIcons: Record<string, React.FC> = {
   replace: ReplaceIcon,
 };
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function TxStatusBadge({
   status,
@@ -196,7 +176,6 @@ export function TxStatusBadge({
           letter-spacing: 0.04em;
         }
 
-        /* Pulsing animation for pending/unknown states */
         .tx-status-badge.animate {
           animation: badge-pulse 2s ease-in-out infinite;
         }
@@ -210,7 +189,6 @@ export function TxStatusBadge({
           }
         }
 
-        /* Spinning animation for confirming icon */
         .tx-status-badge.animate .tx-status-badge-icon svg {
           animation: badge-spin 2s linear infinite;
         }
@@ -224,12 +202,10 @@ export function TxStatusBadge({
           }
         }
 
-        /* Override spin for non-spinning badges */
         .tx-status-badge:not([data-status="confirming"]) .tx-status-badge-icon svg {
           animation: none;
         }
 
-        /* Reduced motion preference */
         @media (prefers-reduced-motion: reduce) {
           .tx-status-badge.animate,
           .tx-status-badge.animate .tx-status-badge-icon svg {
@@ -241,22 +217,17 @@ export function TxStatusBadge({
   );
 }
 
-// ============================================
-// COMPACT VARIANT
-// ============================================
 
 export interface TxStatusDotProps {
-  /** Transaction status */
+  
   status: TxDisplayStatus;
-  /** Dot size in pixels */
+  
   size?: number;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-/**
- * Compact status indicator dot
- */
+
 export function TxStatusDot({
   status,
   size = 8,

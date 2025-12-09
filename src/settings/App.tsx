@@ -5,9 +5,6 @@ import { sendToBackground } from '@shared/messaging';
 import { DEFAULT_PRIVACY_SETTINGS } from '../privacy/types';
 import { DEFAULT_FINGERPRINT_SETTINGS } from '../fingerprinting/types';
 
-// ============================================
-// ICONS (inline SVG components)
-// ============================================
 
 interface IconProps {
   size?: number;
@@ -213,9 +210,6 @@ const HandStopIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// ============================================
-// TYPES
-// ============================================
 
 type TabId = 'general' | 'privacy' | 'trackers' | 'scripts' | 'wallet' | 'about';
 
@@ -233,6 +227,17 @@ interface PrivacyMetrics {
   filterListCount: number;
   scriptsIntercepted: number;
   requestsModified: number;
+  blockedByDomain: { [domain: string]: number };
+  recentBlocked: BlockedRequest[];
+  recentCookieCleanups: CookieCleanupEntry[];
+  sessionStart: number;
+}
+
+interface CookieCleanupEntry {
+  domain: string;
+  count: number;
+  mode: string;
+  timestamp: number;
 }
 
 interface BlockedRequest {
@@ -266,9 +271,39 @@ interface FilterListHealthSummary {
   lists: FilterListHealth[];
 }
 
-// ============================================
-// ICON HELPER
-// ============================================
+interface RulesetStats {
+  enabledRulesets: string[];
+  availableRulesets: string[];
+  filteringLevel: string;
+  dynamicRuleCount: number;
+  availableStaticSlots: number;
+}
+
+interface CookieStats {
+  totalCookies: number;
+  byDomain: { [domain: string]: number };
+  secureCookies: number;
+  httpOnlyCookies: number;
+}
+
+interface HeaderRuleStatus {
+  refererStripping: boolean;
+  gpcEnabled: boolean;
+  paramStripping: boolean;
+  ruleCount: number;
+}
+
+interface PrivacyStatus {
+  isEnabled: boolean;
+  isInitialized: boolean;
+  adBlockerEnabled: boolean;
+  headerStatus: HeaderRuleStatus;
+  cookieStats: CookieStats;
+  filterStats: any;
+  ubolStats: any;
+  metrics: PrivacyMetrics;
+}
+
 
 function getFeatureIcon(iconName: string): React.ReactNode {
   switch (iconName) {
@@ -279,9 +314,6 @@ function getFeatureIcon(iconName: string): React.ReactNode {
   }
 }
 
-// ============================================
-// WALLET SECURITY SETTINGS COMPONENT
-// ============================================
 
 interface SecuritySettingsState {
   connectionMonitoring: boolean;
@@ -351,7 +383,7 @@ const DEFAULT_SECURITY_SETTINGS: SecuritySettingsState = {
   phishingDetection: true,
   warnOnUnknownPrograms: true,
   warnOnLargeTransfers: true,
-  largeTransferThreshold: 100, // USD
+  largeTransferThreshold: 100, 
   warnOnAuthorityChanges: true,
   warnOnUnlimitedApprovals: true,
   autoBlockMalicious: true,
@@ -366,7 +398,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   const [connections, setConnections] = useState<ConnectionRecordDisplay[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // RPC Management state
+  
   const [rpcHealth, setRpcHealth] = useState<RpcHealthSummary | null>(null);
   const [selectedNetwork, setSelectedNetwork] = useState<SolanaNetwork>('mainnet-beta');
   const [newRpcUrl, setNewRpcUrl] = useState('');
@@ -374,7 +406,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   const [rpcError, setRpcError] = useState<string | null>(null);
   const [testingRpc, setTestingRpc] = useState<string | null>(null);
 
-  // Threat Intel state
+  
   const [threatIntelHealth, setThreatIntelHealth] = useState<ThreatIntelHealth | null>(null);
   const [threatIntelSources, setThreatIntelSources] = useState<ThreatIntelSource[]>([]);
   const [showAddSource, setShowAddSource] = useState(false);
@@ -394,7 +426,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
 
   const loadSecurityData = async () => {
     try {
-      // Load security settings
+      
       const settingsRes = await sendToBackground({
         type: 'SECURITY_GET_SETTINGS',
         payload: undefined,
@@ -403,7 +435,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         setSecuritySettings(settingsRes.data as SecuritySettingsState);
       }
 
-      // Load connections
+      
       const connectionsRes = await sendToBackground({
         type: 'SECURITY_GET_CONNECTIONS',
         payload: { limit: 50 },
@@ -412,7 +444,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         setConnections(connectionsRes.data as ConnectionRecordDisplay[]);
       }
     } catch (error) {
-      console.error('Failed to load security data:', error);
+
     } finally {
       setLoading(false);
     }
@@ -428,7 +460,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         setRpcHealth(res.data as RpcHealthSummary);
       }
     } catch (error) {
-      console.error('Failed to load RPC health:', error);
+
     }
   };
 
@@ -470,7 +502,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       });
       await loadRpcHealth();
     } catch (error) {
-      console.error('Failed to remove RPC:', error);
+
     }
   };
 
@@ -483,7 +515,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       });
       await loadRpcHealth();
     } catch (error) {
-      console.error('Failed to test RPC:', error);
+
     } finally {
       setTestingRpc(null);
     }
@@ -503,7 +535,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         setThreatIntelSources(sourcesRes.data as ThreatIntelSource[]);
       }
     } catch (error) {
-      console.error('Failed to load threat intel data:', error);
+
     }
   };
 
@@ -513,7 +545,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       await sendToBackground({ type: 'REFRESH_THREAT_INTEL', payload: undefined });
       await loadThreatIntelData();
     } catch (error) {
-      console.error('Failed to refresh threat intel:', error);
+
     } finally {
       setRefreshingThreatIntel(false);
     }
@@ -525,12 +557,12 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         type: 'TOGGLE_THREAT_INTEL_SOURCE',
         payload: { sourceId, enabled },
       });
-      // Update local state
+      
       setThreatIntelSources(prev => 
         prev.map(s => s.id === sourceId ? { ...s, enabled } : s)
       );
     } catch (error) {
-      console.error('Failed to toggle source:', error);
+
     }
   };
 
@@ -574,7 +606,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       });
       setThreatIntelSources(prev => prev.filter(s => s.id !== sourceId));
     } catch (error) {
-      console.error('Failed to remove source:', error);
+
     }
   };
 
@@ -592,7 +624,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       type: 'SECURITY_CONNECTION_REVOKE',
       payload: { domain },
     });
-    // Refresh connections
+    
     const connectionsRes = await sendToBackground({
       type: 'SECURITY_GET_CONNECTIONS',
       payload: { limit: 50 },
@@ -629,7 +661,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
       <h2>Wallet Security</h2>
       <p className="settings-section-desc">Keep your crypto wallet safe from scams and theft</p>
 
-      {/* Security Stats */}
+      {}
       <div className="settings-stats-grid">
         <div className="settings-stat-card">
           <span className="settings-stat-value">{activeConnections.length}</span>
@@ -645,7 +677,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         </div>
       </div>
 
-      {/* Security Monitoring Toggles */}
+      {}
       <div className="settings-subsection">
         <h3>Security Monitoring</h3>
         <p className="settings-subsection-desc">
@@ -739,7 +771,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         </div>
       </div>
 
-      {/* Transaction Warnings */}
+      {}
       <div className="settings-subsection">
         <h3>Transaction Warnings</h3>
         <p className="settings-subsection-desc">
@@ -857,7 +889,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         </div>
       </div>
 
-      {/* Connected Sites */}
+      {}
       <div className="settings-subsection">
         <h3>Connected Sites</h3>
         <p className="settings-subsection-desc">
@@ -913,14 +945,14 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         )}
       </div>
 
-      {/* RPC Endpoints Management */}
+      {}
       <div className="settings-subsection">
         <h3>Network Connections</h3>
         <p className="settings-subsection-desc">
           Servers used to connect to Solana (advanced - most users don't need to change this)
         </p>
 
-        {/* Network Selector */}
+        {}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
             Network
@@ -944,7 +976,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
           </select>
         </div>
 
-        {/* RPC Health Summary */}
+        {}
         {rpcHealth && (
           <>
             <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
@@ -962,7 +994,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
               </div>
             </div>
 
-            {/* Score Explanation */}
+            {}
             <div style={{
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-subtle)',
@@ -989,7 +1021,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
               </p>
             </div>
 
-            {/* Endpoint List */}
+            {}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
               {rpcHealth.endpoints.map((endpoint) => (
                 <div
@@ -1099,7 +1131,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
           </>
         )}
 
-        {/* Add Custom RPC */}
+        {}
         <div style={{ marginTop: '16px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
             Add Custom RPC Endpoint
@@ -1140,38 +1172,38 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         </div>
       </div>
 
-      {/* Threat Intel Sources */}
+      {}
       <div className="settings-subsection">
         <h3>Scam Database</h3>
         <p className="settings-subsection-desc">
           Lists of known scam websites we check against (updated automatically)
         </p>
 
-        {/* Health Summary */}
+        {}
         {threatIntelHealth && (
           <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
             <div className="settings-stat-card">
               <span className="settings-stat-value">{threatIntelHealth.scamDomainCount}</span>
-              <span className="settings-stat-label">Scam Domains</span>
+              <span className="settings-stat-label"> Scam Domains</span>
             </div>
             <div className="settings-stat-card">
               <span className="settings-stat-value">{threatIntelHealth.legitimateDomainCount}</span>
-              <span className="settings-stat-label">Legitimate Domains</span>
+              <span className="settings-stat-label"> Legitimate Domains</span>
             </div>
             <div className="settings-stat-card">
               <span className="settings-stat-value">{threatIntelHealth.sourcesEnabled || 0}/{threatIntelHealth.sourcesConfigured || 0}</span>
-              <span className="settings-stat-label">Sources Active</span>
+              <span className="settings-stat-label"> Sources Active</span>
             </div>
             <div className="settings-stat-card">
               <span className="settings-stat-value" style={{ fontSize: '14px' }}>
                 {threatIntelHealth.lastRefresh > 0 ? formatTime(threatIntelHealth.lastRefresh) : 'Never'}
               </span>
-              <span className="settings-stat-label">Last Refresh</span>
+              <span className="settings-stat-label"> Last Refresh</span>
             </div>
           </div>
         )}
 
-        {/* Bootstrap indicator */}
+        {}
         {threatIntelHealth?.usingBootstrap && (
           <div style={{
             marginBottom: '16px',
@@ -1189,7 +1221,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
           </div>
         )}
 
-        {/* Refresh button */}
+        {}
         <div style={{ marginBottom: '16px' }}>
           <button
             className="btn btn-primary"
@@ -1201,7 +1233,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
           </button>
         </div>
 
-        {/* Source List */}
+        {}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
           {threatIntelSources.map((source) => (
             <div
@@ -1296,7 +1328,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
           ))}
         </div>
 
-        {/* Add Custom Source */}
+        {}
         {!showAddSource ? (
           <button
             className="btn btn-secondary"
@@ -1434,7 +1466,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
         )}
       </div>
 
-      {/* Disclaimer */}
+      {}
       <div style={{
         marginTop: '24px',
         padding: '16px 20px',
@@ -1467,12 +1499,8 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   );
 };
 
-// ============================================
-// MAIN APP COMPONENT
-// ============================================
 
 const App: React.FC = () => {
-  // Check URL hash for initial tab
   const getInitialTab = (): TabId => {
     const hash = window.location.hash.replace('#', '');
     if (['general', 'privacy', 'trackers', 'scripts', 'wallet', 'about'].includes(hash)) {
@@ -1485,7 +1513,6 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab());
   const [loading, setLoading] = useState(true);
 
-  // Privacy state
   const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(DEFAULT_PRIVACY_SETTINGS);
   const [siteSettings, setSiteSettings] = useState<SitePrivacySettings>({});
   const [filterStats, setFilterStats] = useState<FilterListStats | null>(null);
@@ -1494,16 +1521,17 @@ const App: React.FC = () => {
   const [siteSearch, setSiteSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fingerprint protection state
   const [fingerprintSettings, setFingerprintSettings] = useState<FingerprintSettings>(DEFAULT_FINGERPRINT_SETTINGS);
 
-  // Blocked trackers state
   const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([]);
   const [trackerSearch, setTrackerSearch] = useState('');
 
-  // Filter list health state
   const [filterListHealth, setFilterListHealth] = useState<FilterListHealthSummary | null>(null);
   const [retryingList, setRetryingList] = useState<string | null>(null);
+
+  const [rulesetStats, setRulesetStats] = useState<RulesetStats | null>(null);
+
+  const [privacyStatus, setPrivacyStatus] = useState<PrivacyStatus | null>(null);
 
   useEffect(() => {
     loadInitialData();
@@ -1512,7 +1540,6 @@ const App: React.FC = () => {
       setFlags(newFlags);
     });
 
-    // Listen for hash changes
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
       if (['general', 'privacy', 'trackers', 'scripts', 'wallet', 'about'].includes(hash)) {
@@ -1529,7 +1556,7 @@ const App: React.FC = () => {
 
   const loadInitialData = async () => {
     try {
-      const [loadedFlags, privSettings, siteSets, filterStatsData, metricsData, fpSettings, blocked, filterHealth] = await Promise.all([
+      const [loadedFlags, privSettings, siteSets, filterStatsData, metricsData, fpSettings, blocked, filterHealth, rulesetStatsData, privacyStatusData] = await Promise.all([
         getFeatureFlags(),
         fetchPrivacySettings(),
         fetchSiteSettings(),
@@ -1538,6 +1565,8 @@ const App: React.FC = () => {
         fetchFingerprintSettings(),
         fetchBlockedRequests(),
         fetchFilterListHealth(),
+        fetchRulesetStats(),
+        fetchPrivacyStatus(),
       ]);
 
       setFlags(loadedFlags);
@@ -1548,8 +1577,10 @@ const App: React.FC = () => {
       if (fpSettings) setFingerprintSettings(fpSettings);
       if (blocked) setBlockedRequests(blocked);
       if (filterHealth) setFilterListHealth(filterHealth);
+      if (rulesetStatsData) setRulesetStats(rulesetStatsData);
+      if (privacyStatusData) setPrivacyStatus(privacyStatusData);
     } catch (error) {
-      console.error('Failed to load settings:', error);
+
     } finally {
       setLoading(false);
     }
@@ -1584,11 +1615,10 @@ const App: React.FC = () => {
     try {
       await sendToBackground({ type: 'RESET_FILTER_LIST', payload: { url } });
       await sendToBackground({ type: 'REFRESH_FILTER_LISTS', payload: undefined });
-      // Reload filter list health data
       const newHealth = await fetchFilterListHealth();
       if (newHealth) setFilterListHealth(newHealth);
     } catch (error) {
-      console.error('Failed to retry filter list:', error);
+
     } finally {
       setRetryingList(null);
     }
@@ -1602,6 +1632,16 @@ const App: React.FC = () => {
   const fetchFingerprintSettings = async (): Promise<FingerprintSettings | null> => {
     const response = await sendToBackground({ type: 'GET_FINGERPRINT_SETTINGS', payload: undefined });
     return response.success ? response.data as FingerprintSettings : null;
+  };
+
+  const fetchRulesetStats = async (): Promise<RulesetStats | null> => {
+    const response = await sendToBackground({ type: 'GET_RULESET_STATS', payload: undefined });
+    return response.success ? response.data as RulesetStats : null;
+  };
+
+  const fetchPrivacyStatus = async (): Promise<PrivacyStatus | null> => {
+    const response = await sendToBackground({ type: 'GET_PRIVACY_STATUS', payload: undefined });
+    return response.success ? response.data as PrivacyStatus : null;
   };
 
   const handleToggle = async (id: keyof FeatureFlags) => {
@@ -1641,7 +1681,7 @@ const App: React.FC = () => {
       const newMetrics = await fetchMetrics();
       if (newMetrics) setMetrics(newMetrics);
     } catch (error) {
-      console.error('Failed to refresh filter lists:', error);
+
     } finally {
       setRefreshing(false);
     }
@@ -1657,7 +1697,6 @@ const App: React.FC = () => {
         payload: { url: urlToAdd },
       });
       setNewFilterUrl('');
-      // Update local state with the new filter URL
       setPrivacySettings(prev => ({
         ...prev,
         filterListUrls: [...prev.filterListUrls, urlToAdd],
@@ -1665,7 +1704,7 @@ const App: React.FC = () => {
       const newMetrics = await fetchMetrics();
       if (newMetrics) setMetrics(newMetrics);
     } catch (error) {
-      console.error('Failed to add filter list:', error);
+
     }
   };
 
@@ -1680,7 +1719,7 @@ const App: React.FC = () => {
         filterListUrls: prev.filterListUrls.filter(u => u !== url),
       }));
     } catch (error) {
-      console.error('Failed to remove filter list:', error);
+
     }
   };
 
@@ -1692,7 +1731,7 @@ const App: React.FC = () => {
       });
       setSiteSettings(prev => ({ ...prev, [domain]: mode }));
     } catch (error) {
-      console.error('Failed to update site mode:', error);
+
     }
   };
 
@@ -1701,7 +1740,6 @@ const App: React.FC = () => {
     return new Date(timestamp).toLocaleString();
   };
 
-  // Format large numbers to be shorter (e.g., 25785 -> "25.8K")
   const formatNumber = (num: number): string => {
     if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
@@ -1826,15 +1864,11 @@ const App: React.FC = () => {
           {activeTab === 'privacy' && (
             <section className="settings-section">
               <h2>Privacy Protection</h2>
-              <p className="settings-section-desc">Stop websites from tracking you and showing annoying ads</p>
+              <p className="settings-section-desc">Protect your identity and personal data from websites</p>
 
-              {/* Privacy Stats */}
+              {}
               {metrics && (
                 <div className="settings-stats-grid">
-                  <div className="settings-stat-card">
-                    <span className="settings-stat-value">{formatNumber(metrics.totalBlockedRequests)}</span>
-                    <span className="settings-stat-label"> Trackers Blocked</span>
-                  </div>
                   <div className="settings-stat-card">
                     <span className="settings-stat-value">{formatNumber(metrics.scriptsIntercepted || 0)}</span>
                     <span className="settings-stat-label"> Scripts Intercepted</span>
@@ -1847,16 +1881,12 @@ const App: React.FC = () => {
                     <span className="settings-stat-value">{formatNumber(metrics.totalCookiesDeleted)}</span>
                     <span className="settings-stat-label"> Cookies Deleted</span>
                   </div>
-                  <div className="settings-stat-card">
-                    <span className="settings-stat-value">{formatNumber(metrics.activeRuleCount)}</span>
-                    <span className="settings-stat-label"> Active Rules</span>
-                  </div>
                 </div>
               )}
 
-              {/* Protection Toggles */}
+              {}
               <div className="settings-subsection">
-                <h3>Protection Features</h3>
+                <h3>Privacy Features</h3>
                 {!flags.privacy && (
                   <p className="settings-subsection-hint">
                     Enable "Privacy & Ad Blocking" in the General tab to activate these features.
@@ -1864,27 +1894,6 @@ const App: React.FC = () => {
                 )}
 
                 <div className="settings-group" role="list">
-                  <div className="settings-item" role="listitem">
-                    <div className="settings-item-info">
-                      <div className="settings-item-icon">
-                        <BlockIcon size={20} />
-                      </div>
-                      <div className="settings-item-text">
-                        <span className="settings-item-name">Block Ads & Trackers</span>
-                        <span className="settings-item-desc">Hide annoying ads and stop companies from watching what you do online</span>
-                      </div>
-                    </div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={flags.privacy && privacySettings.blockTrackers}
-                        onChange={() => handlePrivacySettingChange('blockTrackers', !privacySettings.blockTrackers)}
-                        disabled={!flags.privacy}
-                      />
-                      <span className="toggle-track" aria-hidden="true" />
-                    </label>
-                  </div>
-
                   <div className="settings-item" role="listitem">
                     <div className="settings-item-info">
                       <div className="settings-item-icon">
@@ -1971,7 +1980,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Fingerprint Protection */}
+              {}
               <div className="settings-subsection">
                 <h3>Fingerprint Protection</h3>
                 <p className="settings-subsection-desc">
@@ -2112,7 +2121,328 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cookie Cleanup Mode */}
+              {}
+              {flags.privacy && privacyStatus?.cookieStats && (
+                <div className="settings-subsection">
+                  <h3>Current Cookie Status</h3>
+                  <p className="settings-subsection-desc">
+                    Real-time overview of cookies currently stored in your browser
+                  </p>
+
+                  <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value">{formatNumber(privacyStatus.cookieStats.totalCookies)}</span>
+                      <span className="settings-stat-label">Total Cookies</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value" style={{ color: 'var(--success)' }}>{formatNumber(privacyStatus.cookieStats.secureCookies)}</span>
+                      <span className="settings-stat-label">Secure Cookies</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value" style={{ color: 'var(--accent-primary)' }}>{formatNumber(privacyStatus.cookieStats.httpOnlyCookies)}</span>
+                      <span className="settings-stat-label">HttpOnly Cookies</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value">{formatNumber(Object.keys(privacyStatus.cookieStats.byDomain).length)}</span>
+                      <span className="settings-stat-label">Cookie Domains</span>
+                    </div>
+                  </div>
+
+                  {}
+                  {Object.keys(privacyStatus.cookieStats.byDomain).length > 0 && (
+                    <div>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '12px', color: 'var(--text-secondary)' }}>
+                        Top Cookie Setters
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {Object.entries(privacyStatus.cookieStats.byDomain)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([domain, count]) => (
+                            <div
+                              key={domain}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '8px 12px',
+                                background: 'var(--bg-secondary)',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-subtle)',
+                              }}
+                            >
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)' }}>
+                                {domain}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  color: 'var(--text-muted)',
+                                  background: 'var(--bg-tertiary)',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                }}
+                              >
+                                {count} {count === 1 ? 'cookie' : 'cookies'}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {}
+              {flags.privacy && metrics?.blockedByDomain && Object.keys(metrics.blockedByDomain).length > 0 && (
+                <div className="settings-subsection">
+                  <h3>Most Invasive Sites</h3>
+                  <p className="settings-subsection-desc">
+                    Domains that have attempted the most tracking requests
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {Object.entries(metrics.blockedByDomain)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 10)
+                      .map(([domain, count], index) => {
+                        const maxCount = Math.max(...Object.values(metrics.blockedByDomain));
+                        const percentage = (count / maxCount) * 100;
+                        
+                        return (
+                          <div
+                            key={domain}
+                            style={{
+                              padding: '12px',
+                              background: 'var(--bg-secondary)',
+                              borderRadius: '8px',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    color: 'var(--text-muted)',
+                                    minWidth: '20px',
+                                  }}
+                                >
+                                  #{index + 1}
+                                </span>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                  {domain}
+                                </span>
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  color: 'var(--danger)',
+                                  background: 'var(--danger-muted)',
+                                  padding: '4px 10px',
+                                  borderRadius: '6px',
+                                }}
+                              >
+                                {formatNumber(count)} blocked
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                background: 'var(--bg-tertiary)',
+                                borderRadius: '2px',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${percentage}%`,
+                                  height: '100%',
+                                  background: 'linear-gradient(90deg, var(--danger) 0%, var(--warning) 100%)',
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {}
+              {flags.privacy && privacyStatus?.headerStatus && (
+                <div className="settings-subsection">
+                  <h3>Active Protection Features</h3>
+                  <p className="settings-subsection-desc">
+                    Real-time status of your privacy protection features
+                  </p>
+
+                  <div className="settings-group" role="list" style={{ gap: '8px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Referrer Headers</span>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: privacyStatus.headerStatus.refererStripping ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                          color: privacyStatus.headerStatus.refererStripping ? 'var(--success)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {privacyStatus.headerStatus.refererStripping ? '✓ STRIPPED' : 'INACTIVE'}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Global Privacy Control</span>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: privacyStatus.headerStatus.gpcEnabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                          color: privacyStatus.headerStatus.gpcEnabled ? 'var(--success)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {privacyStatus.headerStatus.gpcEnabled ? '✓ ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Tracking Parameters</span>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: privacyStatus.headerStatus.paramStripping ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                          color: privacyStatus.headerStatus.paramStripping ? 'var(--success)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {privacyStatus.headerStatus.paramStripping ? '✓ CLEANED' : 'INACTIVE'}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Fingerprint Protection</span>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: fingerprintSettings.enabled ? 'var(--success-muted)' : 'var(--bg-tertiary)',
+                          color: fingerprintSettings.enabled ? 'var(--success)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {fingerprintSettings.enabled ? '✓ ENABLED' : 'INACTIVE'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {}
+              {flags.privacy && metrics?.recentCookieCleanups && metrics.recentCookieCleanups.length > 0 && (
+                <div className="settings-subsection">
+                  <h3>Recent Privacy Actions</h3>
+                  <p className="settings-subsection-desc">
+                    Live feed of recent protection events
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '300px', overflowY: 'auto' }}>
+                    {metrics.recentCookieCleanups.slice(0, 15).map((cleanup, index) => {
+                      const timeAgo = (() => {
+                        const diff = Date.now() - cleanup.timestamp;
+                        if (diff < 60000) return 'Just now';
+                        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                        return new Date(cleanup.timestamp).toLocaleString();
+                      })();
+
+                      return (
+                        <div
+                          key={`${cleanup.timestamp}-${index}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '10px 12px',
+                            background: 'var(--bg-secondary)',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-subtle)',
+                          }}
+                        >
+                          <span style={{ fontSize: '16px' }}>🍪</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                              Deleted <strong>{cleanup.count}</strong> {cleanup.count === 1 ? 'cookie' : 'cookies'}
+                              {cleanup.domain && (
+                                <>
+                                  {' '}from <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent-primary)' }}>{cleanup.domain}</span>
+                                </>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {timeAgo}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {}
               <div className="settings-subsection">
                 <h3>Cookie Cleanup Mode</h3>
                 <p className="settings-subsection-desc">Choose what happens to cookies when you close a tab</p>
@@ -2153,77 +2483,257 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Filter Lists */}
+              {}
               <div className="settings-subsection">
-                <h3>Block Lists</h3>
-                <p className="settings-subsection-desc">
-                  Lists of known ads and trackers to block (updated automatically)
-                  {privacySettings.lastFilterUpdate && (
-                    <span style={{ marginLeft: 'var(--space-sm)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '0.75rem' }}>
-                      Last updated: {formatDate(privacySettings.lastFilterUpdate)}
-                    </span>
-                  )}
-                </p>
+                <h3>Website Exceptions</h3>
+                <p className="settings-subsection-desc">Adjust protection level for specific sites (useful if a site doesn't work properly)</p>
                 {!flags.privacy && (
                   <p className="settings-subsection-hint">
-                    Enable "Privacy & Ad Blocking" in the General tab to manage filter lists.
+                    Enable "Privacy & Ad Blocking" in the General tab to configure per-site settings.
                   </p>
                 )}
 
-                <div className="filter-list-header">
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleRefreshFilterLists}
-                    disabled={refreshing || !flags.privacy}
-                  >
-                    <RefreshIcon size={14} />
-                    <span>{refreshing ? 'Refreshing...' : 'Refresh Lists'}</span>
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  className="form-input site-search-input"
+                  placeholder="Search sites..."
+                  value={siteSearch}
+                  onChange={(e) => setSiteSearch(e.target.value)}
+                />
 
-                <div className="filter-list-items">
-                  {privacySettings.filterListUrls.map((url) => (
-                    <div key={url} className="filter-list-item">
-                      <span className="filter-list-url">{url}</span>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleRemoveFilterList(url)}
-                        disabled={!flags.privacy}
-                      >
-                        <CloseIcon size={12} />
-                      </button>
+                {filteredSites.length > 0 ? (
+                  <div className="site-list">
+                    {filteredSites.map(([domain, mode]) => (
+                      <div key={domain} className="site-list-item">
+                        <span className="site-list-domain">{domain}</span>
+                        <select
+                          className="site-list-select"
+                          value={mode}
+                          onChange={(e) => handleSiteModeChange(domain, e.target.value as SitePrivacyMode)}
+                          disabled={!flags.privacy}
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="strict">Strict</option>
+                          <option value="disabled">Disabled</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>No per-site settings configured yet.</p>
+                    <p style={{ marginTop: 'var(--space-sm)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Sites will appear here when you customize their privacy settings.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {activeTab === 'trackers' && (
+            <section className="settings-section">
+              <h2>Ads & Tracker Blocking</h2>
+              <p className="settings-section-desc">Stop websites from tracking you and showing annoying ads</p>
+              {!flags.privacy && (
+                <p className="settings-subsection-hint">
+                  Enable "Privacy & Ad Blocking" in the General tab to start blocking trackers.
+                </p>
+              )}
+
+              {}
+              {metrics && (
+                <div className="settings-stats-grid" style={{ marginBottom: '24px' }}>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.totalBlockedRequests)}</span>
+                    <span className="settings-stat-label"> Total Blocked</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(metrics.activeRuleCount)}</span>
+                    <span className="settings-stat-label"> Active Rules</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">{formatNumber(blockedRequests.length)}</span>
+                    <span className="settings-stat-label"> Recent Requests</span>
+                  </div>
+                  <div className="settings-stat-card">
+                    <span className="settings-stat-value">
+                      {formatNumber(new Set(blockedRequests.map(r => r.domain)).size)}
+                    </span>
+                    <span className="settings-stat-label"> Unique Domains</span>
+                  </div>
+                </div>
+              )}
+
+              {}
+              <div className="settings-subsection">
+                <h3>Tracker Blocking</h3>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" in the General tab to activate these features.
+                  </p>
+                )}
+
+                <div className="settings-group" role="list">
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <BlockIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Block Ads & Trackers</span>
+                        <span className="settings-item-desc">Hide annoying ads and stop companies from watching what you do online</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="add-filter-form">
-                  <input
-                    type="url"
-                    className="form-input"
-                    placeholder="Enter filter list URL..."
-                    value={newFilterUrl}
-                    onChange={(e) => setNewFilterUrl(e.target.value)}
-                    disabled={!flags.privacy}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleAddFilterList}
-                    disabled={!newFilterUrl.trim() || !flags.privacy}
-                  >
-                    Add List
-                  </button>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={flags.privacy && privacySettings.blockTrackers}
+                        onChange={() => handlePrivacySettingChange('blockTrackers', !privacySettings.blockTrackers)}
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              {/* Filter List Health Dashboard */}
-              {filterListHealth && (
+              {}
+              {rulesetStats && (
                 <div className="settings-subsection">
-                  <h3>Block List Status</h3>
+                  <h3>Static Block Lists</h3>
                   <p className="settings-subsection-desc">
-                    Check if your block lists are working properly
+                    Pre-compiled ad and tracker blocking rules (based on EasyList, EasyPrivacy, and uBlock filters)
+                  </p>
+                  {!flags.privacy && (
+                    <p className="settings-subsection-hint">
+                      Enable "Privacy & Ad Blocking" in the General tab to activate blocking.
+                    </p>
+                  )}
+
+                  <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value" style={{ color: 'var(--success)' }}>{rulesetStats.enabledRulesets.length}</span>
+                      <span className="settings-stat-label"> Active Rulesets</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value">{rulesetStats.availableRulesets.length}</span>
+                      <span className="settings-stat-label"> Total Available</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value">{formatNumber(rulesetStats.availableStaticSlots)}</span>
+                      <span className="settings-stat-label"> Available Slots</span>
+                    </div>
+                    <div className="settings-stat-card">
+                      <span className="settings-stat-value" style={{ textTransform: 'capitalize' }}>{rulesetStats.filteringLevel}</span>
+                      <span className="settings-stat-label"> Filtering Level</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {rulesetStats.enabledRulesets.map((rulesetId) => (
+                      <div
+                        key={rulesetId}
+                        style={{
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: 'var(--success)',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
+                          {rulesetId.replace('static_ruleset_', '').replace(/_/g, ' ').toUpperCase()}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--success-muted)',
+                            color: 'var(--success)',
+                          }}
+                        >
+                          ACTIVE
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {rulesetStats.enabledRulesets.length === 0 && (
+                    <div className="empty-state" style={{ padding: '24px', textAlign: 'center' }}>
+                      <p>No rulesets are currently active.</p>
+                      <p style={{ marginTop: 'var(--space-sm)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        Enable "Privacy & Ad Blocking" in the General tab to activate blocking.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {}
+              {privacySettings.filterListUrls.length > 0 && (
+                <div className="settings-subsection">
+                  <h3>Custom Filter Lists</h3>
+                  <p className="settings-subsection-desc">
+                    Additional filter lists you've added (updated automatically)
+                    {privacySettings.lastFilterUpdate && (
+                      <span style={{ marginLeft: 'var(--space-sm)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '0.75rem' }}>
+                        Last updated: {formatDate(privacySettings.lastFilterUpdate)}
+                      </span>
+                    )}
                   </p>
 
-                  {/* Health Stats Grid */}
+                  <div className="filter-list-header">
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleRefreshFilterLists}
+                      disabled={refreshing || !flags.privacy}
+                    >
+                      <RefreshIcon size={14} />
+                      <span>{refreshing ? 'Refreshing...' : 'Refresh Lists'}</span>
+                    </button>
+                  </div>
+
+                  <div className="filter-list-items">
+                    {privacySettings.filterListUrls.map((url) => (
+                      <div key={url} className="filter-list-item">
+                        <span className="filter-list-url">{url}</span>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleRemoveFilterList(url)}
+                          disabled={!flags.privacy}
+                        >
+                          <CloseIcon size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {}
+              {filterListHealth && privacySettings.filterListUrls.length > 0 && (
+                <div className="settings-subsection">
+                  <h3>Custom Filter List Status</h3>
+                  <p className="settings-subsection-desc">
+                    Check if your custom filter lists are working properly
+                  </p>
+
+                  {}
                   <div className="settings-stats-grid" style={{ marginBottom: '16px' }}>
                     <div className="settings-stat-card">
                       <span className="settings-stat-value" style={{ color: 'var(--success)' }}>{filterListHealth.healthyLists}</span>
@@ -2243,10 +2753,9 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Per-list status */}
+                  {}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {filterListHealth.lists.map((list) => {
-                      // Extract short name from URL
                       const shortName = (() => {
                         try {
                           const url = new URL(list.url);
@@ -2347,231 +2856,158 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Per-Site Settings */}
+              {}
               <div className="settings-subsection">
-                <h3>Website Exceptions</h3>
-                <p className="settings-subsection-desc">Adjust protection level for specific sites (useful if a site doesn't work properly)</p>
-                {!flags.privacy && (
-                  <p className="settings-subsection-hint">
-                    Enable "Privacy & Ad Blocking" in the General tab to configure per-site settings.
-                  </p>
-                )}
+                <h3>Recently Blocked Trackers</h3>
+                <p className="settings-subsection-desc">View trackers and ads we've blocked while you browse</p>
 
+                {}
                 <input
                   type="text"
-                  className="form-input site-search-input"
-                  placeholder="Search sites..."
-                  value={siteSearch}
-                  onChange={(e) => setSiteSearch(e.target.value)}
+                  className="form-input"
+                  placeholder="Search trackers by domain or URL..."
+                  value={trackerSearch}
+                  onChange={(e) => setTrackerSearch(e.target.value)}
+                  style={{ marginBottom: '16px' }}
                 />
 
-                {filteredSites.length > 0 ? (
-                  <div className="site-list">
-                    {filteredSites.map(([domain, mode]) => (
-                      <div key={domain} className="site-list-item">
-                        <span className="site-list-domain">{domain}</span>
-                        <select
-                          className="site-list-select"
-                          value={mode}
-                          onChange={(e) => handleSiteModeChange(domain, e.target.value as SitePrivacyMode)}
-                          disabled={!flags.privacy}
-                        >
-                          <option value="normal">Normal</option>
-                          <option value="strict">Strict</option>
-                          <option value="disabled">Disabled</option>
-                        </select>
+                {(() => {
+                  
+                  const groupedByDomain = blockedRequests.reduce((acc, req) => {
+                    if (!acc[req.domain]) {
+                      acc[req.domain] = [];
+                    }
+                    acc[req.domain].push(req);
+                    return acc;
+                  }, {} as Record<string, BlockedRequest[]>);
+
+                  
+                  const sortedDomains = Object.entries(groupedByDomain)
+                    .filter(([domain]) => 
+                      !trackerSearch || 
+                      domain.toLowerCase().includes(trackerSearch.toLowerCase())
+                    )
+                    .sort((a, b) => b[1].length - a[1].length);
+
+                  const formatTime = (timestamp: number) => {
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diff = now.getTime() - date.getTime();
+                    if (diff < 60000) return 'Just now';
+                    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                    return date.toLocaleString();
+                  };
+
+                  if (sortedDomains.length === 0) {
+                    return (
+                      <div className="empty-state" style={{ padding: '48px', textAlign: 'center' }}>
+                        <BlockIcon size={48} />
+                        <h3 style={{ marginTop: '16px', marginBottom: '8px' }}>No Trackers Blocked Yet</h3>
+                        <p style={{ color: 'var(--text-muted)' }}>
+                          Blocked trackers will appear here as you browse the web.
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <p>No per-site settings configured yet.</p>
-                    <p style={{ marginTop: 'var(--space-sm)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Sites will appear here when you customize their privacy settings.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-
-          {activeTab === 'trackers' && (
-            <section className="settings-section">
-              <h2>Blocked Trackers</h2>
-              <p className="settings-section-desc">See everything we've blocked from tracking you</p>
-              {!flags.privacy && (
-                <p className="settings-subsection-hint">
-                  Enable "Privacy & Ad Blocking" in the General tab to start blocking trackers.
-                </p>
-              )}
-
-              {/* Stats Summary */}
-              {metrics && (
-                <div className="settings-stats-grid" style={{ marginBottom: '24px' }}>
-                  <div className="settings-stat-card">
-                    <span className="settings-stat-value">{formatNumber(metrics.totalBlockedRequests)}</span>
-                    <span className="settings-stat-label"> Total Blocked</span>
-                  </div>
-                  <div className="settings-stat-card">
-                    <span className="settings-stat-value">{formatNumber(blockedRequests.length)}</span>
-                    <span className="settings-stat-label"> Recent Requests</span>
-                  </div>
-                  <div className="settings-stat-card">
-                    <span className="settings-stat-value">
-                      {formatNumber(new Set(blockedRequests.map(r => r.domain)).size)}
-                    </span>
-                    <span className="settings-stat-label"> Unique Domains</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Search */}
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Search trackers by domain or URL..."
-                value={trackerSearch}
-                onChange={(e) => setTrackerSearch(e.target.value)}
-                style={{ marginBottom: '16px' }}
-              />
-
-              {/* Blocked Trackers List */}
-              {(() => {
-                // Group by domain
-                const groupedByDomain = blockedRequests.reduce((acc, req) => {
-                  if (!acc[req.domain]) {
-                    acc[req.domain] = [];
+                    );
                   }
-                  acc[req.domain].push(req);
-                  return acc;
-                }, {} as Record<string, BlockedRequest[]>);
 
-                // Sort domains by count and filter by search
-                const sortedDomains = Object.entries(groupedByDomain)
-                  .filter(([domain]) => 
-                    !trackerSearch || 
-                    domain.toLowerCase().includes(trackerSearch.toLowerCase())
-                  )
-                  .sort((a, b) => b[1].length - a[1].length);
-
-                const formatTime = (timestamp: number) => {
-                  const date = new Date(timestamp);
-                  const now = new Date();
-                  const diff = now.getTime() - date.getTime();
-                  if (diff < 60000) return 'Just now';
-                  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-                  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-                  return date.toLocaleString();
-                };
-
-                if (sortedDomains.length === 0) {
                   return (
-                    <div className="empty-state" style={{ padding: '48px', textAlign: 'center' }}>
-                      <BlockIcon size={48} />
-                      <h3 style={{ marginTop: '16px', marginBottom: '8px' }}>No Trackers Blocked Yet</h3>
-                      <p style={{ color: 'var(--text-muted)' }}>
-                        Blocked trackers will appear here as you browse the web.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {sortedDomains.map(([domain, requests]) => (
-                      <details 
-                        key={domain} 
-                        className="tracker-domain-group"
-                        style={{
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: '12px',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <summary
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {sortedDomains.map(([domain, requests]) => (
+                        <details 
+                          key={domain} 
+                          className="tracker-domain-group"
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '16px 20px',
-                            cursor: 'pointer',
-                            listStyle: 'none',
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <BlockIcon size={20} />
-                            <span style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              color: 'var(--text-primary)',
-                            }}>
-                              {domain}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              color: 'var(--accent-primary)',
-                              background: 'var(--accent-muted)',
-                              padding: '4px 12px',
-                              borderRadius: '6px',
-                            }}>
-                              {requests.length} blocked
-                            </span>
-                            <span style={{ color: 'var(--text-muted)' }}>▾</span>
-                          </div>
-                        </summary>
-                        <div style={{ 
-                          borderTop: '1px solid var(--border-subtle)',
-                          maxHeight: '300px',
-                          overflowY: 'auto',
-                        }}>
-                          {requests.map((req, idx) => (
-                            <div 
-                              key={`${req.url}-${idx}`}
-                              style={{
-                                padding: '12px 20px',
-                                borderBottom: '1px solid var(--border-subtle)',
-                              }}
-                            >
-                              <div style={{
+                          <summary
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '16px 20px',
+                              cursor: 'pointer',
+                              listStyle: 'none',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <BlockIcon size={20} />
+                              <span style={{
                                 fontFamily: 'var(--font-mono)',
-                                fontSize: '12px',
-                                color: 'var(--text-secondary)',
-                                wordBreak: 'break-all',
-                                lineHeight: 1.5,
-                                marginBottom: '8px',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                color: 'var(--text-primary)',
                               }}>
-                                {req.url}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  textTransform: 'uppercase',
-                                  color: 'var(--text-muted)',
-                                  background: 'var(--bg-tertiary)',
-                                  padding: '3px 8px',
-                                  borderRadius: '4px',
-                                }}>
-                                  {req.resourceType || 'unknown'}
-                                </span>
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                  {formatTime(req.timestamp)}
-                                </span>
-                              </div>
+                                {domain}
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      </details>
-                    ))}
-                  </div>
-                );
-              })()}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <span style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '14px',
+                                fontWeight: 700,
+                                color: 'var(--accent-primary)',
+                                background: 'var(--accent-muted)',
+                                padding: '4px 12px',
+                                borderRadius: '6px',
+                              }}>
+                                {requests.length} blocked
+                              </span>
+                              <span style={{ color: 'var(--text-muted)' }}>▾</span>
+                            </div>
+                          </summary>
+                          <div style={{ 
+                            borderTop: '1px solid var(--border-subtle)',
+                            maxHeight: '300px',
+                            overflowY: 'auto',
+                          }}>
+                            {requests.map((req, idx) => (
+                              <div 
+                                key={`${req.url}-${idx}`}
+                                style={{
+                                  padding: '12px 20px',
+                                  borderBottom: '1px solid var(--border-subtle)',
+                                }}
+                              >
+                                <div style={{
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '12px',
+                                  color: 'var(--text-secondary)',
+                                  wordBreak: 'break-all',
+                                  lineHeight: 1.5,
+                                  marginBottom: '8px',
+                                }}>
+                                  {req.url}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  <span style={{
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    textTransform: 'uppercase',
+                                    color: 'var(--text-muted)',
+                                    background: 'var(--bg-tertiary)',
+                                    padding: '3px 8px',
+                                    borderRadius: '4px',
+                                  }}>
+                                    {req.resourceType || 'unknown'}
+                                  </span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    {formatTime(req.timestamp)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </section>
           )}
 
@@ -2585,7 +3021,7 @@ const App: React.FC = () => {
                 </p>
               )}
 
-              {/* Stats Summary */}
+              {}
               {metrics && (
                 <div className="settings-stats-grid" style={{ marginBottom: '24px' }}>
                   <div className="settings-stat-card">
@@ -2603,7 +3039,7 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Fingerprint Protection Status */}
+              {}
               <div className="settings-subsection" style={{ marginTop: 0 }}>
                 <h3>Protection Status</h3>
                 <p className="settings-subsection-desc">
@@ -2611,7 +3047,7 @@ const App: React.FC = () => {
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
-                  {/* Canvas Protection */}
+                  {}
                   <div style={{
                     background: 'var(--bg-secondary)',
                     border: '1px solid var(--border-subtle)',
@@ -2640,7 +3076,7 @@ const App: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* WebGL Protection */}
+                  {}
                   <div style={{
                     background: 'var(--bg-secondary)',
                     border: '1px solid var(--border-subtle)',
@@ -2669,7 +3105,7 @@ const App: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Audio Protection */}
+                  {}
                   <div style={{
                     background: 'var(--bg-secondary)',
                     border: '1px solid var(--border-subtle)',
@@ -2698,7 +3134,7 @@ const App: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Screen Protection */}
+                  {}
                   <div style={{
                     background: 'var(--bg-secondary)',
                     border: '1px solid var(--border-subtle)',
@@ -2727,7 +3163,7 @@ const App: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Client Hints Protection */}
+                  {}
                   <div style={{
                     background: 'var(--bg-secondary)',
                     border: '1px solid var(--border-subtle)',
@@ -2758,7 +3194,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Info Box */}
+              {}
               <div style={{
                 marginTop: '24px',
                 padding: '16px 20px',
@@ -2795,7 +3231,7 @@ const App: React.FC = () => {
                 <div className="about-logo">
                   <img src="icons/binary_john.jpg" alt="AINTIVIRUS" className="logo-icon" />
                   <h3>Aintivirus</h3>
-                  <span className="version-badge">Version 0.1.0</span>
+                  <span className="version-badge">Version 0.2.0</span>
                 </div>
 
                 <p className="about-desc">

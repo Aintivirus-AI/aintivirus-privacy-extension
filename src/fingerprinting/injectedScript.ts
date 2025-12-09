@@ -1,5 +1,5 @@
-// This runs in the actual page context to mess with fingerprinting APIs
-// MUST be self-contained - no imports! Gets bundled separately.
+
+
 (function() {
   'use strict';
   interface InjectedConfig {
@@ -25,10 +25,10 @@
       pixelDepth: number;
     };
     trackerDomains: string[];
-    _configKey?: string; // Internal: the key used to pass this config
+    _configKey?: string; 
   }
 
-  // Find our config - it's stored with a random key so sites can't easily detect it
+  
   const win = window as unknown as Record<string, InjectedConfig | undefined>;
   let config: InjectedConfig | undefined;
   let configKey: string | undefined;
@@ -42,17 +42,16 @@
   }
   
   if (!config) {
-    return; // no config means something went wrong
+    return; 
   }
 
-  // Clean up so sites can't find our config
+  
   try {
     if (configKey) delete win[configKey];
   } catch {
     if (configKey) win[configKey] = undefined;
   }
 
-  // --- Random number generator (seeded so results are consistent per domain) ---
   
   function createSeededRandom(seed: number): () => number {
     let state = seed >>> 0;
@@ -75,9 +74,7 @@
     return Math.max(0, Math.min(255, Math.round(value)));
   }
 
-  // --- Canvas fingerprint protection ---
-  // Add random noise to canvas data so each site gets slightly different results
-
+  
   if (config.protections.canvas) {
     const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
     const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
@@ -87,7 +84,7 @@
       const noiseAmplitude = 2;
       
       for (let i = 0; i < data.length; i += 4) {
-        // Tweak RGB, leave alpha alone
+        
         data[i] = clampByte(data[i] + generateIntNoise(noiseAmplitude));
         data[i + 1] = clampByte(data[i + 1] + generateIntNoise(noiseAmplitude));
         data[i + 2] = clampByte(data[i + 2] + generateIntNoise(noiseAmplitude));
@@ -148,9 +145,7 @@
     };
   }
 
-  // --- WebGL fingerprint protection ---
-  // Make everyone look like they have a generic Intel GPU
-
+  
   if (config.protections.webgl) {
     const MASKED_WEBGL = {
       RENDERER: 'WebKit WebGL',
@@ -190,9 +185,7 @@
     }
   }
 
-  // --- Screen resolution masking ---
-  // Report a common screen size instead of the real one
-
+  
   if (config.protections.screen) {
     const maskedScreen = config.maskedScreen;
     Object.defineProperties(window.screen, {
@@ -224,9 +217,7 @@
     });
   }
 
-  // --- Audio fingerprint protection ---
-  // Add tiny noise to audio data so fingerprints don't match
-
+  
   if (config.protections.audio) {
     const OriginalAudioContext = window.AudioContext || (window as unknown as Record<string, typeof AudioContext>).webkitAudioContext;
     
@@ -251,7 +242,7 @@
       const originalGetChannelData = AudioBuffer.prototype.getChannelData;
       (AudioBuffer.prototype as unknown as { getChannelData: (channel: number) => Float32Array }).getChannelData = function(channel: number): Float32Array {
         const data = originalGetChannelData.call(this, channel);
-        const noiseAmplitude = 0.0000001; // imperceptible
+        const noiseAmplitude = 0.0000001; 
         for (let i = 0; i < data.length; i++) {
           data[i] += (random() * 2 - 1) * noiseAmplitude;
         }
@@ -260,9 +251,7 @@
     }
   }
 
-  // --- Client hints masking ---
-  // Hide detailed browser/OS info
-
+  
   if (config.protections.clientHints) {
     if ('userAgentData' in navigator) {
       const originalUserAgentData = navigator.userAgentData as NavigatorUAData;
@@ -273,7 +262,7 @@
         originalUserAgentData.getHighEntropyValues = async function(hints: string[]): Promise<UADataValues> {
           const realValues = await originalGetHighEntropyValues(hints);
           
-          // Return generic values instead of the real ones
+          
           return {
             ...realValues,
             platformVersion: realValues.platformVersion ? '10.0.0' : undefined,
@@ -286,9 +275,7 @@
     }
   }
 
-  // --- Hardware concurrency ---
-  // Everyone has 4 cores now
-
+  
   if (config.protections.hardwareConcurrency) {
     Object.defineProperty(navigator, 'hardwareConcurrency', {
       get: () => 4,
@@ -296,9 +283,7 @@
     });
   }
 
-  // --- Device memory ---
-  // Everyone has 8GB RAM
-
+  
   if (config.protections.deviceMemory) {
     if ('deviceMemory' in navigator) {
       Object.defineProperty(navigator, 'deviceMemory', {
@@ -308,9 +293,7 @@
     }
   }
 
-  // --- Plugins and mimetypes ---
-  // Hide what plugins are installed
-
+  
   if (config.protections.plugins) {
     const emptyPluginArray = {
       length: 0,
@@ -338,9 +321,7 @@
     });
   }
 
-  // --- Languages ---
-  // Everyone speaks American English
-
+  
   if (config.protections.languages) {
     const normalizedLanguages = ['en-US', 'en'];
     
@@ -355,13 +336,11 @@
     });
   }
 
-  // --- Timezone ---
-  // Everyone's in California
-
+  
   if (config.protections.timezone) {
     const OriginalDate = Date;
     const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-    const NORMALIZED_OFFSET = 480; // Pacific time
+    const NORMALIZED_OFFSET = 480; 
     const NORMALIZED_TIMEZONE = 'America/Los_Angeles';
     
     Date.prototype.getTimezoneOffset = function(): number {
@@ -386,9 +365,7 @@
       OriginalDateTimeFormat.supportedLocalesOf;
   }
 
-  // --- Tracker beacon blocking ---
-  // Silently drop tracking beacons
-
+  
   if (config.trackerDomains && config.trackerDomains.length > 0) {
     const trackerDomains = config.trackerDomains;
     const originalSendBeacon = navigator.sendBeacon.bind(navigator);
@@ -436,7 +413,7 @@
     ): boolean {
       const urlString = url.toString();
       
-      // Pretend we sent it but actually drop it
+      
       if (isTrackerUrl(urlString)) {
         return true;
       }
@@ -445,10 +422,10 @@
     };
   }
 
-  // Done - protections are active
+  
 })();
 
-// TS declarations for browser APIs
+
 interface NavigatorUAData {
   brands: { brand: string; version: string }[];
   mobile: boolean;

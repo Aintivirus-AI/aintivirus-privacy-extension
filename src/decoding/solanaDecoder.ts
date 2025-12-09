@@ -1,19 +1,11 @@
-/**
- * AINTIVIRUS Decoding Module - Solana Instruction Decoder
- *
- * Extends the existing transaction analyzer with improved instruction
- * summaries and warning detection.
- */
+
 
 import { TxWarning, AccountRole, SolanaInstructionSummary, DecodedSolanaTx } from './types';
 import { createWarning } from './warnings';
 
-// ============================================
-// KNOWN PROGRAM IDS
-// ============================================
 
 export const SOLANA_PROGRAMS: Record<string, string> = {
-  // System programs
+  
   '11111111111111111111111111111111': 'System Program',
   'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA': 'SPL Token',
   'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb': 'Token-2022',
@@ -22,7 +14,7 @@ export const SOLANA_PROGRAMS: Record<string, string> = {
   'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr': 'Memo',
   'Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo': 'Memo (Legacy)',
 
-  // DEX & DeFi
+  
   'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4': 'Jupiter v6',
   'JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB': 'Jupiter v4',
   'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc': 'Orca Whirlpool',
@@ -32,29 +24,26 @@ export const SOLANA_PROGRAMS: Record<string, string> = {
   'srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX': 'Serum DEX',
   'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY': 'Phoenix',
 
-  // NFT
+  
   'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s': 'Token Metadata',
   'p1exdMJcjVao65QdewkaZRUnU6VPSXhus9n2GzWfh98': 'Metaplex Auction House',
   'M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K': 'Magic Eden v2',
   'TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN': 'Tensor Swap',
   'TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp': 'Tensor cNFT',
 
-  // Staking & Governance
+  
   'Stake11111111111111111111111111111111111111': 'Stake Program',
   'Vote111111111111111111111111111111111111111': 'Vote Program',
   'marinade finance': 'Marinade Finance',
   'CgntPoLka5pD5fesJYhGmUCF8KU1QS1ZmZiuAuMZr2az': 'Marinade',
 
-  // Infrastructure
+  
   'BPFLoaderUpgradeab1e11111111111111111111111': 'BPF Loader',
   'Config1111111111111111111111111111111111111': 'Config',
   'SysvarC1ock11111111111111111111111111111111': 'Clock Sysvar',
   'SysvarRent111111111111111111111111111111111': 'Rent Sysvar',
 };
 
-// ============================================
-// TOKEN INSTRUCTION TYPES
-// ============================================
 
 export const TOKEN_INSTRUCTION_NAMES: Record<number, string> = {
   0: 'InitializeMint',
@@ -96,13 +85,7 @@ export const SYSTEM_INSTRUCTION_NAMES: Record<number, string> = {
   12: 'UpgradeNonceAccount',
 };
 
-// ============================================
-// MAIN DECODER
-// ============================================
 
-/**
- * Decode a Solana instruction for display
- */
 export function decodeSolanaInstruction(
   programId: string,
   accounts: string[],
@@ -112,7 +95,7 @@ export function decodeSolanaInstruction(
   const programName = SOLANA_PROGRAMS[programId] || 'Unknown Program';
   const warnings: TxWarning[] = [];
 
-  // Parse based on program
+  
   let action = 'Unknown action';
   const accountRoles: AccountRole[] = accounts.map((addr, idx) => ({
     address: addr,
@@ -121,7 +104,7 @@ export function decodeSolanaInstruction(
   }));
 
   if (programId === '11111111111111111111111111111111') {
-    // System Program
+    
     const result = decodeSystemInstruction(data, accounts, walletAddress);
     action = result.action;
     warnings.push(...result.warnings);
@@ -129,7 +112,7 @@ export function decodeSolanaInstruction(
     programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' ||
     programId === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
   ) {
-    // SPL Token / Token-2022
+    
     const result = decodeTokenInstruction(data, accounts, walletAddress);
     action = result.action;
     warnings.push(...result.warnings);
@@ -140,11 +123,11 @@ export function decodeSolanaInstruction(
   } else if (programId.includes('Memo')) {
     action = 'Add Memo';
   } else {
-    // Try to identify common DeFi actions
+    
     action = identifyDeFiAction(programId, accounts.length, data);
   }
 
-  // Add warning for unknown programs
+  
   if (!SOLANA_PROGRAMS[programId]) {
     warnings.push(
       createWarning(
@@ -166,9 +149,6 @@ export function decodeSolanaInstruction(
   };
 }
 
-// ============================================
-// SYSTEM PROGRAM DECODER
-// ============================================
 
 function decodeSystemInstruction(
   data: Uint8Array | Buffer,
@@ -187,7 +167,7 @@ function decodeSystemInstruction(
   let action = instructionName;
 
   switch (instructionType) {
-    case 2: // Transfer
+    case 2: 
       if (data.length >= 12) {
         const lamports = new DataView(data.buffer, data.byteOffset + 4, 8).getBigUint64(0, true);
         const sol = Number(lamports) / 1e9;
@@ -207,7 +187,7 @@ function decodeSystemInstruction(
       }
       break;
 
-    case 0: // CreateAccount
+    case 0: 
       if (data.length >= 12) {
         const lamports = new DataView(data.buffer, data.byteOffset + 4, 8).getBigUint64(0, true);
         const sol = Number(lamports) / 1e9;
@@ -215,7 +195,7 @@ function decodeSystemInstruction(
       }
       break;
 
-    case 1: // Assign
+    case 1: 
       action = 'Assign Account Owner';
       warnings.push(
         createWarning(
@@ -231,9 +211,6 @@ function decodeSystemInstruction(
   return { action, warnings };
 }
 
-// ============================================
-// TOKEN PROGRAM DECODER
-// ============================================
 
 function decodeTokenInstruction(
   data: Uint8Array | Buffer,
@@ -252,21 +229,21 @@ function decodeTokenInstruction(
   let action = instructionName;
 
   switch (instructionType) {
-    case 3: // Transfer
-    case 12: // TransferChecked
+    case 3: 
+    case 12: 
       if (data.length >= 9) {
         const amount = new DataView(data.buffer, data.byteOffset + 1, 8).getBigUint64(0, true);
         action = `Transfer ${amount.toLocaleString()} tokens`;
       }
       break;
 
-    case 4: // Approve
-    case 13: // ApproveChecked
+    case 4: 
+    case 13: 
       if (data.length >= 9) {
         const amount = new DataView(data.buffer, data.byteOffset + 1, 8).getBigUint64(0, true);
         const delegate = accounts[1] || 'unknown';
 
-        // Check for unlimited approval
+        
         if (amount === BigInt('18446744073709551615')) {
           action = `Approve UNLIMITED tokens to ${truncateAddress(delegate)}`;
           warnings.push(
@@ -283,18 +260,18 @@ function decodeTokenInstruction(
       }
       break;
 
-    case 5: // Revoke
+    case 5: 
       action = 'Revoke Token Approval';
       break;
 
-    case 6: // SetAuthority
+    case 6: 
       if (data.length >= 2) {
         const authorityType = data[1];
         const authorityNames = ['Mint', 'Freeze', 'Owner', 'Close'];
         const authName = authorityNames[authorityType] || 'Unknown';
         action = `Set ${authName} Authority`;
 
-        // Check if authority is being transferred to non-wallet
+        
         const newAuthority = accounts[2];
         if (newAuthority && walletAddress && newAuthority !== walletAddress) {
           warnings.push(
@@ -309,7 +286,7 @@ function decodeTokenInstruction(
       }
       break;
 
-    case 9: // CloseAccount
+    case 9: 
       const rentReceiver = accounts[1];
       action = `Close Token Account`;
 
@@ -325,16 +302,16 @@ function decodeTokenInstruction(
       }
       break;
 
-    case 7: // MintTo
-    case 14: // MintToChecked
+    case 7: 
+    case 14: 
       if (data.length >= 9) {
         const amount = new DataView(data.buffer, data.byteOffset + 1, 8).getBigUint64(0, true);
         action = `Mint ${amount.toLocaleString()} tokens`;
       }
       break;
 
-    case 8: // Burn
-    case 15: // BurnChecked
+    case 8: 
+    case 15: 
       if (data.length >= 9) {
         const amount = new DataView(data.buffer, data.byteOffset + 1, 8).getBigUint64(0, true);
         action = `Burn ${amount.toLocaleString()} tokens`;
@@ -345,9 +322,6 @@ function decodeTokenInstruction(
   return { action, warnings };
 }
 
-// ============================================
-// DEFI ACTION IDENTIFICATION
-// ============================================
 
 function identifyDeFiAction(programId: string, accountCount: number, data: Uint8Array | Buffer): string {
   const programName = SOLANA_PROGRAMS[programId];
@@ -356,17 +330,17 @@ function identifyDeFiAction(programId: string, accountCount: number, data: Uint8
     return 'Interact with program';
   }
 
-  // Jupiter
+  
   if (programName.includes('Jupiter')) {
     return 'Swap tokens via Jupiter';
   }
 
-  // Orca
+  
   if (programName.includes('Orca')) {
     return 'Swap tokens via Orca';
   }
 
-  // Raydium
+  
   if (programName.includes('Raydium')) {
     if (accountCount > 10) {
       return 'Swap tokens via Raydium';
@@ -374,17 +348,17 @@ function identifyDeFiAction(programId: string, accountCount: number, data: Uint8
     return 'Raydium pool operation';
   }
 
-  // NFT marketplaces
+  
   if (programName.includes('Magic Eden') || programName.includes('Tensor')) {
     return 'NFT marketplace operation';
   }
 
-  // Metaplex
+  
   if (programName.includes('Metadata')) {
     return 'Update NFT metadata';
   }
 
-  // Staking
+  
   if (programName.includes('Stake')) {
     return 'Staking operation';
   }
@@ -392,13 +366,7 @@ function identifyDeFiAction(programId: string, accountCount: number, data: Uint8
   return `${programName} operation`;
 }
 
-// ============================================
-// TRANSACTION DECODER
-// ============================================
 
-/**
- * Decode multiple instructions into a transaction summary
- */
 export function decodeSolanaTransaction(
   instructions: Array<{
     programId: string;
@@ -424,7 +392,7 @@ export function decodeSolanaTransaction(
     decodedInstructions.push(decoded);
     allWarnings.push(...decoded.warnings);
 
-    // Track SOL transfers
+    
     if (decoded.action.includes('Transfer') && decoded.action.includes('SOL')) {
       const match = decoded.action.match(/([\d.]+)\s*SOL/);
       if (match) {
@@ -432,13 +400,13 @@ export function decodeSolanaTransaction(
       }
     }
 
-    // Track authority changes
+    
     if (decoded.action.includes('Authority')) {
       authorityChangeCount++;
     }
   }
 
-  // Add warning for multiple authority changes
+  
   if (authorityChangeCount > 1) {
     allWarnings.push(
       createWarning(
@@ -450,7 +418,7 @@ export function decodeSolanaTransaction(
     );
   }
 
-  // Calculate risk level
+  
   let riskLevel: 'low' | 'medium' | 'high' = 'low';
 
   if (allWarnings.some(w => w.level === 'danger')) {
@@ -467,25 +435,18 @@ export function decodeSolanaTransaction(
   };
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function truncateAddress(address: string): string {
   if (address.length <= 12) return address;
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
-/**
- * Get program name for display
- */
+
 export function getProgramDisplayName(programId: string): string {
   return SOLANA_PROGRAMS[programId] || `${programId.slice(0, 8)}...${programId.slice(-4)}`;
 }
 
-/**
- * Check if program is known and safe
- */
+
 export function isKnownProgram(programId: string): boolean {
   return programId in SOLANA_PROGRAMS;
 }

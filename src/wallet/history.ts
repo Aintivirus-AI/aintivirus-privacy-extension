@@ -1,15 +1,4 @@
-/**
- * AINTIVIRUS Wallet Module - Transaction History
- * 
- * This module handles fetching and parsing transaction history:
- * - Fetch recent transactions via RPC
- * - Parse transaction data into readable format
- * - Cache management for performance
- * 
- * Uses standard Solana RPC methods:
- * - getSignaturesForAddress: Get transaction signatures
- * - getParsedTransaction: Get detailed transaction info
- */
+
 
 import {
   PublicKey,
@@ -26,33 +15,29 @@ import {
   WalletErrorCode,
 } from './types';
 import { getCurrentConnection } from './rpc';
-import { getPublicAddress } from './storage';
+import { getPublicAddress, getWalletSettings } from './storage';
+import {
+  historyDedup,
+  historyKey,
+  HISTORY_CACHE_TTL,
+} from './requestDedup';
+import { getTokenMetadata } from './tokens';
 
-// Token Program ID for fetching token accounts
+
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
-// ============================================
-// CONSTANTS
-// ============================================
 
-/**
- * Default number of transactions to fetch per page
- */
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 15;
 
-/**
- * Maximum number of transactions to fetch per request
- */
-const MAX_LIMIT = 100;
 
-/**
- * Cache duration in milliseconds (30 seconds - short for fresher data)
- */
-const CACHE_DURATION = 30 * 1000;
+const MAX_LIMIT = 50;
 
-// ============================================
-// CACHE
-// ============================================
+
+const CACHE_DURATION = 10 * 60 * 1000;
+
+
+const STALE_WINDOW = 60 * 1000;
+
 
 interface CachedHistory {
   transactions: TransactionHistoryItem[];
@@ -62,39 +47,46 @@ interface CachedHistory {
 
 let historyCache: CachedHistory | null = null;
 
-/**
- * Clear the transaction history cache
- */
+
 export function clearHistoryCache(): void {
   historyCache = null;
+  
+  historyDedup.invalidate(/^history:/);
 }
 
-/**
- * Check if cache is valid
- */
+
+function getCacheStatus(address: string): { valid: boolean; stale: boolean } {
+  if (!historyCache) return { valid: false, stale: false };
+  if (historyCache.address !== address) return { valid: false, stale: false };
+  
+  const age = Date.now() - historyCache.fetchedAt;
+  
+  if (age <= CACHE_DURATION) {
+    return { valid: true, stale: false };
+  }
+  
+  if (age <= CACHE_DURATION + STALE_WINDOW) {
+    return { valid: true, stale: true };
+  }
+  
+  return { valid: false, stale: false };
+}
+
+
 function isCacheValid(address: string): boolean {
-  if (!historyCache) return false;
-  if (historyCache.address !== address) return false;
-  if (Date.now() - historyCache.fetchedAt > CACHE_DURATION) return false;
-  return true;
+  return getCacheStatus(address).valid;
 }
 
-// ============================================
-// TRANSACTION HISTORY
-// ============================================
 
-/**
- * Get transaction history for the wallet
- * 
- * @param options - Pagination options
- * @returns Transaction history result
- */
+let historyRefreshInProgress = false;
+
+
 export async function getTransactionHistory(
   options: { limit?: number; before?: string; forceRefresh?: boolean } = {}
 ): Promise<TransactionHistoryResult> {
   const { limit = DEFAULT_LIMIT, before, forceRefresh } = options;
   
-  // Get wallet address
+  
   const address = await getPublicAddress();
   if (!address) {
     throw new WalletError(
@@ -103,14 +95,29 @@ export async function getTransactionHistory(
     );
   }
 
-  // Clear cache if force refresh requested
+  
   if (forceRefresh) {
     clearHistoryCache();
+    historyDedup.invalidate(new RegExp(`^history:solana:${address}`));
   }
 
-  // Use cache for first page if available (and not force refreshing)
-  if (!before && !forceRefresh && isCacheValid(address)) {
+  
+  const cacheStatus = getCacheStatus(address);
+  
+  
+  if (!before && !forceRefresh && cacheStatus.valid) {
     const cached = historyCache!.transactions.slice(0, limit);
+    
+    
+    if (cacheStatus.stale && !historyRefreshInProgress) {
+      historyRefreshInProgress = true;
+      const bgKey = historyKey('solana', address, limit, 'background');
+      historyDedup.execute(bgKey, () => fetchHistoryInternal(address, limit, before), 0)
+        .finally(() => {
+          historyRefreshInProgress = false;
+        });
+    }
+    
     return {
       transactions: cached,
       hasMore: historyCache!.transactions.length > limit,
@@ -118,61 +125,95 @@ export async function getTransactionHistory(
     };
   }
 
+  
+  const cacheKey = historyKey('solana', address, limit);
+  return historyDedup.execute(
+    before ? `${cacheKey}:${before}` : cacheKey,
+    () => fetchHistoryInternal(address, limit, before),
+    forceRefresh ? 0 : HISTORY_CACHE_TTL
+  );
+}
+
+
+async function fetchHistoryInternal(
+  address: string,
+  limit: number,
+  before?: string
+): Promise<TransactionHistoryResult> {
   try {
     const connection = await getCurrentConnection();
     const publicKey = new PublicKey(address);
     
-    // Fetch signatures for the wallet address
-    const walletSignatures = await connection.getSignaturesForAddress(
-      publicKey,
-      {
-        limit: Math.min(limit, MAX_LIMIT),
-        before: before || undefined,
-      }
-    );
+    
+    let walletSignatures: ConfirmedSignatureInfo[] = [];
+    
+    try {
+      walletSignatures = await connection.getSignaturesForAddress(
+        publicKey,
+        {
+          limit: Math.min(limit, MAX_LIMIT),
+          before: before || undefined,
+        }
+      );
+    } catch (error) {
+      
+    }
 
-    // Also fetch signatures for token accounts (ATAs) to catch incoming token transfers
-    // This is important because received tokens don't involve the wallet as a signer
+    
     let tokenAccountSignatures: ConfirmedSignatureInfo[] = [];
     try {
+      
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
         publicKey,
         { programId: TOKEN_PROGRAM_ID }
       );
       
-      // Fetch signatures for each token account (limit to first 5 accounts to avoid rate limits)
-      const accountsToCheck = tokenAccounts.value.slice(0, 5);
-      const signaturePromises = accountsToCheck.map(account =>
-        connection.getSignaturesForAddress(
-          account.pubkey,
-          { limit: Math.min(limit, 10) } // Fewer per account
-        ).catch(() => [] as ConfirmedSignatureInfo[])
-      );
       
-      const allTokenSignatures = await Promise.all(signaturePromises);
-      tokenAccountSignatures = allTokenSignatures.flat();
-    } catch (tokenError) {
-      // If fetching token account signatures fails, continue with wallet signatures only
-      console.warn('[AINTIVIRUS Wallet] Failed to fetch token account signatures:', tokenError);
+      const accountsToCheck = tokenAccounts.value.slice(0, 5);
+      
+      for (const account of accountsToCheck) {
+        try {
+          const sigs = await connection.getSignaturesForAddress(
+            account.pubkey,
+            { limit: 10 } 
+          );
+          tokenAccountSignatures.push(...sigs);
+        } catch {
+          
+        }
+      }
+    } catch (error) {
+      
     }
 
-    // Merge and deduplicate signatures, keeping unique by signature string
-    const signatureMap = new Map<string, ConfirmedSignatureInfo>();
-    for (const sig of walletSignatures) {
-      signatureMap.set(sig.signature, sig);
-    }
+    
+    const allSignatures = [...walletSignatures];
+    const seenSignatures = new Set(walletSignatures.map(s => s.signature));
+    
     for (const sig of tokenAccountSignatures) {
-      if (!signatureMap.has(sig.signature)) {
-        signatureMap.set(sig.signature, sig);
+      if (!seenSignatures.has(sig.signature)) {
+        seenSignatures.add(sig.signature);
+        allSignatures.push(sig);
       }
     }
     
-    // Sort by block time (newest first) and limit
-    const allSignatures = Array.from(signatureMap.values())
-      .sort((a, b) => (b.blockTime || 0) - (a.blockTime || 0))
-      .slice(0, Math.min(limit, MAX_LIMIT));
-
-    if (allSignatures.length === 0) {
+    
+    allSignatures.sort((a, b) => b.slot - a.slot);
+    
+    
+    const limitedSignatures = allSignatures.slice(0, Math.min(limit, MAX_LIMIT));
+    
+    
+    if (limitedSignatures.length === 0) {
+      if (historyCache && historyCache.address === address) {
+        return {
+          transactions: historyCache.transactions.slice(0, limit),
+          hasMore: historyCache.transactions.length > limit,
+          cursor: historyCache.transactions.length > 0 
+            ? historyCache.transactions[historyCache.transactions.length - 1].signature 
+            : null,
+        };
+      }
       return {
         transactions: [],
         hasMore: false,
@@ -180,13 +221,13 @@ export async function getTransactionHistory(
       };
     }
 
-    // Fetch transaction details
+    
     const transactions = await fetchTransactionDetails(
-      allSignatures,
+      limitedSignatures,
       address
     );
 
-    // Update cache for first page
+    
     if (!before) {
       historyCache = {
         transactions,
@@ -197,12 +238,23 @@ export async function getTransactionHistory(
 
     return {
       transactions,
-      hasMore: allSignatures.length === limit,
+      hasMore: limitedSignatures.length === limit,
       cursor: transactions.length > 0 
         ? transactions[transactions.length - 1].signature 
         : null,
     };
   } catch (error) {
+    
+    if (historyCache && historyCache.address === address) {
+      return {
+        transactions: historyCache.transactions.slice(0, limit),
+        hasMore: historyCache.transactions.length > limit,
+        cursor: historyCache.transactions.length > 0 
+          ? historyCache.transactions[historyCache.transactions.length - 1].signature 
+          : null,
+      };
+    }
+    
     if (error instanceof WalletError) {
       throw error;
     }
@@ -213,13 +265,7 @@ export async function getTransactionHistory(
   }
 }
 
-/**
- * Fetch detailed transaction information for signatures
- * 
- * @param signatures - Array of signature info
- * @param walletAddress - Wallet address for direction detection
- * @returns Parsed transaction items
- */
+
 async function fetchTransactionDetails(
   signatures: ConfirmedSignatureInfo[],
   walletAddress: string
@@ -227,13 +273,21 @@ async function fetchTransactionDetails(
   const connection = await getCurrentConnection();
   const transactions: TransactionHistoryItem[] = [];
 
-  // Batch fetch transactions (max 100 per request)
   const signatureStrings = signatures.map(s => s.signature);
   
-  // Fetch in batches of 10 to avoid rate limits
-  const batchSize = 10;
+  
+  const batchSize = 5;
+  
+  
+  const batchDelay = 100; 
+  
   for (let i = 0; i < signatureStrings.length; i += batchSize) {
     const batch = signatureStrings.slice(i, i + batchSize);
+    
+    
+    if (i > 0) {
+      await new Promise(resolve => setTimeout(resolve, batchDelay));
+    }
     
     const parsedTransactions = await Promise.all(
       batch.map(sig => 
@@ -253,6 +307,11 @@ async function fetchTransactionDetails(
         walletAddress
       );
       
+      
+      if (item.tokenInfo) {
+        item.tokenInfo = await enrichTokenInfo(item.tokenInfo);
+      }
+      
       transactions.push(item);
     }
   }
@@ -260,20 +319,13 @@ async function fetchTransactionDetails(
   return transactions;
 }
 
-/**
- * Parse a transaction into a history item
- * 
- * @param sigInfo - Signature info from getSignaturesForAddress
- * @param parsed - Parsed transaction data (may be null)
- * @param walletAddress - Wallet address for direction detection
- * @returns Transaction history item
- */
+
 function parseTransactionToHistoryItem(
   sigInfo: ConfirmedSignatureInfo,
   parsed: ParsedTransactionWithMeta | null,
   walletAddress: string
 ): TransactionHistoryItem {
-  // Base item from signature info
+  
   const item: TransactionHistoryItem = {
     signature: sigInfo.signature,
     timestamp: sigInfo.blockTime ?? null,
@@ -287,15 +339,15 @@ function parseTransactionToHistoryItem(
     slot: sigInfo.slot,
   };
 
-  // If we don't have parsed data, return basic item
+  
   if (!parsed || !parsed.meta) {
     return item;
   }
 
-  // Get fee
+  
   item.feeLamports = parsed.meta.fee;
 
-  // Parse transaction type and amount
+  
   const result = parseTransferInfo(parsed, walletAddress);
   item.direction = result.direction;
   item.amountLamports = result.amount;
@@ -303,34 +355,67 @@ function parseTransactionToHistoryItem(
   item.counterparty = result.counterparty;
   item.type = result.type;
   
-  // Add token info if available
+  
   if (result.tokenInfo) {
     item.tokenInfo = {
       mint: result.tokenInfo.mint,
       decimals: result.tokenInfo.decimals,
       amount: result.tokenInfo.amount,
+      symbol: result.tokenInfo.symbol,
+      name: result.tokenInfo.name,
+      logoUri: result.tokenInfo.logoUri,
     };
   }
 
   return item;
 }
 
-/**
- * Token info extracted from a transaction
- */
+
 interface ExtractedTokenInfo {
   mint: string;
   decimals: number;
   amount: number;
+  symbol?: string;
+  name?: string;
+  logoUri?: string;
 }
 
-/**
- * Parse transfer information from a parsed transaction
- * 
- * @param parsed - Parsed transaction
- * @param walletAddress - Wallet address
- * @returns Transfer info
- */
+
+async function enrichTokenInfo(tokenInfo: ExtractedTokenInfo): Promise<ExtractedTokenInfo> {
+  const mint = tokenInfo.mint;
+  
+  
+  try {
+    const settings = await getWalletSettings();
+    const customToken = (settings.customTokens || []).find(t => t.mint === mint);
+    
+    if (customToken) {
+      return {
+        ...tokenInfo,
+        symbol: customToken.symbol || tokenInfo.symbol,
+        name: customToken.name || tokenInfo.name,
+        logoUri: customToken.logoUri || tokenInfo.logoUri,
+      };
+    }
+  } catch (error) {
+    
+  }
+  
+  
+  const metadata = getTokenMetadata(mint);
+  if (metadata) {
+    return {
+      ...tokenInfo,
+      symbol: metadata.symbol || tokenInfo.symbol,
+      name: metadata.name || tokenInfo.name,
+      logoUri: metadata.logoUri || tokenInfo.logoUri,
+    };
+  }
+  
+  return tokenInfo;
+}
+
+
 function parseTransferInfo(
   parsed: ParsedTransactionWithMeta,
   walletAddress: string
@@ -353,29 +438,27 @@ function parseTransferInfo(
     };
   }
 
-  // Check for SPL token transfer FIRST - this uses token balance metadata
-  // which includes owner info, so it works even when wallet isn't in accountKeys
+  
   const tokenTransferInfo = parseTokenTransfer(parsed, walletAddress);
   
-  // If we found a token transfer, return it immediately
-  // This is important for received tokens where the wallet might not be in accountKeys
+  
   if (tokenTransferInfo) {
     return {
       direction: tokenTransferInfo.direction,
-      amount: 0, // SOL amount is 0 for token transfers
+      amount: 0, 
       counterparty: tokenTransferInfo.counterparty,
       type: tokenTransferInfo.direction === 'sent' ? 'Sent Token' : 'Received Token',
       tokenInfo: tokenTransferInfo.tokenInfo,
     };
   }
 
-  // Find wallet account index for SOL balance changes
+  
   const accountKeys = message.accountKeys;
   const walletIndex = accountKeys.findIndex(
     key => key.pubkey.toBase58() === walletAddress
   );
 
-  // If wallet not in account keys and no token transfer found, it's unknown
+  
   if (walletIndex === -1) {
     return {
       direction: 'unknown',
@@ -385,12 +468,12 @@ function parseTransferInfo(
     };
   }
   
-  // Calculate SOL change for wallet
+  
   const preBalance = meta.preBalances[walletIndex] || 0;
   const postBalance = meta.postBalances[walletIndex] || 0;
   const balanceChange = postBalance - preBalance;
 
-  // Determine direction and amount based on SOL balance change
+  
   let direction: TransactionDirection = 'unknown';
   let amount = 0;
   let counterparty: string | null = null;
@@ -398,18 +481,18 @@ function parseTransferInfo(
   if (balanceChange > 0) {
     direction = 'received';
     amount = balanceChange;
-    // Find sender (account that lost SOL)
+    
     counterparty = findCounterparty(meta, accountKeys, 'sender');
   } else if (balanceChange < 0) {
     direction = 'sent';
-    // Amount is absolute value minus fee
+    
     amount = Math.abs(balanceChange) - meta.fee;
     if (amount < 0) amount = 0;
-    // Find recipient (account that gained SOL)
+    
     counterparty = findCounterparty(meta, accountKeys, 'recipient');
   }
 
-  // Determine transaction type
+  
   const type = determineTransactionType(parsed, direction);
 
   return {
@@ -420,9 +503,7 @@ function parseTransferInfo(
   };
 }
 
-/**
- * Parse SPL token transfer from a transaction
- */
+
 function parseTokenTransfer(
   parsed: ParsedTransactionWithMeta,
   walletAddress: string
@@ -436,7 +517,7 @@ function parseTokenTransfer(
   
   if (!meta) return null;
 
-  // Look for token transfer instructions
+  
   for (const instruction of instructions) {
     if ('program' in instruction && instruction.program === 'spl-token') {
       const parsedInstruction = instruction as {
@@ -462,7 +543,7 @@ function parseTokenTransfer(
       const info = parsedInstruction.parsed?.info;
       
       if ((parsedType === 'transfer' || parsedType === 'transferChecked') && info) {
-        // For transferChecked, we have mint and tokenAmount directly
+        
         if (parsedType === 'transferChecked' && info.mint && info.tokenAmount) {
           const isSource = info.authority === walletAddress;
           const direction: TransactionDirection = isSource ? 'sent' : 'received';
@@ -478,7 +559,7 @@ function parseTokenTransfer(
           };
         }
         
-        // For regular transfer, check token balance changes
+        
         if (meta.preTokenBalances && meta.postTokenBalances) {
           const tokenBalanceChange = findTokenBalanceChange(
             meta.preTokenBalances,
@@ -503,8 +584,7 @@ function parseTokenTransfer(
     }
   }
 
-  // Also check for token balance changes even without explicit instructions
-  // (some transactions might use inner instructions)
+  
   const preTokenBalances = meta.preTokenBalances || [];
   const postTokenBalances = meta.postTokenBalances || [];
   if (preTokenBalances.length > 0 || postTokenBalances.length > 0) {
@@ -531,9 +611,7 @@ function parseTokenTransfer(
   return null;
 }
 
-/**
- * Find token balance change for a wallet
- */
+
 function findTokenBalanceChange(
   preBalances: { accountIndex: number; mint: string; owner?: string; uiTokenAmount: { decimals: number; uiAmount: number | null } }[],
   postBalances: { accountIndex: number; mint: string; owner?: string; uiTokenAmount: { decimals: number; uiAmount: number | null } }[],
@@ -545,11 +623,11 @@ function findTokenBalanceChange(
   uiAmount: number;
   direction: TransactionDirection;
 } | null {
-  // Create maps for wallet-owned token accounts only (keyed by mint)
+  
   const preMap = new Map<string, { mint: string; uiAmount: number; decimals: number }>();
   const postMap = new Map<string, { mint: string; uiAmount: number; decimals: number }>();
   
-  // Only include token accounts owned by the wallet
+  
   for (const balance of preBalances) {
     if (balance.owner === walletAddress) {
       preMap.set(balance.mint, {
@@ -570,7 +648,7 @@ function findTokenBalanceChange(
     }
   }
 
-  // Find changes for wallet-owned token accounts
+  
   for (const [mint, postData] of postMap) {
     const preData = preMap.get(mint);
     const preAmount = preData?.uiAmount || 0;
@@ -587,7 +665,7 @@ function findTokenBalanceChange(
     }
   }
 
-  // Check for token accounts that existed in pre but not in post (closed account = sent all)
+  
   for (const [mint, preData] of preMap) {
     if (!postMap.has(mint) && preData.uiAmount > 0) {
       return {
@@ -599,7 +677,7 @@ function findTokenBalanceChange(
     }
   }
 
-  // Check for new token accounts (received tokens into new account)
+  
   for (const [mint, postData] of postMap) {
     if (!preMap.has(mint) && postData.uiAmount > 0) {
       return {
@@ -614,14 +692,7 @@ function findTokenBalanceChange(
   return null;
 }
 
-/**
- * Find counterparty in a transaction
- * 
- * @param meta - Transaction meta
- * @param accountKeys - Account keys
- * @param type - 'sender' or 'recipient'
- * @returns Counterparty address or null
- */
+
 function findCounterparty(
   meta: NonNullable<ParsedTransactionWithMeta['meta']>,
   accountKeys: { pubkey: PublicKey; signer: boolean; writable: boolean }[],
@@ -644,20 +715,14 @@ function findCounterparty(
   return null;
 }
 
-/**
- * Determine transaction type from parsed data
- * 
- * @param parsed - Parsed transaction
- * @param direction - Transaction direction
- * @returns Transaction type description
- */
+
 function determineTransactionType(
   parsed: ParsedTransactionWithMeta,
   direction: TransactionDirection
 ): string {
   const instructions = parsed.transaction.message.instructions;
   
-  // Check for common program types
+  
   for (const instruction of instructions) {
     if ('program' in instruction) {
       const program = instruction.program;
@@ -680,43 +745,34 @@ function determineTransactionType(
       }
     }
     
-    // Check by program ID for known programs
+    
     if ('programId' in instruction) {
       const programId = instruction.programId.toBase58();
       
-      // Token Program
+      
       if (programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') {
         return 'Token Transaction';
       }
       
-      // Token 2022
+      
       if (programId === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb') {
         return 'Token 2022 Transaction';
       }
       
-      // Metaplex
+      
       if (programId === 'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s') {
         return 'NFT Transaction';
       }
     }
   }
 
-  // Default based on direction
+  
   if (direction === 'sent') return 'Sent';
   if (direction === 'received') return 'Received';
   return 'Transaction';
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
 
-/**
- * Format transaction timestamp for display
- * 
- * @param timestamp - Unix timestamp in seconds
- * @returns Formatted date string
- */
 export function formatTransactionTime(timestamp: number | null): string {
   if (!timestamp) return 'Unknown';
   
@@ -724,39 +780,34 @@ export function formatTransactionTime(timestamp: number | null): string {
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   
-  // Less than 1 minute ago
+  
   if (diff < 60 * 1000) {
     return 'Just now';
   }
   
-  // Less than 1 hour ago
+  
   if (diff < 60 * 60 * 1000) {
     const minutes = Math.floor(diff / (60 * 1000));
     return `${minutes}m ago`;
   }
   
-  // Less than 24 hours ago
+  
   if (diff < 24 * 60 * 60 * 1000) {
     const hours = Math.floor(diff / (60 * 60 * 1000));
     return `${hours}h ago`;
   }
   
-  // Less than 7 days ago
+  
   if (diff < 7 * 24 * 60 * 60 * 1000) {
     const days = Math.floor(diff / (24 * 60 * 60 * 1000));
     return `${days}d ago`;
   }
   
-  // Full date
+  
   return date.toLocaleDateString();
 }
 
-/**
- * Get status color for a transaction
- * 
- * @param status - Transaction status
- * @returns CSS color variable name
- */
+
 export function getStatusColor(status: TransactionStatus): string {
   switch (status) {
     case 'confirmed':
@@ -770,13 +821,7 @@ export function getStatusColor(status: TransactionStatus): string {
   }
 }
 
-/**
- * Truncate address for display
- * 
- * @param address - Full address
- * @param chars - Characters to show on each side
- * @returns Truncated address
- */
+
 export function truncateAddress(address: string, chars: number = 4): string {
   if (address.length <= chars * 2 + 3) {
     return address;
@@ -784,12 +829,7 @@ export function truncateAddress(address: string, chars: number = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-/**
- * Get direction icon for display
- * 
- * @param direction - Transaction direction
- * @returns Icon character
- */
+
 export function getDirectionIcon(direction: TransactionDirection): string {
   switch (direction) {
     case 'sent':

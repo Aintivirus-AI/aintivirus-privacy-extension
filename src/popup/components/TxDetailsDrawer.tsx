@@ -12,9 +12,6 @@ import {
   type EVMConfirmationProgress,
 } from '@wallet/txStatus';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface TxDetailsDrawerProps {
   tx: EVMPendingTxInfo;
@@ -22,34 +19,25 @@ export interface TxDetailsDrawerProps {
   onTxReplaced?: (oldHash: string, newHash: string) => void;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString();
 }
 
-/**
- * Calculate EVM confirmations (simplified - in real use would need current block)
- * For now we estimate based on time since submission
- */
+
 function estimateConfirmations(tx: EVMPendingTxInfo): number {
   if (tx.status !== 'mined') return 0;
-  // Assume ~12 second blocks for mainnet, estimate confirmations
+  
   const secondsSinceMined = Math.floor((Date.now() - tx.submittedAt) / 1000);
   return Math.max(0, Math.floor(secondsSinceMined / 12));
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerProps) {
   const [showSpeedUp, setShowSpeedUp] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
 
-  // Calculate display status and progress
+  
   const confirmations = useMemo(() => estimateConfirmations(tx), [tx]);
   
   const displayStatus: TxDisplayStatus = useMemo(() => {
@@ -84,13 +72,13 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
     <>
       <div className="drawer-overlay" onClick={onClose}>
         <div className="drawer-content" onClick={(e) => e.stopPropagation()}>
-          {/* Header */}
+          {}
           <div className="drawer-header">
             <h2>Transaction Details</h2>
             <button className="close-btn" onClick={onClose}>✕</button>
           </div>
 
-          {/* Status Badge */}
+          {}
           <div className="status-section">
             <TxStatusBadge
               status={displayStatus}
@@ -104,7 +92,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
             )}
           </div>
 
-          {/* Confirmation Progress */}
+          {}
           {showProgress && (
             <div className="confirmation-progress-section">
               <TxConfirmationProgress
@@ -117,7 +105,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
             </div>
           )}
 
-          {/* Details Grid */}
+          {}
           <div className="details-grid">
             <div className="detail-row">
               <span className="label">Hash</span>
@@ -230,7 +218,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
             )}
           </div>
 
-          {/* Actions */}
+          {}
           <div className="drawer-actions">
             <ExplorerLinkIcon
               type="tx"
@@ -263,7 +251,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
         </div>
       </div>
 
-      {/* Modals */}
+      {}
       {showSpeedUp && (
         <SpeedUpModal
           tx={tx}

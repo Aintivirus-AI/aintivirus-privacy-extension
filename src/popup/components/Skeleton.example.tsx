@@ -1,13 +1,4 @@
-/**
- * AINTIVIRUS - Skeleton Loading Integration Examples
- *
- * This file demonstrates how to integrate skeleton loading states
- * into various components. These patterns can be copied and adapted.
- *
- * @usage Import and use in your components:
- *
- * import { Skeleton, SkeletonGroup, SkeletonTokenItem } from './components';
- */
+
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -23,9 +14,6 @@ import {
   SkeletonAllowanceCard,
 } from './Skeleton';
 
-// ============================================
-// EXAMPLE 1: Basic Loading State Pattern
-// ============================================
 
 interface DataItem {
   id: string;
@@ -33,31 +21,13 @@ interface DataItem {
   value: number;
 }
 
-/**
- * Example: Replace spinner with skeleton
- *
- * Before (with spinner):
- * ```
- * if (loading) {
- *   return <div className="spinner" />;
- * }
- * return <YourContent />;
- * ```
- *
- * After (with skeleton):
- * ```
- * if (loading) {
- *   return <SkeletonForYourContent />;
- * }
- * return <YourContent />;
- * ```
- */
+
 export const BasicLoadingExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DataItem[]>([]);
 
   useEffect(() => {
-    // Simulate API fetch
+    
     const timer = setTimeout(() => {
       setData([
         { id: '1', name: 'Item 1', value: 100 },
@@ -68,7 +38,7 @@ export const BasicLoadingExample: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Pattern: Return skeleton when loading
+  
   if (loading) {
     return (
       <div className="token-list">
@@ -79,7 +49,7 @@ export const BasicLoadingExample: React.FC = () => {
     );
   }
 
-  // Actual content when loaded
+  
   return (
     <div className="token-list">
       {data.map((item) => (
@@ -92,16 +62,7 @@ export const BasicLoadingExample: React.FC = () => {
   );
 };
 
-// ============================================
-// EXAMPLE 2: SkeletonGroup with Fade Transition
-// ============================================
 
-/**
- * Example: Smooth transition from skeleton to content
- *
- * SkeletonGroup provides automatic fade-in animation when
- * transitioning from loading to loaded state.
- */
 export const SmoothTransitionExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState<number | null>(null);
@@ -128,19 +89,11 @@ export const SmoothTransitionExample: React.FC = () => {
   );
 };
 
-// ============================================
-// EXAMPLE 3: Custom Skeleton Composition
-// ============================================
 
-/**
- * Example: Build custom skeleton layouts
- *
- * Use base Skeleton components to match your exact layout.
- */
 export const CustomSkeletonExample: React.FC = () => {
   return (
     <div style={{ padding: 16 }}>
-      {/* Custom card skeleton */}
+      {}
       <div
         style={{
           display: 'flex',
@@ -151,7 +104,7 @@ export const CustomSkeletonExample: React.FC = () => {
           borderRadius: 12,
         }}
       >
-        {/* Header with avatar and title */}
+        {}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Skeleton variant="circle" size={48} />
           <div style={{ flex: 1 }}>
@@ -160,10 +113,10 @@ export const CustomSkeletonExample: React.FC = () => {
           </div>
         </div>
 
-        {/* Content area */}
+        {}
         <SkeletonText lines={2} gap={8} />
 
-        {/* Action buttons */}
+        {}
         <div style={{ display: 'flex', gap: 8 }}>
           <Skeleton variant="rect" width={80} height={32} borderRadius={6} />
           <Skeleton variant="rect" width={80} height={32} borderRadius={6} />
@@ -173,15 +126,7 @@ export const CustomSkeletonExample: React.FC = () => {
   );
 };
 
-// ============================================
-// EXAMPLE 4: Wallet View Integration
-// ============================================
 
-/**
- * Example: Full wallet view with skeleton loading
- *
- * This pattern is useful for initial page load.
- */
 interface WalletData {
   balance: number;
   address: string;
@@ -229,13 +174,7 @@ export const WalletViewExample: React.FC = () => {
   );
 };
 
-// ============================================
-// EXAMPLE 5: Security Stats with Skeleton
-// ============================================
 
-/**
- * Example: Stats grid skeleton
- */
 interface Stats {
   blocked: number;
   cookies: number;
@@ -278,36 +217,7 @@ export const SecurityStatsExample: React.FC = () => {
   );
 };
 
-// ============================================
-// EXAMPLE 6: Allowances List with Skeleton
-// ============================================
 
-/**
- * Example: Replace loading spinner in AllowancesView
- *
- * Integration point in AllowancesView.tsx around line 700-710:
- *
- * Before:
- * ```
- * {loading ? (
- *   <div style={styles.loadingState}>
- *     <div style={styles.spinner} />
- *     <span>Scanning allowances...</span>
- *   </div>
- * ```
- *
- * After:
- * ```
- * {loading ? (
- *   <div style={{ padding: 12 }}>
- *     <SkeletonAllowanceCard />
- *     <div style={{ height: 8 }} />
- *     <SkeletonAllowanceCard />
- *     <div style={{ height: 8 }} />
- *     <SkeletonAllowanceCard />
- *   </div>
- * ```
- */
 export const AllowancesListExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
@@ -329,15 +239,7 @@ export const AllowancesListExample: React.FC = () => {
   return <div>Allowances content loaded!</div>;
 };
 
-// ============================================
-// EXAMPLE 7: Inline Skeleton for Single Values
-// ============================================
 
-/**
- * Example: Inline skeleton for text values
- *
- * Use when loading individual values within existing content.
- */
 export const InlineSkeletonExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [price, setPrice] = useState<number | null>(null);
@@ -362,42 +264,6 @@ export const InlineSkeletonExample: React.FC = () => {
   );
 };
 
-// ============================================
-// INTEGRATION CHECKLIST
-// ============================================
-
-/**
- * ## How to Integrate Skeleton Loading
- *
- * 1. **Identify Loading States**
- *    - Find components that show spinners or "Loading..." text
- *    - Look for `loading` state variables
- *
- * 2. **Choose Skeleton Type**
- *    - Use preset components for common patterns (SkeletonTokenItem, etc.)
- *    - Build custom with base Skeleton for unique layouts
- *
- * 3. **Match Dimensions**
- *    - Skeleton dimensions should match loaded content
- *    - This prevents layout shift
- *
- * 4. **Replace Spinner**
- *    - Replace: `<div className="spinner" />` or loading text
- *    - With: Appropriate skeleton component(s)
- *
- * 5. **Test**
- *    - Verify no layout shift on load
- *    - Check reduced-motion preference support
- *    - Verify transition looks smooth
- *
- * ## Key Integration Points in AINTIVIRUS:
- *
- * - `AllowancesView.tsx` line ~700: Replace spinner with SkeletonAllowanceCard
- * - `PendingTxList.tsx` line ~109: Replace spinner with SkeletonPendingTx
- * - `App.tsx` wallet loading: Replace with SkeletonWalletView
- * - Token list loading: Replace with multiple SkeletonTokenItem
- * - Stats loading: Replace with SkeletonSecurityStats
- */
 
 export default {
   BasicLoadingExample,

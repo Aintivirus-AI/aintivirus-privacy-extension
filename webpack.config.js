@@ -99,9 +99,24 @@ module.exports = (env, argv) => {
             from: 'public',
             to: '.',
           },
+          // uBOL (uBlock Origin Lite) integration files
+          // Licensed under GPL-3.0 - see vendor/ubol/LICENSE.txt
+          // This is the ONLY ad blocking engine - all rules come from uBOL
           {
-            from: 'rules',
-            to: 'rules',
+            from: 'vendor/ubol/rulesets',
+            to: 'ubol/rulesets',
+          },
+          {
+            from: 'vendor/ubol/web_accessible_resources',
+            to: 'ubol/web_accessible_resources',
+          },
+          {
+            from: 'vendor/ubol/js/scripting',
+            to: 'ubol/js/scripting',
+          },
+          {
+            from: 'vendor/ubol/LICENSE.txt',
+            to: 'ubol/LICENSE.txt',
           },
         ],
       }),

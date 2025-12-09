@@ -1,7 +1,5 @@
-// Deterministic random numbers for fingerprint noise
-// Same seed = same results, so fingerprints stay consistent per domain per session
 
-// Mulberry32 - fast and good enough for our purposes
+
 export function createSeededRandom(seed: number): () => number {
   let state = seed >>> 0;
   
@@ -14,7 +12,7 @@ export function createSeededRandom(seed: number): () => number {
   };
 }
 
-// Simple djb2 hash to turn a domain into a seed
+
 export function hashString(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
@@ -23,7 +21,7 @@ export function hashString(str: string): number {
   return hash >>> 0;
 }
 
-// Mix multiple seeds together
+
 export function combineSeeds(...seeds: number[]): number {
   let combined = 0;
   for (const seed of seeds) {
@@ -36,7 +34,7 @@ export function generateNoise(random: () => number, amplitude: number): number {
   return (random() * 2 - 1) * amplitude;
 }
 
-// Integer noise for pixel tweaking
+
 export function generateIntNoise(random: () => number, maxDelta: number): number {
   return Math.floor(random() * (maxDelta * 2 + 1)) - maxDelta;
 }
@@ -45,7 +43,7 @@ export function clampByte(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-// Add noise to canvas pixels - just RGB, leave alpha alone
+
 export function applyCanvasNoise(
   data: Uint8ClampedArray,
   random: () => number,
@@ -58,24 +56,23 @@ export function applyCanvasNoise(
   }
 }
 
-// One seed per session - rotates roughly daily
+
 export function generateSessionSeed(): number {
   const datePart = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
   const randomPart = Math.floor(Math.random() * 0xFFFFFF);
   return combineSeeds(datePart, randomPart);
 }
 
-// Each domain gets its own consistent seed
+
 export function generateDomainSeed(domain: string, sessionSeed: number): number {
   const domainHash = hashString(domain);
   return combineSeeds(domainHash, sessionSeed);
 }
 
-// Pick a resolution deterministically based on seed
+
 export function pickResolution<T>(seed: number, resolutions: readonly T[]): T {
   const random = createSeededRandom(seed);
   const index = Math.floor(random() * resolutions.length);
   return resolutions[index];
 }
-
 

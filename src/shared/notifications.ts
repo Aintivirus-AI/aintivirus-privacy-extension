@@ -1,4 +1,4 @@
-// Browser notifications for security alerts and stuff
+
 
 import { getFeatureFlag } from './featureFlags';
 
@@ -17,10 +17,10 @@ export interface NotificationOptions {
   title: string;
   message: string;
   priority?: NotificationPriority;
-  actionUrl?: string;      // where to go when clicked
-  tabId?: number;          // which tab to focus
-  contextId?: string;      // for grouping related alerts
-  requireInteraction?: boolean;  // force user to dismiss it
+  actionUrl?: string;      
+  tabId?: number;          
+  contextId?: string;      
+  requireInteraction?: boolean;  
 }
 
 function getPriorityLevel(priority: NotificationPriority): 0 | 1 | 2 {
@@ -49,11 +49,11 @@ export async function areNotificationsEnabled(): Promise<boolean> {
   return getFeatureFlag('notifications');
 }
 
-// Show a notification (respects the notifications toggle)
+
 export async function showNotification(options: NotificationOptions): Promise<string | null> {
   const enabled = await areNotificationsEnabled();
   if (!enabled) {
-    console.log('[AINTIVIRUS] Notifications disabled, skipping:', options.title);
+
     return null;
   }
 
@@ -87,10 +87,10 @@ export async function showNotification(options: NotificationOptions): Promise<st
       },
       (createdId) => {
         if (chrome.runtime.lastError) {
-          console.error('[AINTIVIRUS] Notification error:', chrome.runtime.lastError);
+
           resolve(null);
         } else {
-          console.log('[AINTIVIRUS] Notification created:', createdId);
+
           resolve(createdId);
         }
       }
@@ -103,11 +103,10 @@ export function clearNotification(notificationId: string): void {
   notificationHandlers.delete(notificationId);
 }
 
-// Set up click handlers - call once in background
+
 export function initializeNotificationHandlers(): void {
   chrome.notifications.onClicked.addListener((notificationId) => {
-    console.log('[AINTIVIRUS] Notification clicked:', notificationId);
-    
+
     const handler = notificationHandlers.get(notificationId);
     if (handler) {
       if (handler.tabId) {
@@ -129,10 +128,8 @@ export function initializeNotificationHandlers(): void {
     notificationHandlers.delete(notificationId);
   });
 
-  console.log('[AINTIVIRUS] Notification handlers initialized');
 }
 
-// --- Convenience functions ---
 
 export async function notifyPhishingSite(
   domain: string,
@@ -186,7 +183,7 @@ export async function notifyRiskyTransaction(
   });
 }
 
-// Debounced - don't spam about every blocked tracker
+
 let blockedCount = 0;
 let blockedNotificationTimeout: ReturnType<typeof setTimeout> | null = null;
 

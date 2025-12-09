@@ -1,48 +1,25 @@
-/**
- * AINTIVIRUS - RefreshIndicator Component
- * 
- * Shows cached data timestamp with subtle refresh indicator:
- * - "Updated X min ago" text
- * - Subtle "Refreshing..." indicator (no spinner spam)
- * - Click to refresh manually
- * 
- * Designed to show cached balances instantly while indicating
- * when fresh data is being fetched.
- * 
- * @example
- * <RefreshIndicator
- *   lastUpdated={Date.now() - 120000}
- *   isRefreshing={isLoading}
- *   onRefresh={handleRefresh}
- * />
- */
+
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface RefreshIndicatorProps {
-  /** Timestamp of last successful update */
+  
   lastUpdated?: number;
-  /** Is currently refreshing */
+  
   isRefreshing?: boolean;
-  /** Manual refresh handler */
+  
   onRefresh?: () => void;
-  /** Whether to show the refresh button */
+  
   showButton?: boolean;
-  /** Size variant */
+  
   size?: 'sm' | 'md';
-  /** Position */
+  
   align?: 'left' | 'center' | 'right';
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function formatLastUpdated(timestamp: number | undefined): string {
   if (!timestamp) return 'Never updated';
@@ -62,9 +39,6 @@ function formatLastUpdated(timestamp: number | undefined): string {
   return new Date(timestamp).toLocaleString();
 }
 
-// ============================================
-// ICONS
-// ============================================
 
 function RefreshIcon({ spinning }: { spinning?: boolean }) {
   return (
@@ -92,9 +66,6 @@ function CheckIcon() {
   );
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
   lastUpdated,
@@ -109,19 +80,19 @@ export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
   const [showSuccess, setShowSuccess] = useState(false);
   const prevRefreshing = React.useRef(isRefreshing);
   
-  // Update display time periodically
+  
   useEffect(() => {
     const updateTime = () => {
       setDisplayTime(formatLastUpdated(lastUpdated));
     };
     
     updateTime();
-    const interval = setInterval(updateTime, 10000); // Update every 10 seconds
+    const interval = setInterval(updateTime, 10000); 
     
     return () => clearInterval(interval);
   }, [lastUpdated]);
   
-  // Show success checkmark when refresh completes
+  
   useEffect(() => {
     if (prevRefreshing.current && !isRefreshing) {
       setShowSuccess(true);

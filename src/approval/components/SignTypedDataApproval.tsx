@@ -1,9 +1,4 @@
-/**
- * AINTIVIRUS dApp Connectivity - Typed Data Signing Approval
- *
- * Displays EIP-712 typed data signing requests with parsed domain,
- * highlighted fields, and risk warnings.
- */
+
 
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
@@ -17,9 +12,6 @@ import {
 } from '../../decoding';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -229,9 +221,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// PROPS
-// ============================================
 
 interface Props {
   request: QueuedRequest;
@@ -239,26 +228,23 @@ interface Props {
   onReject: (reason?: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
   const [showRaw, setShowRaw] = useState(false);
 
-  // Parse the typed data
+  
   const parseResult = useMemo(() => {
     const params = request.params as unknown[];
     if (!params || params.length < 2) {
       return null;
     }
 
-    // eth_signTypedData_v4: [address, typedData]
+    
     const typedDataString = params[1] as string;
     return decodeTypedData(typedDataString);
   }, [request.params]);
 
-  // Use shared formatOrigin for IDN/homograph protection
+  
   const formattedOrigin = useMemo(() => formatOriginUtil(request.origin), [request.origin]);
 
   const getPatternLabel = (pattern: string): { label: string; color: string } => {
@@ -322,7 +308,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
     }
   };
 
-  // Handle parsing errors
+  
   if (!parseResult || !parseResult.isValid) {
     return (
       <div style={styles.container}>
@@ -369,7 +355,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
 
   return (
     <div style={styles.container}>
-      {/* Site Info */}
+      {}
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
@@ -402,7 +388,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </span>
       </div>
 
-      {/* Warnings */}
+      {}
       {warnings.map((warning, idx) => (
         <div key={idx} style={getWarningStyle(warning.level)}>
           <WarningIcon color={getWarningColor(warning.level)} />
@@ -417,7 +403,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       ))}
 
-      {/* Domain Card */}
+      {}
       {displayModel?.domain && (
         <div style={styles.card}>
           <div style={styles.cardHeader}>Domain</div>
@@ -453,7 +439,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       )}
 
-      {/* Message Fields Card */}
+      {}
       {displayModel?.messageFields && displayModel.messageFields.length > 0 && (
         <div style={styles.card}>
           <div style={styles.cardHeader}>{displayModel.primaryType}</div>
@@ -478,7 +464,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       )}
 
-      {/* Nested Structs */}
+      {}
       {displayModel?.nestedStructs?.map((struct, structIdx) => (
         <div key={structIdx} style={styles.card}>
           <div style={styles.cardHeader}>{struct.name}</div>
@@ -502,7 +488,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
       ))}
 
-      {/* Raw Data Toggle */}
+      {}
       <button style={styles.toggleButton} onClick={() => setShowRaw(!showRaw)}>
         <svg
           width="16"
@@ -528,7 +514,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         <div style={styles.rawData}>{JSON.stringify(raw, null, 2)}</div>
       )}
 
-      {/* Buttons */}
+      {}
       <div style={styles.buttons}>
         <button
           style={{ ...styles.button, ...styles.rejectButton }}
@@ -547,9 +533,6 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
   );
 }
 
-// ============================================
-// ICONS
-// ============================================
 
 function WarningIcon({ color }: { color: string }) {
   return (

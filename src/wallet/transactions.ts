@@ -1,16 +1,4 @@
-/**
- * AINTIVIRUS Wallet Module - Transaction Operations
- * 
- * This module handles SOL transfer operations including:
- * - Transaction creation and validation
- * - Fee estimation
- * - Transaction broadcasting and confirmation
- * 
- * SECURITY:
- * - All signing operations require an unlocked wallet
- * - Transactions are simulated before broadcast
- * - Proper error handling for all failure modes
- */
+
 
 import {
   PublicKey,
@@ -39,43 +27,27 @@ import { getUnlockedKeypair, getPublicAddress } from './storage';
 import { isValidSolanaAddress } from './keychain';
 import bs58 from 'bs58';
 
-// ============================================
-// SPL TOKEN CONSTANTS (avoiding @solana/spl-token dependency)
-// ============================================
 
-/**
- * SPL Token Program ID
- */
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
-/**
- * Associated Token Program ID
- */
+
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
-/**
- * SPL Token transfer parameters
- */
+
 export interface SendSPLTokenParams {
-  /** Recipient address */
+  
   recipient: string;
-  /** Amount to send (UI amount, will be converted to raw) */
+  
   amount: number;
-  /** Token mint address */
+  
   mint: string;
-  /** Token decimals */
+  
   decimals: number;
-  /** Sender's token account (optional, will be looked up if not provided) */
+  
   tokenAccount?: string;
 }
 
-// ============================================
-// SPL TOKEN HELPERS
-// ============================================
 
-/**
- * Derive Associated Token Account address
- */
 function getAssociatedTokenAddressSync(
   mint: PublicKey,
   owner: PublicKey,
@@ -87,9 +59,7 @@ function getAssociatedTokenAddressSync(
   return address;
 }
 
-/**
- * Create instruction to create an Associated Token Account
- */
+
 function createAssociatedTokenAccountInstruction(
   payer: PublicKey,
   associatedToken: PublicKey,
@@ -106,22 +76,20 @@ function createAssociatedTokenAccountInstruction(
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     programId: ASSOCIATED_TOKEN_PROGRAM_ID,
-    data: Buffer.alloc(0), // No data needed for create ATA
+    data: Buffer.alloc(0), 
   });
 }
 
-/**
- * Create SPL Token transfer instruction
- */
+
 function createTransferInstruction(
   source: PublicKey,
   destination: PublicKey,
   owner: PublicKey,
   amount: bigint,
 ): TransactionInstruction {
-  // Transfer instruction = 3, followed by u64 amount (little-endian)
+  
   const data = Buffer.alloc(9);
-  data.writeUInt8(3, 0); // Transfer instruction discriminator
+  data.writeUInt8(3, 0); 
   data.writeBigUInt64LE(amount, 1);
 
   return new TransactionInstruction({
@@ -135,41 +103,19 @@ function createTransferInstruction(
   });
 }
 
-// ============================================
-// CONSTANTS
-// ============================================
 
-/**
- * Minimum SOL amount to keep for rent exemption
- * Approx 0.00089 SOL for a basic account
- */
 const MIN_RENT_EXEMPT_BALANCE = 890880;
 
-/**
- * Default priority fee in micro-lamports per compute unit
- */
+
 const DEFAULT_PRIORITY_FEE = 1000;
 
-/**
- * Transaction confirmation timeout in milliseconds
- */
+
 const CONFIRMATION_TIMEOUT = 60000;
 
-/**
- * Maximum retries for transaction submission
- */
+
 const MAX_RETRIES = 3;
 
-// ============================================
-// VALIDATION
-// ============================================
 
-/**
- * Validate a recipient address
- * 
- * @param recipient - Base58-encoded public key
- * @returns True if valid
- */
 export function validateRecipient(recipient: string): boolean {
   if (!recipient || recipient.trim().length === 0) {
     return false;
@@ -177,14 +123,7 @@ export function validateRecipient(recipient: string): boolean {
   return isValidSolanaAddress(recipient);
 }
 
-/**
- * Validate transaction amount
- * 
- * @param amountSol - Amount in SOL
- * @param balanceLamports - Current balance in lamports
- * @param feeLamports - Estimated fee in lamports
- * @returns Validation result
- */
+
 export function validateAmount(
   amountSol: number,
   balanceLamports: number,
@@ -209,26 +148,16 @@ export function validateAmount(
     };
   }
 
-  // Warn if remaining balance would be below rent exempt minimum
+  
   if (remainingBalance < MIN_RENT_EXEMPT_BALANCE && remainingBalance > 0) {
-    // Still allow, but this is a warning condition
-    // UI should show warning
+    
+    
   }
 
   return { valid: true };
 }
 
-// ============================================
-// FEE ESTIMATION
-// ============================================
 
-/**
- * Estimate transaction fee for a SOL transfer
- * 
- * @param recipient - Recipient address
- * @param amountSol - Amount to send
- * @returns Fee estimate
- */
 export async function estimateTransactionFee(
   recipient: string,
   amountSol: number
@@ -236,7 +165,7 @@ export async function estimateTransactionFee(
   try {
     const connection = await getCurrentConnection();
     
-    // Get sender address
+    
     const senderAddress = await getPublicAddress();
     if (!senderAddress) {
       throw new WalletError(
@@ -245,7 +174,7 @@ export async function estimateTransactionFee(
       );
     }
 
-    // Create a dummy transaction to estimate fee
+    
     const { blockhash } = await getRecentBlockhash();
     
     const senderPubkey = new PublicKey(senderAddress);
@@ -263,7 +192,7 @@ export async function estimateTransactionFee(
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = senderPubkey;
 
-    // Get fee for this message
+    
     const message = transaction.compileMessage();
     const feeResult = await connection.getFeeForMessage(message);
     
@@ -280,7 +209,7 @@ export async function estimateTransactionFee(
       throw error;
     }
     
-    // Return default estimate on error
+    
     return {
       feeLamports: 5000,
       feeSol: 0.000005,
@@ -289,22 +218,13 @@ export async function estimateTransactionFee(
   }
 }
 
-// ============================================
-// TRANSACTION CREATION
-// ============================================
 
-/**
- * Create a SOL transfer transaction
- * 
- * @param params - Transaction parameters
- * @returns Unsigned transaction
- */
 export async function createTransferTransaction(
   params: SendTransactionParams
 ): Promise<Transaction> {
   const { recipient, amountSol } = params;
 
-  // Validate recipient
+  
   if (!validateRecipient(recipient)) {
     throw new WalletError(
       WalletErrorCode.INVALID_RECIPIENT,
@@ -312,7 +232,7 @@ export async function createTransferTransaction(
     );
   }
 
-  // Get sender address
+  
   const senderAddress = await getPublicAddress();
   if (!senderAddress) {
     throw new WalletError(
@@ -321,7 +241,7 @@ export async function createTransferTransaction(
     );
   }
 
-  // Validate amount
+  
   if (amountSol <= 0) {
     throw new WalletError(
       WalletErrorCode.INVALID_AMOUNT,
@@ -337,7 +257,7 @@ export async function createTransferTransaction(
     const recipientPubkey = new PublicKey(recipient);
     const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
 
-    // Create transaction with transfer instruction
+    
     const transaction = new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: senderPubkey,
@@ -362,16 +282,7 @@ export async function createTransferTransaction(
   }
 }
 
-// ============================================
-// TRANSACTION SIMULATION
-// ============================================
 
-/**
- * Simulate a transaction to check for errors before broadcast
- * 
- * @param transaction - Transaction to simulate
- * @returns Simulation result
- */
 export async function simulateTransaction(
   transaction: Transaction
 ): Promise<{ success: boolean; error?: string }> {
@@ -400,25 +311,13 @@ export async function simulateTransaction(
   }
 }
 
-// ============================================
-// TRANSACTION BROADCASTING
-// ============================================
 
-/**
- * Send SOL to a recipient
- * 
- * SECURITY: This requires an unlocked wallet.
- * The transaction is signed in memory and broadcast.
- * 
- * @param params - Transaction parameters
- * @returns Transaction result with signature
- */
 export async function sendSol(
   params: SendTransactionParams
 ): Promise<SendTransactionResult> {
   const { recipient, amountSol } = params;
 
-  // Get keypair (wallet must be unlocked)
+  
   const keypair = getUnlockedKeypair();
   if (!keypair) {
     throw new WalletError(
@@ -427,7 +326,7 @@ export async function sendSol(
     );
   }
 
-  // Validate recipient
+  
   if (!validateRecipient(recipient)) {
     throw new WalletError(
       WalletErrorCode.INVALID_RECIPIENT,
@@ -435,14 +334,14 @@ export async function sendSol(
     );
   }
 
-  // Get current balance
+  
   const connection = await getCurrentConnection();
   const balance = await connection.getBalance(keypair.publicKey);
 
-  // Estimate fee
+  
   const feeEstimate = await estimateTransactionFee(recipient, amountSol);
   
-  // Validate amount against balance
+  
   const validation = validateAmount(amountSol, balance, feeEstimate.feeLamports);
   if (!validation.valid) {
     throw new WalletError(
@@ -452,10 +351,10 @@ export async function sendSol(
   }
 
   try {
-    // Create transaction
+    
     const transaction = await createTransferTransaction(params);
 
-    // Simulate before sending
+    
     const simulation = await simulateTransaction(transaction);
     if (!simulation.success) {
       throw new WalletError(
@@ -464,10 +363,10 @@ export async function sendSol(
       );
     }
 
-    // Sign transaction
+    
     transaction.sign(keypair);
 
-    // Send with retry logic
+    
     let signature: string | null = null;
     let lastError: Error | null = null;
 
@@ -485,13 +384,13 @@ export async function sendSol(
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
         
-        // Check if it's a retryable error
+        
         if (error instanceof SendTransactionError) {
           const logs = error.logs;
-          console.error('[AINTIVIRUS Wallet] Send transaction error:', logs);
+
         }
         
-        // Wait before retry
+        
         if (attempt < MAX_RETRIES - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
         }
@@ -505,18 +404,17 @@ export async function sendSol(
       );
     }
 
-    // Confirm transaction (non-blocking on soft failures)
+    
     const confirmResult = await confirmTransaction(signature);
     
-    // Get explorer URL
+    
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
     if (!confirmResult.confirmed) {
-      // Log warning but don't throw - transaction was sent and may succeed
-      console.warn(`[AINTIVIRUS Wallet] Confirmation uncertain: ${confirmResult.error}`);
-      console.log(`[AINTIVIRUS Wallet] Transaction sent (unconfirmed): ${signature}`);
+      
+
     } else {
-      console.log(`[AINTIVIRUS Wallet] Transaction confirmed: ${signature}`);
+
     }
 
     return {
@@ -528,7 +426,7 @@ export async function sendSol(
       throw error;
     }
 
-    // Parse common errors
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     if (errorMessage.includes('insufficient funds') || errorMessage.includes('Insufficient')) {
@@ -545,19 +443,7 @@ export async function sendSol(
   }
 }
 
-// ============================================
-// TRANSACTION CONFIRMATION
-// ============================================
 
-/**
- * Wait for transaction confirmation using signature status polling
- * 
- * This approach is more reliable than blockhash-based confirmation
- * as it doesn't depend on block height expiration.
- * 
- * @param signature - Transaction signature
- * @returns Confirmation result
- */
 export async function confirmTransaction(
   signature: string
 ): Promise<{ confirmed: boolean; error?: string }> {
@@ -565,8 +451,7 @@ export async function confirmTransaction(
     const connection = await getCurrentConnection();
     const startTime = Date.now();
     
-    // Poll for transaction status instead of using blockhash-based confirmation
-    // This avoids "block height exceeded" errors
+    
     while (Date.now() - startTime < CONFIRMATION_TIMEOUT) {
       try {
         const status = await connection.getSignatureStatus(signature, {
@@ -574,7 +459,7 @@ export async function confirmTransaction(
         });
         
         if (status?.value) {
-          // Check for errors
+          
           if (status.value.err) {
             return {
               confirmed: false,
@@ -582,23 +467,22 @@ export async function confirmTransaction(
             };
           }
           
-          // Check confirmation level
+          
           if (status.value.confirmationStatus === 'confirmed' || 
               status.value.confirmationStatus === 'finalized') {
             return { confirmed: true };
           }
         }
       } catch (pollError) {
-        // Ignore polling errors, continue trying
-        console.warn('[AINTIVIRUS Wallet] Poll error:', pollError);
+        
+
       }
       
-      // Wait before next poll
+      
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
 
-    // Timeout reached - but transaction may still have succeeded
-    // Do one final check
+    
     try {
       const finalStatus = await connection.getSignatureStatus(signature, {
         searchTransactionHistory: true,
@@ -611,7 +495,7 @@ export async function confirmTransaction(
         }
       }
     } catch {
-      // Ignore final check errors
+      
     }
 
     return {
@@ -621,11 +505,10 @@ export async function confirmTransaction(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    // Don't fail hard on "block height exceeded" - the tx likely went through
+    
     if (errorMessage.includes('block height exceeded')) {
-      console.warn('[AINTIVIRUS Wallet] Block height exceeded during confirmation, checking status...');
+
       
-      // Try to get the actual status
       try {
         const connection = await getCurrentConnection();
         const status = await connection.getSignatureStatus(signature, {
@@ -636,7 +519,7 @@ export async function confirmTransaction(
           return { confirmed: true };
         }
       } catch {
-        // Ignore status check error
+        
       }
       
       return {
@@ -652,47 +535,22 @@ export async function confirmTransaction(
   }
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
 
-/**
- * Convert SOL to lamports
- * 
- * @param sol - Amount in SOL
- * @returns Amount in lamports
- */
 export function solToLamports(sol: number): number {
   return Math.floor(sol * LAMPORTS_PER_SOL);
 }
 
-/**
- * Convert lamports to SOL
- * 
- * @param lamports - Amount in lamports
- * @returns Amount in SOL
- */
+
 export function lamportsToSol(lamports: number): number {
   return lamports / LAMPORTS_PER_SOL;
 }
 
-/**
- * Format SOL amount for display
- * 
- * @param sol - Amount in SOL
- * @param decimals - Decimal places (default 6)
- * @returns Formatted string
- */
+
 export function formatSolAmount(sol: number, decimals: number = 6): string {
   return sol.toFixed(decimals).replace(/\.?0+$/, '');
 }
 
-/**
- * Parse SOL amount from user input
- * 
- * @param input - User input string
- * @returns Parsed SOL amount or null if invalid
- */
+
 export function parseSolInput(input: string): number | null {
   const cleaned = input.trim().replace(/,/g, '');
   const parsed = parseFloat(cleaned);
@@ -704,14 +562,7 @@ export function parseSolInput(input: string): number | null {
   return parsed;
 }
 
-/**
- * Check if an amount would leave dust (unusably small balance)
- * 
- * @param currentBalance - Current balance in lamports
- * @param sendAmount - Amount to send in lamports
- * @param fee - Fee in lamports
- * @returns True if remaining balance would be dust
- */
+
 export function wouldLeaveDust(
   currentBalance: number,
   sendAmount: number,
@@ -721,37 +572,19 @@ export function wouldLeaveDust(
   return remaining > 0 && remaining < MIN_RENT_EXEMPT_BALANCE;
 }
 
-/**
- * Calculate maximum sendable amount
- * 
- * @param balance - Current balance in lamports
- * @param fee - Estimated fee in lamports
- * @returns Maximum SOL that can be sent
- */
+
 export function calculateMaxSendable(balance: number, fee: number): number {
   const maxLamports = Math.max(0, balance - fee);
   return lamportsToSol(maxLamports);
 }
 
-// ============================================
-// SPL TOKEN TRANSFERS
-// ============================================
 
-/**
- * Send SPL tokens to a recipient
- * 
- * SECURITY: This requires an unlocked wallet.
- * Creates Associated Token Account for recipient if needed.
- * 
- * @param params - SPL token transfer parameters
- * @returns Transaction result with signature
- */
 export async function sendSPLToken(
   params: SendSPLTokenParams
 ): Promise<SendTransactionResult> {
   const { recipient, amount, mint, decimals, tokenAccount: senderTokenAccount } = params;
 
-  // Get keypair (wallet must be unlocked)
+  
   const keypair = getUnlockedKeypair();
   if (!keypair) {
     throw new WalletError(
@@ -760,7 +593,7 @@ export async function sendSPLToken(
     );
   }
 
-  // Validate recipient
+  
   if (!validateRecipient(recipient)) {
     throw new WalletError(
       WalletErrorCode.INVALID_RECIPIENT,
@@ -768,7 +601,7 @@ export async function sendSPLToken(
     );
   }
 
-  // Validate amount
+  
   if (amount <= 0) {
     throw new WalletError(
       WalletErrorCode.INVALID_AMOUNT,
@@ -781,10 +614,10 @@ export async function sendSPLToken(
     const mintPubkey = new PublicKey(mint);
     const recipientPubkey = new PublicKey(recipient);
 
-    // Calculate raw amount from UI amount
+    
     const rawAmount = BigInt(Math.floor(amount * Math.pow(10, decimals)));
 
-    // Get or derive the sender's token account
+    
     let senderATA: PublicKey;
     if (senderTokenAccount) {
       senderATA = new PublicKey(senderTokenAccount);
@@ -792,42 +625,42 @@ export async function sendSPLToken(
       senderATA = getAssociatedTokenAddressSync(mintPubkey, keypair.publicKey);
     }
 
-    // Get the recipient's associated token account
+    
     const recipientATA = getAssociatedTokenAddressSync(mintPubkey, recipientPubkey);
 
-    // Check if recipient's token account exists
+    
     let recipientAccountExists = false;
     try {
       const accountInfo = await connection.getAccountInfo(recipientATA);
       recipientAccountExists = accountInfo !== null;
     } catch {
-      // Account doesn't exist, we'll create it
+      
       recipientAccountExists = false;
     }
 
-    // Create transaction
+    
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     const transaction = new Transaction();
 
-    // If recipient ATA doesn't exist, add instruction to create it
+    
     if (!recipientAccountExists) {
       transaction.add(
         createAssociatedTokenAccountInstruction(
-          keypair.publicKey, // payer
-          recipientATA, // ata
-          recipientPubkey, // owner
-          mintPubkey // mint
+          keypair.publicKey, 
+          recipientATA, 
+          recipientPubkey, 
+          mintPubkey 
         )
       );
     }
 
-    // Add transfer instruction
+    
     transaction.add(
       createTransferInstruction(
-        senderATA, // source
-        recipientATA, // destination
-        keypair.publicKey, // owner
-        rawAmount // amount (raw)
+        senderATA, 
+        recipientATA, 
+        keypair.publicKey, 
+        rawAmount 
       )
     );
 
@@ -835,7 +668,7 @@ export async function sendSPLToken(
     transaction.feePayer = keypair.publicKey;
     transaction.lastValidBlockHeight = lastValidBlockHeight;
 
-    // Simulate before sending
+    
     const simulation = await simulateTransaction(transaction);
     if (!simulation.success) {
       throw new WalletError(
@@ -844,10 +677,10 @@ export async function sendSPLToken(
       );
     }
 
-    // Sign transaction
+    
     transaction.sign(keypair);
 
-    // Send with retry logic
+    
     let signature: string | null = null;
     let lastError: Error | null = null;
 
@@ -867,7 +700,7 @@ export async function sendSPLToken(
         
         if (error instanceof SendTransactionError) {
           const logs = error.logs;
-          console.error('[AINTIVIRUS Wallet] Send SPL token error:', logs);
+
         }
         
         if (attempt < MAX_RETRIES - 1) {
@@ -883,16 +716,16 @@ export async function sendSPLToken(
       );
     }
 
-    // Confirm transaction
+    
     const confirmResult = await confirmTransaction(signature);
     
-    // Get explorer URL
+    
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
     if (!confirmResult.confirmed) {
-      console.warn(`[AINTIVIRUS Wallet] Token transfer confirmation uncertain: ${confirmResult.error}`);
+
     } else {
-      console.log(`[AINTIVIRUS Wallet] Token transfer confirmed: ${signature}`);
+
     }
 
     return {

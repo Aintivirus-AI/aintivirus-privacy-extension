@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aintivirus Privacy and Wallet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Aintivirus security extension",
   
   "__host_permissions_justification__": [
@@ -36,7 +36,8 @@
     "webNavigation",
     "alarms",
     "notifications",
-    "sidePanel"
+    "sidePanel",
+    "browsingData"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -44,14 +45,94 @@
   "declarative_net_request": {
     "rule_resources": [
       {
-        "id": "ruleset_custom",
+        "id": "ublock-filters",
         "enabled": true,
-        "path": "rules/static_ruleset_custom.json"
+        "path": "ubol/rulesets/main/ublock-filters.json"
       },
       {
-        "id": "ruleset_fixes",
+        "id": "easylist",
         "enabled": true,
-        "path": "rules/static_ruleset_fixes.json"
+        "path": "ubol/rulesets/main/easylist.json"
+      },
+      {
+        "id": "easyprivacy",
+        "enabled": true,
+        "path": "ubol/rulesets/main/easyprivacy.json"
+      },
+      {
+        "id": "pgl",
+        "enabled": true,
+        "path": "ubol/rulesets/main/pgl.json"
+      },
+      {
+        "id": "ublock-badware",
+        "enabled": true,
+        "path": "ubol/rulesets/main/ublock-badware.json"
+      },
+      {
+        "id": "urlhaus-full",
+        "enabled": true,
+        "path": "ubol/rulesets/main/urlhaus-full.json"
+      },
+      {
+        "id": "adguard-mobile",
+        "enabled": false,
+        "path": "ubol/rulesets/main/adguard-mobile.json"
+      },
+      {
+        "id": "block-lan",
+        "enabled": false,
+        "path": "ubol/rulesets/main/block-lan.json"
+      },
+      {
+        "id": "dpollock-0",
+        "enabled": false,
+        "path": "ubol/rulesets/main/dpollock-0.json"
+      },
+      {
+        "id": "adguard-spyware-url",
+        "enabled": false,
+        "path": "ubol/rulesets/main/adguard-spyware-url.json"
+      },
+      {
+        "id": "annoyances-cookies",
+        "enabled": false,
+        "path": "ubol/rulesets/main/annoyances-cookies.json"
+      },
+      {
+        "id": "annoyances-overlays",
+        "enabled": false,
+        "path": "ubol/rulesets/main/annoyances-overlays.json"
+      },
+      {
+        "id": "annoyances-social",
+        "enabled": false,
+        "path": "ubol/rulesets/main/annoyances-social.json"
+      },
+      {
+        "id": "annoyances-widgets",
+        "enabled": false,
+        "path": "ubol/rulesets/main/annoyances-widgets.json"
+      },
+      {
+        "id": "annoyances-others",
+        "enabled": false,
+        "path": "ubol/rulesets/main/annoyances-others.json"
+      },
+      {
+        "id": "annoyances-notifications",
+        "enabled": false,
+        "path": "ubol/rulesets/main/annoyances-notifications.json"
+      },
+      {
+        "id": "ublock-experimental",
+        "enabled": false,
+        "path": "ubol/rulesets/main/ublock-experimental.json"
+      },
+      {
+        "id": "stevenblack-hosts",
+        "enabled": false,
+        "path": "ubol/rulesets/main/stevenblack-hosts.json"
       }
     ]
   },
@@ -69,6 +150,15 @@
         "noop-bugsnag.js"
       ],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "ubol/web_accessible_resources/*",
+        "ubol/js/scripting/*",
+        "ubol/rulesets/scripting/*"
+      ],
+      "matches": ["<all_urls>"],
+      "use_dynamic_url": true
     }
   ],
   "background": {

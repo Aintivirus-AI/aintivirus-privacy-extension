@@ -1,9 +1,4 @@
-/**
- * AINTIVIRUS dApp Connectivity - Approval Window Entry Point
- * 
- * This is the entry point for the approval window that opens when
- * a dApp requests user approval for connect, sign, or transaction.
- */
+
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';

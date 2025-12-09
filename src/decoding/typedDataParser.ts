@@ -1,8 +1,4 @@
-/**
- * AINTIVIRUS Decoding Module - EIP-712 Typed Data Parser
- *
- * Parses and validates EIP-712 typed data for signing requests.
- */
+
 
 import {
   TypedDataV4,
@@ -28,9 +24,6 @@ import {
 } from './warnings';
 import { lookupContract, getContractDisplayName } from './selectors';
 
-// ============================================
-// HIGHLIGHT FIELD NAMES
-// ============================================
 
 const HIGHLIGHT_FIELDS = new Set([
   'spender',
@@ -53,15 +46,9 @@ const AMOUNT_FIELDS = new Set(['value', 'amount', 'wad', 'amountIn', 'amountOut'
 const ADDRESS_FIELDS = new Set(['spender', 'to', 'from', 'operator', 'owner', 'token', 'verifyingContract']);
 const DEADLINE_FIELDS = new Set(['deadline', 'expiry', 'expiration', 'sigDeadline', 'validTo', 'validBefore']);
 
-// ============================================
-// MAIN PARSER
-// ============================================
 
-/**
- * Decode and validate EIP-712 typed data
- */
 export function decodeTypedData(rawData: string): TypedDataParseResult {
-  // Parse JSON
+  
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawData);
@@ -69,7 +56,7 @@ export function decodeTypedData(rawData: string): TypedDataParseResult {
     return createErrorResult('Invalid JSON: ' + (e instanceof Error ? e.message : 'Parse error'));
   }
 
-  // Validate structure
+  
   const validation = validateTypedDataStructure(parsed);
   if (!validation.isValid) {
     return createErrorResult(validation.error!);
@@ -77,16 +64,16 @@ export function decodeTypedData(rawData: string): TypedDataParseResult {
 
   const typedData = parsed as TypedDataV4;
 
-  // Detect pattern
+  
   const pattern = detectPattern(typedData);
 
-  // Generate warnings
+  
   const warnings = generateWarnings(typedData, pattern);
 
-  // Build display model
+  
   const displayModel = buildDisplayModel(typedData);
 
-  // Extract highlighted fields
+  
   const highlightedFields = extractHighlightedFields(typedData);
 
   return {
@@ -99,9 +86,6 @@ export function decodeTypedData(rawData: string): TypedDataParseResult {
   };
 }
 
-// ============================================
-// VALIDATION
-// ============================================
 
 interface ValidationResult {
   isValid: boolean;
@@ -115,7 +99,7 @@ function validateTypedDataStructure(data: unknown): ValidationResult {
 
   const obj = data as Record<string, unknown>;
 
-  // Check required fields
+  
   if (!obj.types || typeof obj.types !== 'object') {
     return { isValid: false, error: 'Missing or invalid "types" field' };
   }
@@ -132,13 +116,13 @@ function validateTypedDataStructure(data: unknown): ValidationResult {
     return { isValid: false, error: 'Missing or invalid "message" field' };
   }
 
-  // Validate domain has at least name or verifyingContract
+  
   const domain = obj.domain as Record<string, unknown>;
   if (!domain.name && !domain.verifyingContract) {
     return { isValid: false, error: 'Domain must have "name" or "verifyingContract"' };
   }
 
-  // Check that primaryType exists in types
+  
   const types = obj.types as Record<string, unknown>;
   if (!types[obj.primaryType as string]) {
     return { isValid: false, error: `Primary type "${obj.primaryType}" not found in types` };
@@ -147,17 +131,14 @@ function validateTypedDataStructure(data: unknown): ValidationResult {
   return { isValid: true };
 }
 
-// ============================================
-// PATTERN DETECTION
-// ============================================
 
 function detectPattern(data: TypedDataV4): TypedDataPattern {
   const primaryType = data.primaryType.toLowerCase();
   const domainName = (data.domain.name || '').toLowerCase();
 
-  // Check for Permit patterns
+  
   if (primaryType === 'permit' || primaryType.includes('permit')) {
-    // Check for Permit2
+    
     if (
       domainName.includes('permit2') ||
       data.domain.verifyingContract?.toLowerCase() === '0x000000000022d473030f116ddee9f6b43ac78ba3'
@@ -165,7 +146,7 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
       return 'permit2';
     }
 
-    // Check for batch permit
+    
     if (primaryType.includes('batch')) {
       return 'permit2_batch';
     }
@@ -173,7 +154,7 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
     return 'permit';
   }
 
-  // Check for order patterns (trading)
+  
   if (
     primaryType.includes('order') ||
     primaryType.includes('trade') ||
@@ -182,12 +163,12 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
     return 'order';
   }
 
-  // Check for voting/governance
+  
   if (primaryType.includes('vote') || primaryType.includes('ballot')) {
     return 'vote';
   }
 
-  // Check for delegation
+  
   if (primaryType.includes('delegation') || primaryType.includes('delegate')) {
     return 'delegation';
   }
@@ -195,14 +176,11 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
   return 'unknown';
 }
 
-// ============================================
-// WARNING GENERATION
-// ============================================
 
 function generateWarnings(data: TypedDataV4, pattern: TypedDataPattern): TxWarning[] {
   const warnings: TxWarning[] = [];
 
-  // Pattern-specific warnings
+  
   switch (pattern) {
     case 'permit':
       warnings.push(warnPermitSignature());
@@ -213,7 +191,7 @@ function generateWarnings(data: TypedDataV4, pattern: TypedDataPattern): TxWarni
       break;
   }
 
-  // Check message fields for dangerous values
+  
   analyzeMessageFields(data.message, data.types, data.primaryType, warnings, '');
 
   return warnings;
@@ -234,7 +212,7 @@ function analyzeMessageFields(
     const fieldPath = path ? `${path}.${field.name}` : field.name;
     const fieldNameLower = field.name.toLowerCase();
 
-    // Check for amount fields
+    
     if (AMOUNT_FIELDS.has(fieldNameLower) && typeof value === 'string') {
       try {
         const amount = BigInt(value);
@@ -242,11 +220,11 @@ function analyzeMessageFields(
           warnings.push(warnInfiniteApproval());
         }
       } catch {
-        // Not a valid number
+        
       }
     }
 
-    // Check for deadline fields
+    
     if (DEADLINE_FIELDS.has(fieldNameLower) && value !== undefined) {
       try {
         const deadline = typeof value === 'string' ? BigInt(value) : BigInt(Number(value));
@@ -255,18 +233,18 @@ function analyzeMessageFields(
           warnings.push(warnDeadline(deadlineStatus));
         }
       } catch {
-        // Not a valid timestamp
+        
       }
     }
 
-    // Check for spender fields with unknown addresses
+    
     if (fieldNameLower === 'spender' && typeof value === 'string' && value.startsWith('0x')) {
       if (!lookupContract(value)) {
         warnings.push(warnUnknownSpender(value));
       }
     }
 
-    // Recurse into nested types
+    
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const nestedTypeName = field.type.replace('[]', '');
       if (types[nestedTypeName]) {
@@ -280,7 +258,7 @@ function analyzeMessageFields(
       }
     }
 
-    // Handle arrays of structs
+    
     if (Array.isArray(value)) {
       const nestedTypeName = field.type.replace('[]', '');
       if (types[nestedTypeName]) {
@@ -300,9 +278,6 @@ function analyzeMessageFields(
   }
 }
 
-// ============================================
-// DISPLAY MODEL BUILDING
-// ============================================
 
 function buildDisplayModel(data: TypedDataV4): TypedDataDisplayModel {
   const messageFields = extractFieldsFromObject(
@@ -312,7 +287,7 @@ function buildDisplayModel(data: TypedDataV4): TypedDataDisplayModel {
     ''
   );
 
-  // Extract nested structs
+  
   const nestedStructs: Array<{ name: string; fields: HighlightedField[] }> = [];
 
   for (const [fieldName, value] of Object.entries(data.message)) {
@@ -354,7 +329,7 @@ function extractFieldsFromObject(
     const value = obj[field.name];
     const path = parentPath ? `${parentPath}.${field.name}` : field.name;
 
-    // Skip nested objects (handled separately)
+    
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       continue;
     }
@@ -374,7 +349,7 @@ function createHighlightedField(
   const nameLower = name.toLowerCase();
   const valueStr = String(value ?? '');
 
-  // Determine highlight type
+  
   let highlight: HighlightedField['highlight'] = 'normal';
   if (HIGHLIGHT_FIELDS.has(nameLower)) {
     if (nameLower === 'spender') highlight = 'spender';
@@ -386,7 +361,7 @@ function createHighlightedField(
     else if (nameLower === 'operator') highlight = 'operator';
   }
 
-  // Format display value
+  
   let displayValue = valueStr;
 
   if (ADDRESS_FIELDS.has(nameLower) && valueStr.startsWith('0x')) {
@@ -415,9 +390,6 @@ function createHighlightedField(
   };
 }
 
-// ============================================
-// HIGHLIGHTED FIELD EXTRACTION
-// ============================================
 
 function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
   const highlighted: HighlightedField[] = [];
@@ -428,7 +400,7 @@ function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
       const fieldPath = path ? `${path}.${key}` : key;
 
       if (HIGHLIGHT_FIELDS.has(keyLower)) {
-        // Determine type for this field
+        
         let type = 'unknown';
         if (ADDRESS_FIELDS.has(keyLower)) type = 'address';
         else if (AMOUNT_FIELDS.has(keyLower)) type = 'uint256';
@@ -437,12 +409,12 @@ function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
         highlighted.push(createHighlightedField(key, type, value, fieldPath));
       }
 
-      // Recurse into nested objects
+      
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         extract(value as Record<string, unknown>, fieldPath);
       }
 
-      // Recurse into arrays
+      
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
           if (value[i] && typeof value[i] === 'object') {
@@ -457,9 +429,6 @@ function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
   return highlighted;
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function createErrorResult(error: string): TypedDataParseResult {
   return {
@@ -473,9 +442,7 @@ function createErrorResult(error: string): TypedDataParseResult {
   };
 }
 
-/**
- * Get chain name from chain ID
- */
+
 export function getChainName(chainId: number | undefined): string {
   if (!chainId) return 'Unknown';
 
@@ -500,9 +467,7 @@ export function getChainName(chainId: number | undefined): string {
   return chains[chainId] || `Chain ${chainId}`;
 }
 
-/**
- * Format domain for display
- */
+
 export function formatDomain(domain: TypedDataDomain): string {
   const parts: string[] = [];
 

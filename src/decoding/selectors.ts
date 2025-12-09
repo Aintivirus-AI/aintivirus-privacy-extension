@@ -1,19 +1,11 @@
-/**
- * AINTIVIRUS Decoding Module - Function Selectors
- *
- * Maps 4-byte function selectors to human-readable names and categories.
- */
+
 
 import { FunctionSignature, KnownContracts, KnownProtocol } from './types';
 
-// ============================================
-// EVM FUNCTION SELECTORS
-// ============================================
 
 export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
-  // ----------------------------------------
-  // ERC-20 Token
-  // ----------------------------------------
+  
+  
   '0xa9059cbb': {
     name: 'transfer',
     params: ['address to', 'uint256 amount'],
@@ -40,9 +32,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'other',
   },
 
-  // ----------------------------------------
-  // ERC-721 NFT
-  // ----------------------------------------
+  
   '0x42842e0e': {
     name: 'safeTransferFrom',
     params: ['address from', 'address to', 'uint256 tokenId'],
@@ -53,8 +43,8 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     params: ['address from', 'address to', 'uint256 tokenId', 'bytes data'],
     category: 'nft',
   },
-  // Note: 0x23b872dd (transferFrom) is defined in ERC-20 section above
-  // Same selector works for both ERC-20 and ERC-721 as signature is identical
+  
+  
   '0xa22cb465': {
     name: 'setApprovalForAll',
     params: ['address operator', 'bool approved'],
@@ -66,9 +56,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'other',
   },
 
-  // ----------------------------------------
-  // ERC-1155 Multi-Token
-  // ----------------------------------------
+  
   '0xf242432a': {
     name: 'safeTransferFrom',
     params: ['address from', 'address to', 'uint256 id', 'uint256 amount', 'bytes data'],
@@ -80,9 +68,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'nft',
   },
 
-  // ----------------------------------------
-  // EIP-2612 Permit
-  // ----------------------------------------
+  
   '0xd505accf': {
     name: 'permit',
     params: [
@@ -97,9 +83,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'approval',
   },
 
-  // ----------------------------------------
-  // Permit2 (Uniswap)
-  // ----------------------------------------
+  
   '0x2b67b570': {
     name: 'permit',
     params: ['address owner', 'PermitSingle permitSingle', 'bytes signature'],
@@ -120,9 +104,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'permit2',
   },
 
-  // ----------------------------------------
-  // Uniswap Routers
-  // ----------------------------------------
+  
   '0x3593564c': {
     name: 'execute',
     params: ['bytes commands', 'bytes[] inputs', 'uint256 deadline'],
@@ -164,9 +146,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'swap',
   },
 
-  // ----------------------------------------
-  // Uniswap V3
-  // ----------------------------------------
+  
   '0xc04b8d59': {
     name: 'exactInput',
     params: ['ExactInputParams params'],
@@ -193,9 +173,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'router',
   },
 
-  // ----------------------------------------
-  // WETH
-  // ----------------------------------------
+  
   '0xd0e30db0': {
     name: 'deposit',
     params: [],
@@ -207,9 +185,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'other',
   },
 
-  // ----------------------------------------
-  // Common DeFi
-  // ----------------------------------------
+  
   '0x1249c58b': {
     name: 'mint',
     params: [],
@@ -252,12 +228,9 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
   },
 };
 
-// ============================================
-// KNOWN PROTOCOL CONTRACTS (Mainnet)
-// ============================================
 
 export const KNOWN_CONTRACTS: KnownContracts = {
-  // Uniswap
+  
   '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45': {
     name: 'Uniswap SwapRouter02',
     verified: true,
@@ -279,13 +252,13 @@ export const KNOWN_CONTRACTS: KnownContracts = {
     verified: true,
   },
 
-  // WETH
+  
   '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': {
     name: 'Wrapped Ether (WETH)',
     verified: true,
   },
 
-  // Major Tokens
+  
   '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
     name: 'USD Coin (USDC)',
     verified: true,
@@ -299,19 +272,19 @@ export const KNOWN_CONTRACTS: KnownContracts = {
     verified: true,
   },
 
-  // 1inch
+  
   '0x1111111254eeb25477b68fb85ed929f73a960582': {
     name: '1inch Router V5',
     verified: true,
   },
 
-  // 0x
+  
   '0xdef1c0ded9bec7f1a1670819833240f027b25eff': {
     name: '0x Exchange Proxy',
     verified: true,
   },
 
-  // OpenSea
+  
   '0x00000000000000adc04c56bf30ac9d3c0aaf14dc': {
     name: 'OpenSea Seaport 1.5',
     verified: true,
@@ -321,58 +294,110 @@ export const KNOWN_CONTRACTS: KnownContracts = {
     verified: true,
   },
 
-  // Blur
+  
   '0xb2ecfe4e4d61f8790bbb9de2d1259b9e2410cea5': {
     name: 'Blur Marketplace',
     verified: true,
   },
 
-  // Lido
+  
   '0xae7ab96520de3a18e5e111b5eaab095312d7fe84': {
     name: 'Lido stETH',
     verified: true,
   },
 
-  // Aave
+  
   '0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2': {
     name: 'Aave V3 Pool',
     verified: true,
   },
 };
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
 
-/**
- * Look up a function signature by selector
- */
+const selectorCache = new Map<string, FunctionSignature | null>();
+
+
 export function lookupSelector(selector: string): FunctionSignature | null {
   const normalized = selector.toLowerCase();
-  return KNOWN_SELECTORS[normalized] || null;
+  
+  
+  if (selectorCache.has(normalized)) {
+    return selectorCache.get(normalized)!;
+  }
+  
+  
+  const result = KNOWN_SELECTORS[normalized] || null;
+  
+  
+  selectorCache.set(normalized, result);
+  
+  return result;
 }
 
-/**
- * Look up known contract/protocol info
- */
+
+export function preloadCommonSelectors(): void {
+  
+  const commonSelectors = [
+    '0xa9059cbb', 
+    '0x095ea7b3', 
+    '0x23b872dd', 
+    '0xa22cb465', 
+  ];
+  
+  for (const selector of commonSelectors) {
+    lookupSelector(selector);
+  }
+}
+
+
+const contractCache = new Map<string, KnownProtocol | null>();
+
+
 export function lookupContract(address: string): KnownProtocol | null {
   const normalized = address.toLowerCase();
-  return KNOWN_CONTRACTS[normalized] || null;
+  
+  
+  if (contractCache.has(normalized)) {
+    return contractCache.get(normalized)!;
+  }
+  
+  
+  const result = KNOWN_CONTRACTS[normalized] || null;
+  
+  
+  contractCache.set(normalized, result);
+  
+  return result;
 }
 
-/**
- * Check if an address is a known verified contract
- */
+
 export function isVerifiedContract(address: string): boolean {
   const info = lookupContract(address);
   return info?.verified ?? false;
 }
 
-/**
- * Get contract display name or formatted address
- */
+
+const displayNameCache = new Map<string, string>();
+
+
 export function getContractDisplayName(address: string): string {
+  
+  if (displayNameCache.has(address)) {
+    return displayNameCache.get(address)!;
+  }
+  
   const info = lookupContract(address);
-  if (info) return info.name;
-  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+  const displayName = info ? info.name : `${address.slice(0, 8)}...${address.slice(-6)}`;
+  
+  
+  displayNameCache.set(address, displayName);
+  
+  return displayName;
+}
+
+
+export function clearSelectorCaches(): void {
+  selectorCache.clear();
+  contractCache.clear();
+  displayNameCache.clear();
 }

@@ -1,14 +1,8 @@
-/**
- * AINTIVIRUS dApp Connectivity Module
- * 
- * This module provides dApp connectivity for the wallet extension.
- * Exports all handlers and types needed by other modules.
- */
 
-// Types
+
 export * from './types';
 
-// Handlers
+
 export {
   initializeDAppHandlers,
   broadcastAccountsChanged,
@@ -16,7 +10,7 @@ export {
   broadcastDisconnect,
 } from './handlers';
 
-// Permission Store
+
 export {
   getPermission,
   setPermission,
@@ -31,7 +25,7 @@ export {
   updatePermissionSettings,
 } from './permissions/store';
 
-// Request Queue
+
 export {
   enqueue,
   getRequest,
@@ -46,7 +40,7 @@ export {
   getQueueStats,
 } from './queue/requestQueue';
 
-// Content Bridge (for content script)
+
 export {
   initializeDAppBridge,
   injectDAppScript,

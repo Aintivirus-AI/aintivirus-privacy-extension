@@ -1,24 +1,4 @@
-/**
- * AINTIVIRUS Wallet Module - Secure Storage
- * 
- * SECURITY CRITICAL: This module manages the encrypted wallet vault.
- * 
- * Architecture:
- * - Multi-wallet vault stored in chrome.storage.local
- * - Encrypted mnemonics stored separately per wallet
- * - In-memory keypair only when wallet is unlocked
- * - Auto-lock after timeout (configurable)
- * 
- * Storage keys:
- * - multiWalletVault: Wallet metadata (MultiWalletVault)
- * - walletEncryptedData: Encrypted mnemonics (EncryptedWalletData)
- * - walletSettings: User preferences (WalletSettings)
- * 
- * NEVER:
- * - Store unencrypted private keys or mnemonics
- * - Keep unlocked keypair longer than necessary
- * - Log any sensitive data
- */
+
 
 import { Keypair } from '@solana/web3.js';
 import {
@@ -84,48 +64,37 @@ import {
   needsV2ToV3Migration,
 } from './migration';
 
-// ============================================
-// IN-MEMORY STATE
-// ============================================
 
-/**
- * SECURITY: In-memory wallet state
- * 
- * This holds the unlocked keypairs during an active session.
- * The keypairs are cleared when the wallet is locked.
- * 
- * WARNING: This is the only place where unencrypted keys exist.
- */
 interface InMemoryWalletState {
-  /** Active wallet ID */
+  
   activeWalletId: string | null;
-  /** Active account ID within the wallet */
+  
   activeAccountId: string | null;
-  /** Unlocked Solana keypair (SENSITIVE - null when locked) */
+  
   keypair: Keypair | null;
-  /** Unlocked EVM keypair (SENSITIVE - null when locked) */
+  
   evmKeypair: EVMKeypair | null;
-  /** Public Solana address (safe to keep) */
+  
   publicAddress: string | null;
-  /** Public EVM address (safe to keep) */
+  
   evmAddress: string | null;
-  /** Active wallet label */
+  
   walletLabel: string | null;
-  /** Active account name */
+  
   accountName: string | null;
-  /** Active account index (for derivation) */
+  
   accountIndex: number;
-  /** Whether current account is watch-only */
+  
   isWatchOnly: boolean;
-  /** Auto-lock timer */
+  
   lockTimer: ReturnType<typeof setTimeout> | null;
-  /** Cached password hash for wallet switching (cleared on lock) */
+  
   passwordHash: string | null;
-  /** Cached mnemonic for deriving keys (cleared on lock) */
+  
   cachedMnemonic: string | null;
 }
 
-// SECURITY: Module-level state (not exported)
+
 const memoryState: InMemoryWalletState = {
   activeWalletId: null,
   activeAccountId: null,
@@ -142,20 +111,7 @@ const memoryState: InMemoryWalletState = {
   cachedMnemonic: null,
 };
 
-// ============================================
-// RATE LIMITING FOR UNLOCK ATTEMPTS
-// ============================================
 
-/**
- * SECURITY: Rate limiting state to prevent brute force attacks
- * 
- * - Tracks failed unlock attempts
- * - Implements exponential backoff
- * - Locks out after MAX_FAILED_ATTEMPTS for LOCKOUT_DURATION_MS
- * 
- * MV3 COMPLIANCE: State is persisted to chrome.storage.local so
- * restarting the extension doesn't reset lockouts.
- */
 interface RateLimitState {
   failedAttempts: number;
   lastFailedAttempt: number;
@@ -163,13 +119,11 @@ interface RateLimitState {
 }
 
 const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 minutes
-const BASE_BACKOFF_MS = 1000; // 1 second base
+const LOCKOUT_DURATION_MS = 5 * 60 * 1000; 
+const BASE_BACKOFF_MS = 1000; 
 const RATE_LIMIT_STORAGE_KEY = 'walletRateLimitState';
 
-/**
- * Load rate limit state from storage
- */
+
 async function loadRateLimitState(): Promise<RateLimitState> {
   try {
     const result = await chrome.storage.local.get(RATE_LIMIT_STORAGE_KEY);
@@ -179,7 +133,7 @@ async function loadRateLimitState(): Promise<RateLimitState> {
       return state;
     }
   } catch (error) {
-    console.error('[Wallet] Failed to load rate limit state:', error);
+    
   }
   
   return {
@@ -189,29 +143,21 @@ async function loadRateLimitState(): Promise<RateLimitState> {
   };
 }
 
-/**
- * Save rate limit state to storage (atomic write)
- */
+
 async function saveRateLimitState(state: RateLimitState): Promise<void> {
   try {
     await chrome.storage.local.set({ [RATE_LIMIT_STORAGE_KEY]: state });
   } catch (error) {
-    console.error('[Wallet] Failed to save rate limit state:', error);
+    
   }
 }
 
-/**
- * Check if unlock attempts are currently rate limited
- * 
- * MV3 COMPLIANCE: Reads from persisted storage.
- * 
- * @returns Object with isLimited flag and remaining wait time in ms
- */
+
 async function checkRateLimit(): Promise<{ isLimited: boolean; waitMs: number; attemptsRemaining: number }> {
   const now = Date.now();
   const state = await loadRateLimitState();
   
-  // Check if locked out completely
+  
   if (state.lockedUntil > now) {
     return {
       isLimited: true,
@@ -220,7 +166,7 @@ async function checkRateLimit(): Promise<{ isLimited: boolean; waitMs: number; a
     };
   }
   
-  // Reset if lockout has expired
+  
   if (state.lockedUntil > 0 && state.lockedUntil <= now) {
     await saveRateLimitState({
       failedAttempts: 0,
@@ -234,7 +180,7 @@ async function checkRateLimit(): Promise<{ isLimited: boolean; waitMs: number; a
     };
   }
   
-  // Calculate exponential backoff if we have failed attempts
+  
   if (state.failedAttempts > 0) {
     const backoffMs = BASE_BACKOFF_MS * Math.pow(2, state.failedAttempts - 1);
     const nextAllowedTime = state.lastFailedAttempt + backoffMs;
@@ -255,11 +201,7 @@ async function checkRateLimit(): Promise<{ isLimited: boolean; waitMs: number; a
   };
 }
 
-/**
- * Record a failed unlock attempt
- * 
- * MV3 COMPLIANCE: Persists state atomically.
- */
+
 async function recordFailedAttempt(): Promise<void> {
   const now = Date.now();
   const state = await loadRateLimitState();
@@ -267,7 +209,7 @@ async function recordFailedAttempt(): Promise<void> {
   state.failedAttempts++;
   state.lastFailedAttempt = now;
   
-  // Lock out after MAX_FAILED_ATTEMPTS
+  
   if (state.failedAttempts >= MAX_FAILED_ATTEMPTS) {
     state.lockedUntil = now + LOCKOUT_DURATION_MS;
   }
@@ -275,11 +217,7 @@ async function recordFailedAttempt(): Promise<void> {
   await saveRateLimitState(state);
 }
 
-/**
- * Reset rate limiting after successful unlock
- * 
- * MV3 COMPLIANCE: Persists state.
- */
+
 async function resetRateLimit(): Promise<void> {
   await saveRateLimitState({
     failedAttempts: 0,
@@ -288,51 +226,35 @@ async function resetRateLimit(): Promise<void> {
   });
 }
 
-// ============================================
-// STORAGE HELPERS
-// ============================================
 
-/**
- * Get multi-wallet vault from storage
- */
 async function getMultiWalletVault(): Promise<MultiWalletVault | null> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.MULTI_WALLET_VAULT);
   return result[STORAGE_KEYS.MULTI_WALLET_VAULT] || null;
 }
 
-/**
- * Save multi-wallet vault to storage
- */
+
 async function saveMultiWalletVault(vault: MultiWalletVault): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.MULTI_WALLET_VAULT]: vault });
 }
 
-/**
- * Get encrypted wallet data from storage
- */
+
 async function getEncryptedWalletData(): Promise<EncryptedWalletData> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.ENCRYPTED_WALLET_DATA);
   return result[STORAGE_KEYS.ENCRYPTED_WALLET_DATA] || {};
 }
 
-/**
- * Save encrypted wallet data to storage
- */
+
 async function saveEncryptedWalletData(data: EncryptedWalletData): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.ENCRYPTED_WALLET_DATA]: data });
 }
 
-/**
- * Get legacy vault from storage (for migration)
- */
+
 async function getLegacyVault(): Promise<EncryptedVault | null> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.LEGACY_VAULT);
   return result[STORAGE_KEYS.LEGACY_VAULT] || null;
 }
 
-/**
- * Get v3 multi-wallet vault from storage
- */
+
 async function getMultiWalletVaultV3(): Promise<MultiWalletVaultV3 | null> {
   const result = await chrome.storage.local.get(STORAGE_KEYS.MULTI_WALLET_VAULT);
   const vault = result[STORAGE_KEYS.MULTI_WALLET_VAULT];
@@ -342,56 +264,60 @@ async function getMultiWalletVaultV3(): Promise<MultiWalletVaultV3 | null> {
   return null;
 }
 
-/**
- * Save v3 multi-wallet vault to storage
- */
+
 async function saveMultiWalletVaultV3(vault: MultiWalletVaultV3): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.MULTI_WALLET_VAULT]: vault });
 }
 
-/**
- * Get wallet settings from storage
- */
+
+let settingsCache: WalletSettings | null = null;
+let settingsCacheTime: number = 0;
+const SETTINGS_CACHE_TTL = 5000; 
+
+
 export async function getWalletSettings(): Promise<WalletSettings> {
+  const now = Date.now();
+  
+  
+  if (settingsCache && now - settingsCacheTime < SETTINGS_CACHE_TTL) {
+    return settingsCache;
+  }
+  
   const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
-  return result[STORAGE_KEYS.SETTINGS] || DEFAULT_WALLET_SETTINGS;
+  const settings: WalletSettings = result[STORAGE_KEYS.SETTINGS] || DEFAULT_WALLET_SETTINGS;
+  settingsCache = settings;
+  settingsCacheTime = now;
+  
+  return settings;
 }
 
-/**
- * Save wallet settings to storage
- */
+
 export async function saveWalletSettings(settings: Partial<WalletSettings>): Promise<void> {
   const current = await getWalletSettings();
+  const updated = { ...current, ...settings };
+  
   await chrome.storage.local.set({
-    [STORAGE_KEYS.SETTINGS]: { ...current, ...settings },
+    [STORAGE_KEYS.SETTINGS]: updated,
   });
+  
+  
+  settingsCache = updated;
+  settingsCacheTime = Date.now();
 }
 
-// ============================================
-// WALLET LIFECYCLE
-// ============================================
 
-/**
- * Check if a wallet vault exists
- * 
- * SECURITY: This only checks existence, not validity.
- * Checks both v2 multi-wallet vault and v1 legacy vault.
- * 
- * @returns True if wallet has been created
- */
+export function invalidateSettingsCache(): void {
+  settingsCache = null;
+  settingsCacheTime = 0;
+}
+
+
 export async function walletExists(): Promise<boolean> {
   const versionInfo = await detectVaultVersion();
   return versionInfo.version > 0;
 }
 
-/**
- * Get current wallet state (safe for UI)
- * 
- * SECURITY: This returns only public information.
- * Never includes private keys or mnemonic.
- * 
- * @returns Current wallet state
- */
+
 export async function getWalletState(): Promise<WalletState> {
   const versionInfo = await detectVaultVersion();
   const settings = await getWalletSettings();
@@ -408,10 +334,10 @@ export async function getWalletState(): Promise<WalletState> {
   let isWatchOnly = false;
   
   if (versionInfo.version === 0) {
-    // No wallet exists
+    
     lockState = 'uninitialized';
   } else if (versionInfo.version === 1) {
-    // Legacy v1 vault - needs migration
+    
     const legacyVault = versionInfo.legacyVault!;
     if (memoryState.keypair) {
       lockState = 'unlocked';
@@ -425,10 +351,10 @@ export async function getWalletState(): Promise<WalletState> {
     activeWalletLabel = 'Main Wallet';
     activeAccountName = 'Account 1';
   } else if (versionInfo.version === 2) {
-    // v2 multi-wallet vault (needs migration to v3)
+    
     const vault = versionInfo.multiWalletVault!;
     walletCount = vault.wallets.length;
-    accountCount = 1; // v2 always has 1 account per wallet
+    accountCount = 1; 
     
     if (walletCount === 0) {
       lockState = 'uninitialized';
@@ -443,7 +369,7 @@ export async function getWalletState(): Promise<WalletState> {
       isWatchOnly = memoryState.isWatchOnly;
     } else {
       lockState = 'locked';
-      // Get active wallet info from vault
+      
       if (vault.activeWalletId) {
         const activeWallet = vault.wallets.find(w => w.id === vault.activeWalletId);
         if (activeWallet) {
@@ -454,7 +380,7 @@ export async function getWalletState(): Promise<WalletState> {
           activeAccountName = 'Account 1';
         }
       }
-      // Fall back to first wallet if no active wallet
+      
       if (!publicAddress && vault.wallets.length > 0) {
         publicAddress = vault.wallets[0].publicKey;
         activeWalletId = vault.wallets[0].id;
@@ -464,7 +390,7 @@ export async function getWalletState(): Promise<WalletState> {
       }
     }
   } else {
-    // v3 HD accounts vault
+    
     const vault = versionInfo.multiWalletVaultV3!;
     walletCount = vault.wallets.length;
     
@@ -480,7 +406,7 @@ export async function getWalletState(): Promise<WalletState> {
       evmAddress = memoryState.evmAddress;
       isWatchOnly = memoryState.isWatchOnly;
       
-      // Get account count for active wallet
+      
       if (activeWalletId) {
         const activeWallet = vault.wallets.find(w => w.id === activeWalletId);
         if (activeWallet) {
@@ -489,7 +415,7 @@ export async function getWalletState(): Promise<WalletState> {
       }
     } else {
       lockState = 'locked';
-      // Get active wallet/account info from vault
+      
       if (vault.activeWalletId) {
         const activeWallet = vault.wallets.find(w => w.id === vault.activeWalletId);
         if (activeWallet) {
@@ -497,7 +423,7 @@ export async function getWalletState(): Promise<WalletState> {
           activeWalletLabel = activeWallet.label;
           accountCount = activeWallet.accounts.length;
           
-          // Find active account
+          
           const activeAccount = vault.activeAccountId
             ? activeWallet.accounts.find(a => a.id === vault.activeAccountId)
             : activeWallet.accounts[0];
@@ -510,7 +436,7 @@ export async function getWalletState(): Promise<WalletState> {
           }
         }
       }
-      // Fall back to first wallet/account if no active
+      
       if (!publicAddress && vault.wallets.length > 0) {
         const firstWallet = vault.wallets[0];
         activeWalletId = firstWallet.id;
@@ -525,7 +451,7 @@ export async function getWalletState(): Promise<WalletState> {
           activeAccountName = firstAccount.name;
         }
       }
-      // Check for watch-only accounts if no seed wallets
+      
       if (!publicAddress && vault.watchOnlyAccounts.length > 0) {
         const firstWatchOnly = vault.watchOnlyAccounts[0];
         publicAddress = firstWatchOnly.address;
@@ -557,19 +483,7 @@ export async function getWalletState(): Promise<WalletState> {
   };
 }
 
-/**
- * Create a new wallet (first wallet or with existing vault)
- * 
- * SECURITY: This is the most sensitive operation:
- * 1. Generates new mnemonic (256 bits entropy)
- * 2. Derives keypair from mnemonic
- * 3. Encrypts mnemonic with user password
- * 4. Stores encrypted vault
- * 5. Returns mnemonic for user backup (ONE TIME ONLY)
- * 
- * @param password - User's chosen password (SENSITIVE)
- * @returns Object with mnemonic (SENSITIVE), public address, and wallet ID
- */
+
 export async function createWallet(password: string): Promise<{
   mnemonic: string;
   publicAddress: string;
@@ -577,7 +491,7 @@ export async function createWallet(password: string): Promise<{
 }> {
   const versionInfo = await detectVaultVersion();
   
-  // If v1 vault exists, need to migrate first
+  
   if (versionInfo.version === 1) {
     throw new WalletError(
       WalletErrorCode.WALLET_ALREADY_EXISTS,
@@ -585,7 +499,7 @@ export async function createWallet(password: string): Promise<{
     );
   }
   
-  // Validate password strength
+  
   if (!validatePasswordStrength(password)) {
     throw new WalletError(
       WalletErrorCode.INVALID_PASSWORD,
@@ -597,16 +511,16 @@ export async function createWallet(password: string): Promise<{
   let encryptedData: EncryptedWalletData;
   
   if (versionInfo.version === 0) {
-    // First wallet - initialize vault
+    
     const initialized = await initializeMultiWalletVault(password);
     vault = initialized.vault;
     encryptedData = initialized.encryptedData;
   } else {
-    // Add to existing vault
+    
     vault = versionInfo.multiWalletVault!;
     encryptedData = await getEncryptedWalletData();
     
-    // Verify password
+    
     const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
     if (!isValid) {
       throw new WalletError(
@@ -615,7 +529,7 @@ export async function createWallet(password: string): Promise<{
       );
     }
     
-    // Check wallet limit
+    
     if (vault.wallets.length >= MAX_WALLETS) {
       throw new WalletError(
         WalletErrorCode.MAX_WALLETS_REACHED,
@@ -624,19 +538,19 @@ export async function createWallet(password: string): Promise<{
     }
   }
   
-  // SECURITY: Generate new mnemonic (256 bits of entropy)
+  
   let mnemonic = generateMnemonic();
   
-  // SECURITY: Derive keypair from mnemonic
+  
   const keypair = deriveKeypair(mnemonic);
   const publicAddress = getPublicKeyBase58(keypair);
   
-  // Generate wallet ID and label
+  
   const walletId = generateWalletId();
   const walletNumber = vault.wallets.length + 1;
   const label = `Wallet ${walletNumber}`;
   
-  // SECURITY: Encrypt mnemonic with password
+  
   const salt = generateSalt();
   const ivBytes = new Uint8Array(12);
   crypto.getRandomValues(ivBytes);
@@ -644,7 +558,7 @@ export async function createWallet(password: string): Promise<{
   const key = await deriveKeyFromPassword(password, salt);
   const ciphertext = await encrypt(mnemonic, key, iv);
   
-  // Create wallet entry
+  
   const walletEntry: WalletEntry = {
     id: walletId,
     label,
@@ -653,42 +567,42 @@ export async function createWallet(password: string): Promise<{
     derivationIndex: 0,
   };
   
-  // Update vault
+  
   vault.wallets.push(walletEntry);
   vault.activeWalletId = walletId;
   if (vault.createdAt === 0) {
     vault.createdAt = Date.now();
   }
   
-  // Update encrypted data
+  
   encryptedData[walletId] = { salt, iv, ciphertext };
   
-  // Derive EVM keypair and address
+  
   const evmKeypair = deriveEVMKeypair(mnemonic);
   const evmAddress = evmKeypair.address;
   
-  // Update wallet entry with EVM address
+  
   walletEntry.evmAddress = evmAddress;
   vault.wallets[vault.wallets.length - 1] = walletEntry;
   
-  // Save to storage
+  
   await saveMultiWalletVault(vault);
   await saveEncryptedWalletData(encryptedData);
   
-  // SECURITY: Store keypairs in memory (wallet is now unlocked)
+  
   memoryState.activeWalletId = walletId;
   memoryState.keypair = keypair;
   memoryState.evmKeypair = evmKeypair;
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = label;
-  memoryState.passwordHash = password; // For wallet switching
-  memoryState.cachedMnemonic = mnemonic; // Cache for EVM derivation
+  memoryState.passwordHash = password; 
+  memoryState.cachedMnemonic = mnemonic; 
   
-  // Start auto-lock timer
+  
   await startAutoLockTimer();
   
-  // SECURITY: Create a copy of mnemonic for return, then clear original reference
+  
   const mnemonicForBackup = mnemonic.slice();
   mnemonic = '';
   
@@ -699,25 +613,18 @@ export async function createWallet(password: string): Promise<{
   };
 }
 
-/**
- * Import an existing wallet from mnemonic
- * 
- * SECURITY: Validates mnemonic before import.
- * The mnemonic is encrypted and stored, never logged.
- * 
- * @param mnemonic - User's existing mnemonic (SENSITIVE)
- * @param password - User's chosen password (SENSITIVE)
- * @param label - Optional wallet label
- * @returns Public address and wallet ID
- */
+
 export async function importWallet(
   mnemonic: string,
-  password: string,
+  password?: string,
   label?: string
 ): Promise<{ publicAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
   
-  // If v1 vault exists, need to migrate first
+  
+  const effectivePassword = password || memoryState.passwordHash;
+  
+  
   if (versionInfo.version === 1) {
     throw new WalletError(
       WalletErrorCode.WALLET_ALREADY_EXISTS,
@@ -725,7 +632,7 @@ export async function importWallet(
     );
   }
   
-  // Normalize and validate mnemonic
+  
   let normalizedMnemonic = normalizeMnemonic(mnemonic);
   if (!validateMnemonic(normalizedMnemonic)) {
     normalizedMnemonic = '';
@@ -735,39 +642,58 @@ export async function importWallet(
     );
   }
   
-  // Validate password strength
-  if (!validatePasswordStrength(password)) {
-    normalizedMnemonic = '';
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Password does not meet minimum requirements'
-    );
+  
+  if (versionInfo.version === 0) {
+    if (!effectivePassword) {
+      normalizedMnemonic = '';
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Password is required to create the first wallet'
+      );
+    }
+    if (!validatePasswordStrength(effectivePassword)) {
+      normalizedMnemonic = '';
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Password does not meet minimum requirements'
+      );
+    }
   }
   
   let vault: MultiWalletVault;
   let encryptedData: EncryptedWalletData;
   
   if (versionInfo.version === 0) {
-    // First wallet - initialize vault
-    const initialized = await initializeMultiWalletVault(password);
+    
+    const initialized = await initializeMultiWalletVault(effectivePassword!);
     vault = initialized.vault;
     encryptedData = initialized.encryptedData;
   } else {
-    // Add to existing vault
-    vault = versionInfo.multiWalletVault!;
-    encryptedData = await getEncryptedWalletData();
     
-    // Verify password
-    const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
-    if (!isValid) {
+    if (!effectivePassword) {
       normalizedMnemonic = '';
       throw new WalletError(
-        WalletErrorCode.INVALID_PASSWORD,
-        'Incorrect password'
+        WalletErrorCode.WALLET_LOCKED,
+        'Wallet is locked. Please unlock first.'
       );
     }
     
-    // Check wallet limit
+    vault = versionInfo.multiWalletVault!;
+    encryptedData = await getEncryptedWalletData();
+    
+    
+    if (password && password !== memoryState.passwordHash) {
+      const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
+      if (!isValid) {
+        normalizedMnemonic = '';
+        throw new WalletError(
+          WalletErrorCode.INVALID_PASSWORD,
+          'Incorrect password'
+        );
+      }
+    }
+    
+    
     if (vault.wallets.length >= MAX_WALLETS) {
       normalizedMnemonic = '';
       throw new WalletError(
@@ -777,11 +703,11 @@ export async function importWallet(
     }
   }
   
-  // SECURITY: Derive keypair from mnemonic
+  
   const keypair = deriveKeypair(normalizedMnemonic);
   const publicAddress = getPublicKeyBase58(keypair);
   
-  // Check if wallet already exists
+  
   const existingWallet = vault.wallets.find(w => w.publicKey === publicAddress);
   if (existingWallet) {
     normalizedMnemonic = '';
@@ -791,23 +717,23 @@ export async function importWallet(
     );
   }
   
-  // Generate wallet ID and label
+  
   const walletId = generateWalletId();
   const walletNumber = vault.wallets.length + 1;
   const walletLabel = label?.slice(0, MAX_WALLET_LABEL_LENGTH) || `Wallet ${walletNumber}`;
   
-  // SECURITY: Encrypt mnemonic with password
+  
   const salt = generateSalt();
   const ivBytes = new Uint8Array(12);
   crypto.getRandomValues(ivBytes);
   const iv = arrayBufferToBase64(ivBytes.buffer as ArrayBuffer);
-  const key = await deriveKeyFromPassword(password, salt);
+  const key = await deriveKeyFromPassword(effectivePassword!, salt);
   const ciphertext = await encrypt(normalizedMnemonic, key, iv);
   
-  // SECURITY: Clear mnemonic reference after encryption
+  
   normalizedMnemonic = '';
   
-  // Create wallet entry
+  
   const walletEntry: WalletEntry = {
     id: walletId,
     label: walletLabel,
@@ -816,50 +742,46 @@ export async function importWallet(
     derivationIndex: 0,
   };
   
-  // Update vault
+  
   vault.wallets.push(walletEntry);
   vault.activeWalletId = walletId;
   if (vault.createdAt === 0) {
     vault.createdAt = Date.now();
   }
   
-  // Update encrypted data
+  
   encryptedData[walletId] = { salt, iv, ciphertext };
   
-  // Derive EVM keypair and address from mnemonic
-  // Note: normalizedMnemonic has already been cleared at this point
-  // We need to re-derive from the decrypted mnemonic
-  const evmAddress = getEVMAddressFromMnemonic(await decryptMnemonicForEVM(walletId, password, encryptedData[walletId]));
   
-  // Update wallet entry with EVM address
+  const evmAddress = getEVMAddressFromMnemonic(await decryptMnemonicForEVM(walletId, effectivePassword!, encryptedData[walletId]));
+  
+  
   walletEntry.evmAddress = evmAddress;
   vault.wallets[vault.wallets.length - 1] = walletEntry;
   
-  // Save to storage
+  
   await saveMultiWalletVault(vault);
   await saveEncryptedWalletData(encryptedData);
   
-  // Derive EVM keypair for memory
-  const evmKeypair = deriveEVMKeypair(await decryptMnemonicForEVM(walletId, password, encryptedData[walletId]));
   
-  // SECURITY: Store keypairs in memory (wallet is now unlocked)
+  const evmKeypair = deriveEVMKeypair(await decryptMnemonicForEVM(walletId, effectivePassword!, encryptedData[walletId]));
+  
+  
   memoryState.activeWalletId = walletId;
   memoryState.keypair = keypair;
   memoryState.evmKeypair = evmKeypair;
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
-  memoryState.passwordHash = password;
+  memoryState.passwordHash = effectivePassword!;
   
-  // Start auto-lock timer
+  
   await startAutoLockTimer();
   
   return { publicAddress, walletId };
 }
 
-/**
- * Helper to decrypt mnemonic for EVM derivation
- */
+
 async function decryptMnemonicForEVM(
   walletId: string,
   password: string,
@@ -869,17 +791,9 @@ async function decryptMnemonicForEVM(
   return await decrypt(walletData.ciphertext, key, walletData.iv);
 }
 
-/**
- * Unlock the wallet with password
- * 
- * SECURITY: Decrypts the vault and loads keypair into memory.
- * Handles migration from v1 to v2 format if needed.
- * 
- * @param password - User's password (SENSITIVE)
- * @returns Public address
- */
+
 export async function unlockWallet(password: string): Promise<{ publicAddress: string }> {
-  // SECURITY: Check rate limiting before attempting unlock (persisted)
+  
   const rateLimit = await checkRateLimit();
   if (rateLimit.isLimited) {
     const waitSeconds = Math.ceil(rateLimit.waitMs / 1000);
@@ -901,17 +815,17 @@ export async function unlockWallet(password: string): Promise<{ publicAddress: s
     );
   }
   
-  // Already unlocked?
+  
   if (memoryState.keypair) {
     await resetRateLimit();
     return { publicAddress: memoryState.publicAddress! };
   }
   
-  // Handle v1 migration
+  
   if (versionInfo.version === 1) {
     try {
       const { vault } = await migrateV1ToV2(password);
-      // Now unlock with migrated vault
+      
       return await unlockWalletV2(password, vault);
     } catch (error) {
       if (error instanceof WalletError && error.code === WalletErrorCode.INVALID_PASSWORD) {
@@ -921,18 +835,16 @@ export async function unlockWallet(password: string): Promise<{ publicAddress: s
     }
   }
   
-  // v2 multi-wallet unlock
+  
   return await unlockWalletV2(password, versionInfo.multiWalletVault!);
 }
 
-/**
- * Unlock v2 multi-wallet vault
- */
+
 async function unlockWalletV2(
   password: string,
   vault: MultiWalletVault
 ): Promise<{ publicAddress: string }> {
-  // Verify password against master verifier
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     await recordFailedAttempt();
@@ -945,7 +857,7 @@ async function unlockWalletV2(
     );
   }
   
-  // Get active wallet ID (or first wallet)
+  
   let activeWalletId = vault.activeWalletId;
   if (!activeWalletId && vault.wallets.length > 0) {
     activeWalletId = vault.wallets[0].id;
@@ -958,7 +870,7 @@ async function unlockWalletV2(
     );
   }
   
-  // Find wallet entry
+  
   const walletEntry = vault.wallets.find(w => w.id === activeWalletId);
   if (!walletEntry) {
     throw new WalletError(
@@ -967,7 +879,7 @@ async function unlockWalletV2(
     );
   }
   
-  // Get encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   const walletData = encryptedData[activeWalletId];
   if (!walletData) {
@@ -978,7 +890,7 @@ async function unlockWalletV2(
   }
   
   try {
-    // Decrypt stored data (could be mnemonic or private key import)
+    
     const key = await deriveKeyFromPassword(password, walletData.salt);
     let decryptedData = await decrypt(walletData.ciphertext, key, walletData.iv);
     
@@ -987,26 +899,26 @@ async function unlockWalletV2(
     let publicAddress: string;
     let evmAddress: string = '';
     
-    // Check if this is a private key import or mnemonic
+    
     if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
-      // Parse the stored private key
+      
       const parts = decryptedData.split(':');
       const storedChainType = parts[1];
-      const storedPrivateKey = parts.slice(2).join(':'); // In case private key contains ':'
-      decryptedData = ''; // Clear decrypted data
+      const storedPrivateKey = parts.slice(2).join(':'); 
+      decryptedData = ''; 
       
       if (storedChainType === 'solana') {
         keypair = keypairFromPrivateKey(storedPrivateKey);
         publicAddress = getPublicKeyBase58(keypair);
-        // Solana-only import doesn't have EVM keypair
+        
         evmKeypair = null;
         evmAddress = '';
       } else if (storedChainType === 'evm') {
         evmKeypair = evmKeypairFromPrivateKey(storedPrivateKey);
         evmAddress = evmKeypair.address;
-        // EVM-only import doesn't have Solana keypair
+        
         keypair = null;
-        publicAddress = walletEntry.publicKey; // Use stored public key (may be prefixed with 'evm:')
+        publicAddress = walletEntry.publicKey; 
       } else {
         throw new WalletError(
           WalletErrorCode.DECRYPTION_FAILED,
@@ -1014,15 +926,15 @@ async function unlockWalletV2(
         );
       }
     } else {
-      // Regular mnemonic-based wallet
-      const mnemonic = decryptedData;
-      decryptedData = ''; // Clear reference
       
-      // Derive Solana keypair
+      const mnemonic = decryptedData;
+      decryptedData = ''; 
+      
+      
       keypair = deriveKeypair(mnemonic);
       publicAddress = getPublicKeyBase58(keypair);
       
-      // Verify public key matches
+      
       if (publicAddress !== walletEntry.publicKey) {
         await recordFailedAttempt();
         throw new WalletError(
@@ -1031,12 +943,12 @@ async function unlockWalletV2(
         );
       }
       
-      // Derive EVM keypair
+      
       evmKeypair = deriveEVMKeypair(mnemonic);
       evmAddress = evmKeypair.address;
     }
     
-    // Update wallet entry with EVM address if not present
+    
     if (!walletEntry.evmAddress && evmAddress) {
       walletEntry.evmAddress = evmAddress;
       const walletIndex = vault.wallets.findIndex(w => w.id === activeWalletId);
@@ -1046,10 +958,10 @@ async function unlockWalletV2(
       }
     }
     
-    // Reset rate limiting on success
+    
     await resetRateLimit();
     
-    // Store in memory
+    
     memoryState.activeWalletId = activeWalletId;
     memoryState.keypair = keypair;
     memoryState.evmKeypair = evmKeypair;
@@ -1058,7 +970,7 @@ async function unlockWalletV2(
     memoryState.walletLabel = walletEntry.label;
     memoryState.passwordHash = password;
     
-    // Start auto-lock timer
+    
     await startAutoLockTimer();
     
     return { publicAddress };
@@ -1074,40 +986,26 @@ async function unlockWalletV2(
   }
 }
 
-/**
- * Lock the wallet
- * 
- * SECURITY: Clears the keypair from memory.
- * The wallet remains in storage (encrypted).
- */
+
 export function lockWallet(): void {
-  // Clear auto-lock timer
+  
   if (memoryState.lockTimer) {
     clearTimeout(memoryState.lockTimer);
     memoryState.lockTimer = null;
   }
   
-  // SECURITY: Clear all sensitive data from memory
+  
   memoryState.keypair = null;
   memoryState.evmKeypair = null;
   memoryState.passwordHash = null;
   memoryState.cachedMnemonic = null;
   memoryState.isWatchOnly = false;
-  // Keep publicAddress, evmAddress, labels, etc. for display purposes
+  
 }
 
-/**
- * Delete all wallets
- * 
- * SECURITY: Requires password verification before deletion.
- * This permanently removes all encrypted vaults.
- * 
- * WARNING: This is irreversible. User must have their mnemonic backups.
- * 
- * @param password - Password for verification (SENSITIVE)
- */
+
 export async function deleteWallet(password: string): Promise<void> {
-  // SECURITY: Check rate limiting (persisted)
+  
   const rateLimit = await checkRateLimit();
   if (rateLimit.isLimited) {
     const waitSeconds = Math.ceil(rateLimit.waitMs / 1000);
@@ -1126,7 +1024,7 @@ export async function deleteWallet(password: string): Promise<void> {
     );
   }
   
-  // Handle v1 vault
+  
   if (versionInfo.version === 1) {
     const legacyVault = versionInfo.legacyVault!;
     try {
@@ -1149,7 +1047,7 @@ export async function deleteWallet(password: string): Promise<void> {
     return;
   }
   
-  // Handle v2 vault
+  
   const vault = versionInfo.multiWalletVault!;
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
@@ -1174,15 +1072,7 @@ export async function deleteWallet(password: string): Promise<void> {
   memoryState.walletLabel = null;
 }
 
-// ============================================
-// MULTI-WALLET MANAGEMENT
-// ============================================
 
-/**
- * List all wallets (public info only)
- * 
- * @returns Array of wallet entries
- */
 export async function listWallets(): Promise<WalletEntry[]> {
   const versionInfo = await detectVaultVersion();
   
@@ -1191,7 +1081,7 @@ export async function listWallets(): Promise<WalletEntry[]> {
   }
   
   if (versionInfo.version === 1) {
-    // Legacy vault - return single wallet entry
+    
     const legacyVault = versionInfo.legacyVault!;
     return [{
       id: 'legacy',
@@ -1205,22 +1095,25 @@ export async function listWallets(): Promise<WalletEntry[]> {
   return versionInfo.multiWalletVault!.wallets;
 }
 
-/**
- * Add a new wallet (create)
- * 
- * @param password - Password for verification
- * @param label - Optional wallet label
- * @returns New wallet info with mnemonic for backup
- */
+
 export async function addWallet(
-  password: string,
+  password?: string,
   label?: string
 ): Promise<{ mnemonic: string; publicAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
   
+  
+  const effectivePassword = password || memoryState.passwordHash;
+  
   if (versionInfo.version === 0) {
-    // No vault exists - create first wallet
-    return createWallet(password);
+    
+    if (!effectivePassword) {
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Password is required to create the first wallet'
+      );
+    }
+    return createWallet(effectivePassword);
   }
   
   if (versionInfo.version === 1) {
@@ -1230,18 +1123,28 @@ export async function addWallet(
     );
   }
   
-  const vault = versionInfo.multiWalletVault!;
   
-  // Verify password
-  const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
-  if (!isValid) {
+  if (!effectivePassword) {
     throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Incorrect password'
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock first.'
     );
   }
   
-  // Check wallet limit
+  const vault = versionInfo.multiWalletVault!;
+  
+  
+  if (password && password !== memoryState.passwordHash) {
+    const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
+    if (!isValid) {
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Incorrect password'
+      );
+    }
+  }
+  
+  
   if (vault.wallets.length >= MAX_WALLETS) {
     throw new WalletError(
       WalletErrorCode.MAX_WALLETS_REACHED,
@@ -1249,7 +1152,7 @@ export async function addWallet(
     );
   }
   
-  // Generate new wallet
+  
   let mnemonic = generateMnemonic();
   const keypair = deriveKeypair(mnemonic);
   const publicAddress = getPublicKeyBase58(keypair);
@@ -1258,15 +1161,15 @@ export async function addWallet(
   const walletNumber = vault.wallets.length + 1;
   const walletLabel = label?.slice(0, MAX_WALLET_LABEL_LENGTH) || `Wallet ${walletNumber}`;
   
-  // Encrypt mnemonic
+  
   const salt = generateSalt();
   const ivBytes = new Uint8Array(12);
   crypto.getRandomValues(ivBytes);
   const iv = arrayBufferToBase64(ivBytes.buffer as ArrayBuffer);
-  const key = await deriveKeyFromPassword(password, salt);
+  const key = await deriveKeyFromPassword(effectivePassword, salt);
   const ciphertext = await encrypt(mnemonic, key, iv);
   
-  // Create wallet entry
+  
   const walletEntry: WalletEntry = {
     id: walletId,
     label: walletLabel,
@@ -1275,33 +1178,33 @@ export async function addWallet(
     derivationIndex: 0,
   };
   
-  // Derive EVM keypair and address
+  
   const evmKeypair = deriveEVMKeypair(mnemonic);
   const evmAddress = evmKeypair.address;
   walletEntry.evmAddress = evmAddress;
   
-  // Update vault
+  
   vault.wallets.push(walletEntry);
   vault.activeWalletId = walletId;
   
-  // Update encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   encryptedData[walletId] = { salt, iv, ciphertext };
   
-  // Save to storage
+  
   await saveMultiWalletVault(vault);
   await saveEncryptedWalletData(encryptedData);
   
-  // Update memory state
+  
   memoryState.activeWalletId = walletId;
   memoryState.keypair = keypair;
   memoryState.evmKeypair = evmKeypair;
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
-  memoryState.passwordHash = password;
+  memoryState.passwordHash = effectivePassword;
   
-  // Return mnemonic for backup
+  
   const mnemonicForBackup = mnemonic.slice();
   mnemonic = '';
   
@@ -1312,34 +1215,19 @@ export async function addWallet(
   };
 }
 
-/**
- * Import an additional wallet from mnemonic
- * 
- * @param mnemonic - Mnemonic phrase
- * @param password - Password for verification
- * @param label - Optional wallet label
- * @returns New wallet info
- */
+
 export async function importAdditionalWallet(
   mnemonic: string,
-  password: string,
+  password?: string,
   label?: string
 ): Promise<{ publicAddress: string; walletId: string }> {
   return importWallet(mnemonic, password, label);
 }
 
-/**
- * Switch active wallet
- * 
- * SECURITY: Requires password to switch wallets
- * 
- * @param walletId - ID of wallet to switch to
- * @param password - Password for verification
- * @returns New active wallet info
- */
+
 export async function switchWallet(
   walletId: string,
-  password: string
+  password?: string
 ): Promise<{ publicAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
   
@@ -1350,9 +1238,19 @@ export async function switchWallet(
     );
   }
   
+  
+  const effectivePassword = password || memoryState.passwordHash;
+  
+  if (!effectivePassword) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock first.'
+    );
+  }
+  
   const vault = versionInfo.multiWalletVault!;
   
-  // Find wallet
+  
   const walletEntry = vault.wallets.find(w => w.id === walletId);
   if (!walletEntry) {
     throw new WalletError(
@@ -1361,16 +1259,18 @@ export async function switchWallet(
     );
   }
   
-  // Verify password
-  const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
-  if (!isValid) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Incorrect password'
-    );
+  
+  if (password && password !== memoryState.passwordHash) {
+    const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
+    if (!isValid) {
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Incorrect password'
+      );
+    }
   }
   
-  // Get encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   const walletData = encryptedData[walletId];
   if (!walletData) {
@@ -1380,8 +1280,8 @@ export async function switchWallet(
     );
   }
   
-  // Decrypt stored data (could be mnemonic or private key import)
-  const key = await deriveKeyFromPassword(password, walletData.salt);
+  
+  const key = await deriveKeyFromPassword(effectivePassword, walletData.salt);
   let decryptedData = await decrypt(walletData.ciphertext, key, walletData.iv);
   
   let keypair: Keypair | null = null;
@@ -1389,26 +1289,26 @@ export async function switchWallet(
   let publicAddress: string;
   let evmAddress: string = '';
   
-  // Check if this is a private key import or mnemonic
+  
   if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
-    // Parse the stored private key
+    
     const parts = decryptedData.split(':');
     const storedChainType = parts[1];
-    const storedPrivateKey = parts.slice(2).join(':'); // In case private key contains ':'
-    decryptedData = ''; // Clear decrypted data
+    const storedPrivateKey = parts.slice(2).join(':'); 
+    decryptedData = ''; 
     
     if (storedChainType === 'solana') {
       keypair = keypairFromPrivateKey(storedPrivateKey);
       publicAddress = getPublicKeyBase58(keypair);
-      // Solana-only import doesn't have EVM keypair
+      
       evmKeypair = null;
       evmAddress = '';
     } else if (storedChainType === 'evm') {
       evmKeypair = evmKeypairFromPrivateKey(storedPrivateKey);
       evmAddress = evmKeypair.address;
-      // EVM-only import doesn't have Solana keypair
+      
       keypair = null;
-      publicAddress = walletEntry.publicKey; // Use stored public key (may be prefixed with 'evm:')
+      publicAddress = walletEntry.publicKey; 
     } else {
       throw new WalletError(
         WalletErrorCode.DECRYPTION_FAILED,
@@ -1416,14 +1316,14 @@ export async function switchWallet(
       );
     }
   } else {
-    // Regular mnemonic-based wallet
+    
     const mnemonic = decryptedData;
-    decryptedData = ''; // Clear reference
+    decryptedData = ''; 
     
     keypair = deriveKeypair(mnemonic);
     publicAddress = getPublicKeyBase58(keypair);
     
-    // Verify public key
+    
     if (publicAddress !== walletEntry.publicKey) {
       throw new WalletError(
         WalletErrorCode.DECRYPTION_FAILED,
@@ -1431,12 +1331,12 @@ export async function switchWallet(
       );
     }
     
-    // Derive EVM keypair
+    
     evmKeypair = deriveEVMKeypair(mnemonic);
     evmAddress = evmKeypair.address;
   }
   
-  // Update wallet entry with EVM address if not present
+  
   if (!walletEntry.evmAddress) {
     walletEntry.evmAddress = evmAddress;
     const walletIndex = vault.wallets.findIndex(w => w.id === walletId);
@@ -1445,31 +1345,26 @@ export async function switchWallet(
     }
   }
   
-  // Update vault active wallet
+  
   vault.activeWalletId = walletId;
   await saveMultiWalletVault(vault);
   
-  // Update memory state
+  
   memoryState.activeWalletId = walletId;
   memoryState.keypair = keypair;
   memoryState.evmKeypair = evmKeypair;
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletEntry.label;
-  memoryState.passwordHash = password;
+  memoryState.passwordHash = effectivePassword;
   
-  // Reset auto-lock timer
+  
   await startAutoLockTimer();
   
   return { publicAddress, walletId };
 }
 
-/**
- * Rename a wallet
- * 
- * @param walletId - ID of wallet to rename
- * @param label - New label
- */
+
 export async function renameWallet(walletId: string, label: string): Promise<void> {
   const versionInfo = await detectVaultVersion();
   
@@ -1482,7 +1377,7 @@ export async function renameWallet(walletId: string, label: string): Promise<voi
   
   const vault = versionInfo.multiWalletVault!;
   
-  // Find wallet
+  
   const walletIndex = vault.wallets.findIndex(w => w.id === walletId);
   if (walletIndex === -1) {
     throw new WalletError(
@@ -1491,7 +1386,7 @@ export async function renameWallet(walletId: string, label: string): Promise<voi
     );
   }
   
-  // Validate label
+  
   const trimmedLabel = label.trim().slice(0, MAX_WALLET_LABEL_LENGTH);
   if (!trimmedLabel) {
     throw new WalletError(
@@ -1500,24 +1395,17 @@ export async function renameWallet(walletId: string, label: string): Promise<voi
     );
   }
   
-  // Update label
+  
   vault.wallets[walletIndex].label = trimmedLabel;
   await saveMultiWalletVault(vault);
   
-  // Update memory state if this is the active wallet
+  
   if (memoryState.activeWalletId === walletId) {
     memoryState.walletLabel = trimmedLabel;
   }
 }
 
-/**
- * Delete a specific wallet
- * 
- * SECURITY: Requires password verification
- * 
- * @param walletId - ID of wallet to delete
- * @param password - Password for verification
- */
+
 export async function deleteOneWallet(walletId: string, password: string): Promise<void> {
   const versionInfo = await detectVaultVersion();
   
@@ -1530,7 +1418,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
   
   const vault = versionInfo.multiWalletVault!;
   
-  // Check if this is the last wallet
+  
   if (vault.wallets.length <= 1) {
     throw new WalletError(
       WalletErrorCode.CANNOT_DELETE_LAST_WALLET,
@@ -1538,7 +1426,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
     );
   }
   
-  // Find wallet
+  
   const walletIndex = vault.wallets.findIndex(w => w.id === walletId);
   if (walletIndex === -1) {
     throw new WalletError(
@@ -1547,7 +1435,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
     );
   }
   
-  // Verify password
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     throw new WalletError(
@@ -1556,14 +1444,14 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
     );
   }
   
-  // Remove wallet from vault
+  
   vault.wallets.splice(walletIndex, 1);
   
-  // If deleting active wallet, switch to first remaining wallet
+  
   if (vault.activeWalletId === walletId) {
     vault.activeWalletId = vault.wallets[0].id;
     
-    // If unlocked, switch to new active wallet
+    
     if ((memoryState.keypair || memoryState.evmKeypair) && memoryState.passwordHash) {
       const encryptedData = await getEncryptedWalletData();
       const newActiveData = encryptedData[vault.activeWalletId];
@@ -1577,7 +1465,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
         let publicAddress: string;
         let evmAddress: string = '';
         
-        // Check if this is a private key import or mnemonic
+        
         if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
           const parts = decryptedData.split(':');
           const storedChainType = parts[1];
@@ -1595,7 +1483,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
             publicAddress = newActiveWallet.publicKey;
           }
         } else {
-          // Regular mnemonic-based wallet
+          
           const mnemonic = decryptedData;
           decryptedData = '';
           keypair = deriveKeypair(mnemonic);
@@ -1614,25 +1502,16 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
     }
   }
   
-  // Remove encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   delete encryptedData[walletId];
   
-  // Save changes
+  
   await saveMultiWalletVault(vault);
   await saveEncryptedWalletData(encryptedData);
 }
 
-/**
- * Export wallet mnemonic
- * 
- * SECURITY: Requires password verification
- * WARNING: The returned mnemonic is extremely sensitive
- * 
- * @param walletId - ID of wallet to export
- * @param password - Password for verification
- * @returns Mnemonic phrase (SENSITIVE)
- */
+
 export async function exportWalletMnemonic(
   walletId: string,
   password: string
@@ -1648,7 +1527,7 @@ export async function exportWalletMnemonic(
   
   const vault = versionInfo.multiWalletVault!;
   
-  // Find wallet
+  
   const walletEntry = vault.wallets.find(w => w.id === walletId);
   if (!walletEntry) {
     throw new WalletError(
@@ -1657,7 +1536,7 @@ export async function exportWalletMnemonic(
     );
   }
   
-  // Verify password
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     throw new WalletError(
@@ -1666,7 +1545,7 @@ export async function exportWalletMnemonic(
     );
   }
   
-  // Get encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   const walletData = encryptedData[walletId];
   if (!walletData) {
@@ -1676,18 +1555,14 @@ export async function exportWalletMnemonic(
     );
   }
   
-  // Decrypt mnemonic
+  
   const key = await deriveKeyFromPassword(password, walletData.salt);
   const mnemonic = await decrypt(walletData.ciphertext, key, walletData.iv);
   
   return { mnemonic };
 }
 
-/**
- * Get active wallet info
- * 
- * @returns Active wallet ID, address, and label
- */
+
 export async function getActiveWallet(): Promise<{
   walletId: string | null;
   publicAddress: string | null;
@@ -1732,20 +1607,7 @@ export async function getActiveWallet(): Promise<{
   };
 }
 
-// ============================================
-// HD ACCOUNT MANAGEMENT (v3)
-// ============================================
 
-/**
- * Create a new derived account within a seed wallet
- * 
- * SECURITY: Requires password to decrypt mnemonic and derive new addresses.
- * 
- * @param walletId - ID of the seed wallet
- * @param password - Password for verification
- * @param name - Optional account name
- * @returns The new derived account
- */
 export async function createDerivedAccount(
   walletId: string,
   password: string,
@@ -1753,7 +1615,7 @@ export async function createDerivedAccount(
 ): Promise<DerivedAccount> {
   const versionInfo = await detectVaultVersion();
   
-  // Must be v3 vault
+  
   if (versionInfo.version !== 3) {
     throw new WalletError(
       WalletErrorCode.MIGRATION_FAILED,
@@ -1763,7 +1625,7 @@ export async function createDerivedAccount(
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find wallet
+  
   const walletIndex = vault.wallets.findIndex(w => w.id === walletId);
   if (walletIndex === -1) {
     throw new WalletError(
@@ -1774,7 +1636,7 @@ export async function createDerivedAccount(
   
   const wallet = vault.wallets[walletIndex];
   
-  // Check account limit
+  
   if (wallet.accounts.length >= MAX_ACCOUNTS_PER_WALLET) {
     throw new WalletError(
       WalletErrorCode.MAX_ACCOUNTS_REACHED,
@@ -1782,7 +1644,7 @@ export async function createDerivedAccount(
     );
   }
   
-  // Verify password
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     throw new WalletError(
@@ -1791,7 +1653,7 @@ export async function createDerivedAccount(
     );
   }
   
-  // Get encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   const walletData = encryptedData[walletId];
   if (!walletData) {
@@ -1801,7 +1663,7 @@ export async function createDerivedAccount(
     );
   }
   
-  // Decrypt mnemonic and derive new addresses
+  
   const key = await deriveKeyFromPassword(password, walletData.salt);
   let mnemonic = await decrypt(walletData.ciphertext, key, walletData.iv);
   
@@ -1813,15 +1675,15 @@ export async function createDerivedAccount(
     wallet.solanaPathType
   );
   
-  // Clear mnemonic
+  
   mnemonic = '';
   
-  // Generate account ID and name
+  
   const accountId = generateWalletId();
   const accountNumber = wallet.accounts.length + 1;
   const accountName = name?.slice(0, MAX_ACCOUNT_NAME_LENGTH) || `Account ${accountNumber}`;
   
-  // Create account
+  
   const account: DerivedAccount = {
     id: accountId,
     name: accountName,
@@ -1831,26 +1693,18 @@ export async function createDerivedAccount(
     createdAt: Date.now(),
   };
   
-  // Update wallet
+  
   wallet.accounts.push(account);
   wallet.nextAccountIndex = accountIndex + 1;
   vault.wallets[walletIndex] = wallet;
   
-  // Save vault
+  
   await saveMultiWalletVaultV3(vault);
-  
-  console.log(`[AINTIVIRUS Wallet] Created new account ${accountId} at index ${accountIndex}`);
-  
+
   return account;
 }
 
-/**
- * Rename a derived account
- * 
- * @param walletId - ID of the seed wallet
- * @param accountId - ID of the account to rename
- * @param name - New account name
- */
+
 export async function renameAccount(
   walletId: string,
   accountId: string,
@@ -1867,7 +1721,7 @@ export async function renameAccount(
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find wallet
+  
   const walletIndex = vault.wallets.findIndex(w => w.id === walletId);
   if (walletIndex === -1) {
     throw new WalletError(
@@ -1878,7 +1732,7 @@ export async function renameAccount(
   
   const wallet = vault.wallets[walletIndex];
   
-  // Find account
+  
   const accountIndex = wallet.accounts.findIndex(a => a.id === accountId);
   if (accountIndex === -1) {
     throw new WalletError(
@@ -1887,7 +1741,7 @@ export async function renameAccount(
     );
   }
   
-  // Validate name
+  
   const trimmedName = name.trim().slice(0, MAX_ACCOUNT_NAME_LENGTH);
   if (!trimmedName) {
     throw new WalletError(
@@ -1896,30 +1750,20 @@ export async function renameAccount(
     );
   }
   
-  // Update account name
+  
   wallet.accounts[accountIndex].name = trimmedName;
   vault.wallets[walletIndex] = wallet;
   
-  // Save vault
+  
   await saveMultiWalletVaultV3(vault);
   
-  // Update memory state if this is the active account
+  
   if (memoryState.activeAccountId === accountId) {
     memoryState.accountName = trimmedName;
   }
-  
-  console.log(`[AINTIVIRUS Wallet] Renamed account ${accountId} to "${trimmedName}"`);
 }
 
-/**
- * Switch to a different account within a wallet
- * 
- * Note: Does NOT require password since wallet is already unlocked.
- * The mnemonic is cached in memory during the session.
- * 
- * @param walletId - ID of the seed wallet
- * @param accountId - ID of the account to switch to
- */
+
 export async function switchAccount(
   walletId: string,
   accountId: string
@@ -1935,7 +1779,7 @@ export async function switchAccount(
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find wallet
+  
   const wallet = vault.wallets.find(w => w.id === walletId);
   if (!wallet) {
     throw new WalletError(
@@ -1944,7 +1788,7 @@ export async function switchAccount(
     );
   }
   
-  // Find account
+  
   const account = wallet.accounts.find(a => a.id === accountId);
   if (!account) {
     throw new WalletError(
@@ -1953,7 +1797,7 @@ export async function switchAccount(
     );
   }
   
-  // Check if we have cached mnemonic for deriving keys
+  
   if (!memoryState.cachedMnemonic && !memoryState.passwordHash) {
     throw new WalletError(
       WalletErrorCode.WALLET_LOCKED,
@@ -1961,7 +1805,7 @@ export async function switchAccount(
     );
   }
   
-  // If switching to a different wallet, we need to re-derive from that wallet's mnemonic
+  
   if (walletId !== memoryState.activeWalletId) {
     if (!memoryState.passwordHash) {
       throw new WalletError(
@@ -1970,7 +1814,7 @@ export async function switchAccount(
       );
     }
     
-    // Get encrypted data for the new wallet
+    
     const encryptedData = await getEncryptedWalletData();
     const walletData = encryptedData[walletId];
     if (!walletData) {
@@ -1980,11 +1824,11 @@ export async function switchAccount(
       );
     }
     
-    // Decrypt mnemonic
+    
     const key = await deriveKeyFromPassword(memoryState.passwordHash, walletData.salt);
     const mnemonic = await decrypt(walletData.ciphertext, key, walletData.iv);
     
-    // Derive keypairs for the account
+    
     const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
       mnemonic,
       account.index,
@@ -1992,7 +1836,7 @@ export async function switchAccount(
       wallet.solanaPathType
     );
     
-    // Update memory state
+    
     memoryState.activeWalletId = walletId;
     memoryState.activeAccountId = accountId;
     memoryState.keypair = solanaKeypair;
@@ -2005,7 +1849,7 @@ export async function switchAccount(
     memoryState.cachedMnemonic = mnemonic;
     memoryState.isWatchOnly = false;
   } else {
-    // Same wallet, just switch account
+    
     if (!memoryState.cachedMnemonic) {
       throw new WalletError(
         WalletErrorCode.WALLET_LOCKED,
@@ -2013,7 +1857,7 @@ export async function switchAccount(
       );
     }
     
-    // Derive keypairs for the account
+    
     const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
       memoryState.cachedMnemonic,
       account.index,
@@ -2021,7 +1865,7 @@ export async function switchAccount(
       wallet.solanaPathType
     );
     
-    // Update memory state
+    
     memoryState.activeAccountId = accountId;
     memoryState.keypair = solanaKeypair;
     memoryState.evmKeypair = evmKeypair;
@@ -2032,29 +1876,18 @@ export async function switchAccount(
     memoryState.isWatchOnly = false;
   }
   
-  // Update vault active account
+  
   vault.activeWalletId = walletId;
   vault.activeAccountId = accountId;
   await saveMultiWalletVaultV3(vault);
-  
-  console.log(`[AINTIVIRUS Wallet] Switched to account ${accountId}`);
-  
+
   return {
     solanaAddress: account.solanaAddress,
     evmAddress: account.evmAddress,
   };
 }
 
-/**
- * Delete a derived account
- * 
- * SECURITY: Requires password verification.
- * Cannot delete the last account in a wallet.
- * 
- * @param walletId - ID of the seed wallet
- * @param accountId - ID of the account to delete
- * @param password - Password for verification
- */
+
 export async function deleteAccount(
   walletId: string,
   accountId: string,
@@ -2071,7 +1904,7 @@ export async function deleteAccount(
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find wallet
+  
   const walletIndex = vault.wallets.findIndex(w => w.id === walletId);
   if (walletIndex === -1) {
     throw new WalletError(
@@ -2082,7 +1915,7 @@ export async function deleteAccount(
   
   const wallet = vault.wallets[walletIndex];
   
-  // Check if this is the last account
+  
   if (wallet.accounts.length <= 1) {
     throw new WalletError(
       WalletErrorCode.CANNOT_DELETE_LAST_ACCOUNT,
@@ -2090,7 +1923,7 @@ export async function deleteAccount(
     );
   }
   
-  // Find account
+  
   const accountIndex = wallet.accounts.findIndex(a => a.id === accountId);
   if (accountIndex === -1) {
     throw new WalletError(
@@ -2099,7 +1932,7 @@ export async function deleteAccount(
     );
   }
   
-  // Verify password
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     throw new WalletError(
@@ -2108,15 +1941,15 @@ export async function deleteAccount(
     );
   }
   
-  // Remove account
+  
   wallet.accounts.splice(accountIndex, 1);
   vault.wallets[walletIndex] = wallet;
   
-  // If deleting active account, switch to first account
+  
   if (vault.activeAccountId === accountId) {
     vault.activeAccountId = wallet.accounts[0].id;
     
-    // Update memory state if unlocked
+    
     if (memoryState.activeAccountId === accountId && memoryState.cachedMnemonic) {
       const newActiveAccount = wallet.accounts[0];
       const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
@@ -2136,18 +1969,11 @@ export async function deleteAccount(
     }
   }
   
-  // Save vault
-  await saveMultiWalletVaultV3(vault);
   
-  console.log(`[AINTIVIRUS Wallet] Deleted account ${accountId}`);
+  await saveMultiWalletVaultV3(vault);
 }
 
-/**
- * List all accounts in a wallet
- * 
- * @param walletId - ID of the seed wallet
- * @returns Array of derived accounts
- */
+
 export async function listAccounts(walletId: string): Promise<DerivedAccount[]> {
   const versionInfo = await detectVaultVersion();
   
@@ -2160,7 +1986,7 @@ export async function listAccounts(walletId: string): Promise<DerivedAccount[]> 
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find wallet
+  
   const wallet = vault.wallets.find(w => w.id === walletId);
   if (!wallet) {
     throw new WalletError(
@@ -2172,11 +1998,7 @@ export async function listAccounts(walletId: string): Promise<DerivedAccount[]> 
   return wallet.accounts;
 }
 
-/**
- * Get active account info
- * 
- * @returns Active account details
- */
+
 export async function getActiveAccount(): Promise<{
   accountId: string | null;
   solanaAddress: string | null;
@@ -2191,7 +2013,7 @@ export async function getActiveAccount(): Promise<{
   }
   
   if (versionInfo.version === 1 || versionInfo.version === 2) {
-    // For v1/v2, return the wallet's single address as an "account"
+    
     const state = await getWalletState();
     return {
       accountId: null,
@@ -2204,7 +2026,7 @@ export async function getActiveAccount(): Promise<{
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Check for watch-only account first
+  
   if (memoryState.isWatchOnly && memoryState.activeAccountId) {
     const watchOnly = vault.watchOnlyAccounts.find(w => w.id === memoryState.activeAccountId);
     if (watchOnly) {
@@ -2218,7 +2040,7 @@ export async function getActiveAccount(): Promise<{
     }
   }
   
-  // Find active wallet and account
+  
   if (!vault.activeWalletId) {
     return { accountId: null, solanaAddress: null, evmAddress: null, name: null, isWatchOnly: false };
   }
@@ -2245,12 +2067,7 @@ export async function getActiveAccount(): Promise<{
   };
 }
 
-/**
- * Check if a given account ID is watch-only
- * 
- * @param accountId - Account ID to check
- * @returns True if watch-only
- */
+
 export async function isWatchOnlyAccount(accountId: string): Promise<boolean> {
   const versionInfo = await detectVaultVersion();
   
@@ -2262,29 +2079,16 @@ export async function isWatchOnlyAccount(accountId: string): Promise<boolean> {
   return vault.watchOnlyAccounts.some(w => w.id === accountId);
 }
 
-// ============================================
-// WATCH-ONLY ACCOUNT MANAGEMENT
-// ============================================
 
-/**
- * Add a watch-only account
- * 
- * Watch-only accounts can view balances but cannot sign transactions.
- * 
- * @param address - The address to watch
- * @param chainType - 'solana' or 'evm'
- * @param name - Optional account name
- * @returns The new watch-only account
- */
 export async function addWatchOnlyAccount(
   address: string,
   chainType: 'solana' | 'evm',
   name?: string
 ): Promise<WatchOnlyAccount> {
-  // Import validation functions
+  
   const { isValidSolanaAddress, isValidEVMAddress } = await import('./keychain');
   
-  // Validate address format
+  
   if (chainType === 'solana' && !isValidSolanaAddress(address)) {
     throw new WalletError(
       WalletErrorCode.INVALID_ADDRESS,
@@ -2301,7 +2105,7 @@ export async function addWatchOnlyAccount(
   
   const versionInfo = await detectVaultVersion();
   
-  // Need v3 vault for watch-only accounts
+  
   if (versionInfo.version !== 3) {
     throw new WalletError(
       WalletErrorCode.MIGRATION_FAILED,
@@ -2311,7 +2115,7 @@ export async function addWatchOnlyAccount(
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Check if address already exists
+  
   const existingWatchOnly = vault.watchOnlyAccounts.find(
     w => w.address.toLowerCase() === address.toLowerCase()
   );
@@ -2322,7 +2126,7 @@ export async function addWatchOnlyAccount(
     );
   }
   
-  // Check if address exists in any derived account
+  
   for (const wallet of vault.wallets) {
     for (const account of wallet.accounts) {
       if (
@@ -2337,11 +2141,11 @@ export async function addWatchOnlyAccount(
     }
   }
   
-  // Generate account ID and name
+  
   const accountId = generateWalletId();
   const accountName = name?.slice(0, MAX_ACCOUNT_NAME_LENGTH) || `Watch ${vault.watchOnlyAccounts.length + 1}`;
   
-  // Create watch-only account
+  
   const watchOnlyAccount: WatchOnlyAccount = {
     id: accountId,
     name: accountName,
@@ -2350,22 +2154,16 @@ export async function addWatchOnlyAccount(
     createdAt: Date.now(),
   };
   
-  // Add to vault
+  
   vault.watchOnlyAccounts.push(watchOnlyAccount);
   
-  // Save vault
+  
   await saveMultiWalletVaultV3(vault);
-  
-  console.log(`[AINTIVIRUS Wallet] Added watch-only account ${accountId} for ${address}`);
-  
+
   return watchOnlyAccount;
 }
 
-/**
- * Remove a watch-only account
- * 
- * @param accountId - ID of the watch-only account to remove
- */
+
 export async function removeWatchOnlyAccount(accountId: string): Promise<void> {
   const versionInfo = await detectVaultVersion();
   
@@ -2378,7 +2176,7 @@ export async function removeWatchOnlyAccount(accountId: string): Promise<void> {
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find watch-only account
+  
   const accountIndex = vault.watchOnlyAccounts.findIndex(w => w.id === accountId);
   if (accountIndex === -1) {
     throw new WalletError(
@@ -2387,12 +2185,12 @@ export async function removeWatchOnlyAccount(accountId: string): Promise<void> {
     );
   }
   
-  // Remove account
+  
   vault.watchOnlyAccounts.splice(accountIndex, 1);
   
-  // If this was the active account, clear active state
+  
   if (vault.activeAccountId === accountId) {
-    // Switch to first available account
+    
     if (vault.wallets.length > 0 && vault.wallets[0].accounts.length > 0) {
       vault.activeWalletId = vault.wallets[0].id;
       vault.activeAccountId = vault.wallets[0].accounts[0].id;
@@ -2405,7 +2203,7 @@ export async function removeWatchOnlyAccount(accountId: string): Promise<void> {
     }
   }
   
-  // Update memory state if this was the active watch-only
+  
   if (memoryState.activeAccountId === accountId) {
     memoryState.activeAccountId = vault.activeAccountId;
     memoryState.isWatchOnly = false;
@@ -2414,23 +2212,11 @@ export async function removeWatchOnlyAccount(accountId: string): Promise<void> {
     memoryState.accountName = null;
   }
   
-  // Save vault
-  await saveMultiWalletVaultV3(vault);
   
-  console.log(`[AINTIVIRUS Wallet] Removed watch-only account ${accountId}`);
+  await saveMultiWalletVaultV3(vault);
 }
 
-/**
- * Convert a watch-only account to a full account
- * 
- * This is used when a user imports the seed phrase for an address they were watching.
- * The watch-only account is removed and the address is verified against the imported mnemonic.
- * 
- * @param watchOnlyId - ID of the watch-only account
- * @param mnemonic - The seed phrase to import
- * @param password - Password for encryption
- * @returns The new wallet and account IDs
- */
+
 export async function convertWatchOnlyToFull(
   watchOnlyId: string,
   mnemonic: string,
@@ -2447,7 +2233,7 @@ export async function convertWatchOnlyToFull(
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find watch-only account
+  
   const watchOnlyIndex = vault.watchOnlyAccounts.findIndex(w => w.id === watchOnlyId);
   if (watchOnlyIndex === -1) {
     throw new WalletError(
@@ -2458,7 +2244,7 @@ export async function convertWatchOnlyToFull(
   
   const watchOnly = vault.watchOnlyAccounts[watchOnlyIndex];
   
-  // Validate mnemonic
+  
   const normalizedMnemonic = normalizeMnemonic(mnemonic);
   if (!validateMnemonic(normalizedMnemonic)) {
     throw new WalletError(
@@ -2467,7 +2253,7 @@ export async function convertWatchOnlyToFull(
     );
   }
   
-  // Verify password
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     throw new WalletError(
@@ -2476,8 +2262,7 @@ export async function convertWatchOnlyToFull(
     );
   }
   
-  // Derive addresses from mnemonic and find matching index
-  // We'll check indices 0-9 for a match
+  
   let matchingIndex: number | null = null;
   const maxIndexToCheck = 10;
   
@@ -2500,7 +2285,7 @@ export async function convertWatchOnlyToFull(
     );
   }
   
-  // Create new wallet entry
+  
   const walletId = generateWalletId();
   const accountId = generateWalletId();
   const addresses = deriveAddressesForIndex(normalizedMnemonic, matchingIndex, 'standard', 'standard');
@@ -2524,7 +2309,7 @@ export async function convertWatchOnlyToFull(
     createdAt: Date.now(),
   };
   
-  // Encrypt mnemonic
+  
   const salt = generateSalt();
   const ivBytes = new Uint8Array(12);
   crypto.getRandomValues(ivBytes);
@@ -2532,21 +2317,21 @@ export async function convertWatchOnlyToFull(
   const key = await deriveKeyFromPassword(password, salt);
   const ciphertext = await encrypt(normalizedMnemonic, key, iv);
   
-  // Update vault
+  
   vault.wallets.push(walletEntry);
   vault.watchOnlyAccounts.splice(watchOnlyIndex, 1);
   vault.activeWalletId = walletId;
   vault.activeAccountId = accountId;
   
-  // Update encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   encryptedData[walletId] = { salt, iv, ciphertext };
   
-  // Save to storage
+  
   await saveMultiWalletVaultV3(vault);
   await saveEncryptedWalletData(encryptedData);
   
-  // Derive keypairs and update memory state
+  
   const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
     normalizedMnemonic,
     matchingIndex,
@@ -2566,17 +2351,11 @@ export async function convertWatchOnlyToFull(
   memoryState.cachedMnemonic = normalizedMnemonic;
   memoryState.passwordHash = password;
   memoryState.isWatchOnly = false;
-  
-  console.log(`[AINTIVIRUS Wallet] Converted watch-only ${watchOnlyId} to full wallet ${walletId}`);
-  
+
   return { walletId, accountId };
 }
 
-/**
- * List all watch-only accounts
- * 
- * @returns Array of watch-only accounts
- */
+
 export async function listWatchOnlyAccounts(): Promise<WatchOnlyAccount[]> {
   const versionInfo = await detectVaultVersion();
   
@@ -2588,11 +2367,7 @@ export async function listWatchOnlyAccounts(): Promise<WatchOnlyAccount[]> {
   return vault.watchOnlyAccounts;
 }
 
-/**
- * Switch to a watch-only account
- * 
- * @param accountId - ID of the watch-only account
- */
+
 export async function switchToWatchOnly(accountId: string): Promise<{ address: string; chainType: 'solana' | 'evm' }> {
   const versionInfo = await detectVaultVersion();
   
@@ -2605,7 +2380,7 @@ export async function switchToWatchOnly(accountId: string): Promise<{ address: s
   
   const vault = versionInfo.multiWalletVaultV3!;
   
-  // Find watch-only account
+  
   const watchOnly = vault.watchOnlyAccounts.find(w => w.id === accountId);
   if (!watchOnly) {
     throw new WalletError(
@@ -2614,12 +2389,12 @@ export async function switchToWatchOnly(accountId: string): Promise<{ address: s
     );
   }
   
-  // Update vault
+  
   vault.activeWalletId = null;
   vault.activeAccountId = accountId;
   await saveMultiWalletVaultV3(vault);
   
-  // Update memory state
+  
   memoryState.activeWalletId = null;
   memoryState.activeAccountId = accountId;
   memoryState.keypair = null;
@@ -2631,68 +2406,34 @@ export async function switchToWatchOnly(accountId: string): Promise<{ address: s
   memoryState.accountIndex = 0;
   memoryState.cachedMnemonic = null;
   memoryState.isWatchOnly = true;
-  
-  console.log(`[AINTIVIRUS Wallet] Switched to watch-only account ${accountId}`);
-  
+
   return {
     address: watchOnly.address,
     chainType: watchOnly.chainType,
   };
 }
 
-// ============================================
-// KEYPAIR ACCESS (for signing)
-// ============================================
 
-/**
- * Get the unlocked keypair for signing operations
- * 
- * SECURITY: This is the only way to access the private key.
- * The keypair should only be used for signing and never stored
- * or transmitted.
- * 
- * @returns Keypair if unlocked, null if locked
- */
 export function getUnlockedKeypair(): Keypair | null {
   return memoryState.keypair;
 }
 
-/**
- * Get the unlocked EVM keypair for signing operations
- * 
- * SECURITY: This is the only way to access the EVM private key.
- * The keypair should only be used for signing and never stored
- * or transmitted.
- * 
- * @returns EVM Keypair if unlocked, null if locked
- */
+
 export function getUnlockedEVMKeypair(): EVMKeypair | null {
   return memoryState.evmKeypair;
 }
 
-/**
- * Get the EVM address (works even when locked if stored)
- * 
- * @returns EVM address or null
- */
+
 export function getEVMAddress(): string | null {
   return memoryState.evmAddress;
 }
 
-/**
- * Check if wallet is currently unlocked
- * 
- * @returns True if wallet is unlocked
- */
+
 export function isWalletUnlocked(): boolean {
   return memoryState.keypair !== null;
 }
 
-/**
- * Get public address (works even when locked)
- * 
- * @returns Public address or null if no wallet
- */
+
 export async function getPublicAddress(): Promise<string | null> {
   if (memoryState.publicAddress) {
     return memoryState.publicAddress;
@@ -2702,33 +2443,18 @@ export async function getPublicAddress(): Promise<string | null> {
   return activeWallet.publicAddress;
 }
 
-// ============================================
-// PRIVATE KEY IMPORT/EXPORT
-// ============================================
 
-/**
- * Import a wallet from a raw private key (no mnemonic)
- * 
- * SECURITY: This imports a "watch-only-like" wallet derived from a private key.
- * Since there's no mnemonic, we store a placeholder and the derived keypair.
- * 
- * Note: For private key imports, we only support the Solana keypair.
- * The EVM address will be derived if the user provides an EVM private key,
- * or it won't exist for Solana-only imports.
- * 
- * @param privateKey - Raw private key (SENSITIVE)
- * @param password - User's password (SENSITIVE)
- * @param label - Optional wallet label
- * @returns Public addresses and wallet ID
- */
 export async function importWalletFromPrivateKey(
   privateKey: string,
-  password: string,
+  password?: string,
   label?: string
 ): Promise<{ publicAddress: string; evmAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
   
-  // If v1 vault exists, need to migrate first
+  
+  const effectivePassword = password || memoryState.passwordHash;
+  
+  
   if (versionInfo.version === 1) {
     throw new WalletError(
       WalletErrorCode.WALLET_ALREADY_EXISTS,
@@ -2736,15 +2462,23 @@ export async function importWalletFromPrivateKey(
     );
   }
   
-  // Validate password strength
-  if (!validatePasswordStrength(password)) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_PASSWORD,
-      'Password does not meet minimum requirements'
-    );
+  
+  if (versionInfo.version === 0) {
+    if (!effectivePassword) {
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Password is required to create the first wallet'
+      );
+    }
+    if (!validatePasswordStrength(effectivePassword)) {
+      throw new WalletError(
+        WalletErrorCode.INVALID_PASSWORD,
+        'Password does not meet minimum requirements'
+      );
+    }
   }
   
-  // Import keychain functions
+  
   const { 
     keypairFromPrivateKey, 
     evmKeypairFromPrivateKey, 
@@ -2752,7 +2486,7 @@ export async function importWalletFromPrivateKey(
     validatePrivateKey 
   } = await import('./keychain');
   
-  // Validate and detect private key type
+  
   const validation = validatePrivateKey(privateKey);
   if (!validation.valid) {
     throw new WalletError(
@@ -2766,15 +2500,15 @@ export async function importWalletFromPrivateKey(
   let publicAddress: string;
   let evmAddress: string = '';
   
-  // Create keypairs based on detected type
+  
   if (validation.chainType === 'solana') {
     solanaKeypair = keypairFromPrivateKey(privateKey);
     publicAddress = getPublicKeyBase58(solanaKeypair);
   } else if (validation.chainType === 'evm') {
     evmKeypair = evmKeypairFromPrivateKey(privateKey);
     evmAddress = evmKeypair.address;
-    // For EVM-only imports, we don't have a Solana address
-    publicAddress = ''; // Will be set below
+    
+    publicAddress = ''; 
   } else {
     throw new WalletError(
       WalletErrorCode.INVALID_MNEMONIC,
@@ -2786,25 +2520,34 @@ export async function importWalletFromPrivateKey(
   let encryptedData: Record<string, { salt: string; iv: string; ciphertext: string }>;
   
   if (versionInfo.version === 0) {
-    // First wallet - initialize vault
-    const initialized = await initializeMultiWalletVault(password);
+    
+    const initialized = await initializeMultiWalletVault(effectivePassword!);
     vault = initialized.vault;
     encryptedData = initialized.encryptedData;
   } else {
-    // Add to existing vault
-    vault = versionInfo.multiWalletVault!;
-    encryptedData = await getEncryptedWalletData();
     
-    // Verify password
-    const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
-    if (!isValid) {
+    if (!effectivePassword) {
       throw new WalletError(
-        WalletErrorCode.INVALID_PASSWORD,
-        'Incorrect password'
+        WalletErrorCode.WALLET_LOCKED,
+        'Wallet is locked. Please unlock first.'
       );
     }
     
-    // Check wallet limit
+    vault = versionInfo.multiWalletVault!;
+    encryptedData = await getEncryptedWalletData();
+    
+    
+    if (password && password !== memoryState.passwordHash) {
+      const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
+      if (!isValid) {
+        throw new WalletError(
+          WalletErrorCode.INVALID_PASSWORD,
+          'Incorrect password'
+        );
+      }
+    }
+    
+    
     if (vault.wallets.length >= MAX_WALLETS) {
       throw new WalletError(
         WalletErrorCode.MAX_WALLETS_REACHED,
@@ -2813,7 +2556,7 @@ export async function importWalletFromPrivateKey(
     }
   }
   
-  // Check if wallet already exists (by address)
+  
   const searchAddress = publicAddress || evmAddress;
   const existingWallet = vault.wallets.find(w => 
     w.publicKey === searchAddress || w.evmAddress === evmAddress
@@ -2825,73 +2568,62 @@ export async function importWalletFromPrivateKey(
     );
   }
   
-  // Generate wallet ID and label
+  
   const walletId = generateWalletId();
   const walletNumber = vault.wallets.length + 1;
   const walletLabel = label?.slice(0, MAX_WALLET_LABEL_LENGTH) || `Imported Wallet ${walletNumber}`;
   
-  // For private key imports, we store a special marker instead of mnemonic
-  // Format: "PRIVATE_KEY_IMPORT:{type}:{privateKey}"
+  
   const storageData = `PRIVATE_KEY_IMPORT:${validation.chainType}:${privateKey}`;
   
-  // SECURITY: Encrypt the storage data with password
+  
   const salt = generateSalt();
   const ivBytes = new Uint8Array(12);
   crypto.getRandomValues(ivBytes);
   const iv = arrayBufferToBase64(ivBytes.buffer as ArrayBuffer);
-  const key = await deriveKeyFromPassword(password, salt);
+  const key = await deriveKeyFromPassword(effectivePassword!, salt);
   const ciphertext = await encrypt(storageData, key, iv);
   
-  // Create wallet entry
+  
   const walletEntry: WalletEntry = {
     id: walletId,
     label: walletLabel,
-    publicKey: publicAddress || `evm:${evmAddress}`, // Store EVM address with prefix if no Solana
+    publicKey: publicAddress || `evm:${evmAddress}`, 
     createdAt: Date.now(),
     derivationIndex: 0,
     evmAddress: evmAddress || undefined,
   };
   
-  // Update vault
+  
   vault.wallets.push(walletEntry);
   vault.activeWalletId = walletId;
   if (vault.createdAt === 0) {
     vault.createdAt = Date.now();
   }
   
-  // Update encrypted data
+  
   encryptedData[walletId] = { salt, iv, ciphertext };
   
-  // Save to storage
+  
   await saveMultiWalletVault(vault);
   await saveEncryptedWalletData(encryptedData);
   
-  // SECURITY: Store keypairs in memory (wallet is now unlocked)
+  
   memoryState.activeWalletId = walletId;
   memoryState.keypair = solanaKeypair;
   memoryState.evmKeypair = evmKeypair;
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
-  memoryState.passwordHash = password;
+  memoryState.passwordHash = effectivePassword!;
   
-  // Start auto-lock timer
+  
   await startAutoLockTimer();
   
   return { publicAddress, evmAddress, walletId };
 }
 
-/**
- * Export private key for a wallet
- * 
- * SECURITY: Returns the raw private key for the specified chain.
- * WARNING: This is extremely sensitive data.
- * 
- * @param walletId - ID of wallet to export
- * @param password - Password for verification
- * @param chain - Which chain's private key to export ('solana' or 'evm')
- * @returns Private key string (SENSITIVE)
- */
+
 export async function exportPrivateKey(
   walletId: string,
   password: string,
@@ -2914,7 +2646,7 @@ export async function exportPrivateKey(
     );
   }
   
-  // Find wallet
+  
   const walletEntry = vault.wallets.find(w => w.id === walletId);
   if (!walletEntry) {
     throw new WalletError(
@@ -2923,7 +2655,7 @@ export async function exportPrivateKey(
     );
   }
   
-  // Verify password
+  
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
     throw new WalletError(
@@ -2932,7 +2664,7 @@ export async function exportPrivateKey(
     );
   }
   
-  // Get encrypted data
+  
   const encryptedData = await getEncryptedWalletData();
   const walletData = encryptedData[walletId];
   if (!walletData) {
@@ -2942,11 +2674,11 @@ export async function exportPrivateKey(
     );
   }
   
-  // Decrypt stored data
+  
   const key = await deriveKeyFromPassword(password, walletData.salt);
   const decryptedData = await decrypt(walletData.ciphertext, key, walletData.iv);
   
-  // Import keychain functions
+  
   const { 
     deriveKeypair, 
     deriveEVMKeypair,
@@ -2956,12 +2688,12 @@ export async function exportPrivateKey(
     getEVMPrivateKeyHex,
   } = await import('./keychain');
   
-  // Check if this is a private key import or mnemonic
+  
   if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
-    // Parse the stored private key
+    
     const parts = decryptedData.split(':');
     const storedChainType = parts[1];
-    const storedPrivateKey = parts.slice(2).join(':'); // In case private key contains ':'
+    const storedPrivateKey = parts.slice(2).join(':'); 
     
     if (chain === 'solana') {
       if (storedChainType !== 'solana') {
@@ -2981,7 +2713,7 @@ export async function exportPrivateKey(
       return { privateKey: storedPrivateKey };
     }
   } else {
-    // This is a mnemonic-based wallet, derive the private key
+    
     const mnemonic = decryptedData;
     
     if (chain === 'solana') {
@@ -2996,27 +2728,15 @@ export async function exportPrivateKey(
   }
 }
 
-// ============================================
-// AUTO-LOCK (Using Chrome Alarms for reliability)
-// ============================================
 
-/**
- * Alarm name for wallet auto-lock
- * SECURITY: Unique name to prevent conflicts
- */
 const AUTOLOCK_ALARM_NAME = 'walletAutoLock';
 
-/**
- * Start the auto-lock timer using chrome.alarms
- * 
- * SECURITY: Automatically locks the wallet after a period of inactivity.
- * Uses chrome.alarms instead of setTimeout for reliability in MV3 service workers.
- */
+
 async function startAutoLockTimer(): Promise<void> {
-  // Clear existing alarm
+  
   await chrome.alarms.clear(AUTOLOCK_ALARM_NAME);
   
-  // Also clear any legacy setTimeout timer
+  
   if (memoryState.lockTimer) {
     clearTimeout(memoryState.lockTimer);
     memoryState.lockTimer = null;
@@ -3024,12 +2744,12 @@ async function startAutoLockTimer(): Promise<void> {
   
   const settings = await getWalletSettings();
   
-  // 0 = never auto-lock
+  
   if (settings.autoLockMinutes === 0) {
     return;
   }
   
-  // Create alarm that will fire after the specified minutes
+  
   const delayMinutes = Math.max(1, settings.autoLockMinutes);
   
   await chrome.alarms.create(AUTOLOCK_ALARM_NAME, {
@@ -3037,28 +2757,19 @@ async function startAutoLockTimer(): Promise<void> {
   });
 }
 
-/**
- * Handle auto-lock alarm
- * Called from background script's alarm listener
- */
+
 export function handleAutoLockAlarm(): void {
   if (memoryState.keypair) {
     lockWallet();
   }
 }
 
-/**
- * Get the auto-lock alarm name for use in background script
- */
+
 export function getAutoLockAlarmName(): string {
   return AUTOLOCK_ALARM_NAME;
 }
 
-/**
- * Reset the auto-lock timer (call on user activity)
- * 
- * SECURITY: Extends the auto-lock timeout when user is active.
- */
+
 export async function resetAutoLockTimer(): Promise<void> {
   if (memoryState.keypair) {
     await startAutoLockTimer();

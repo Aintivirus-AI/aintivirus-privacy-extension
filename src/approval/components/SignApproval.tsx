@@ -1,17 +1,9 @@
-/**
- * AINTIVIRUS dApp Connectivity - Sign Approval Component
- *
- * Shows message signing request from a dApp with improved display
- * and raw bytes toggle.
- */
+
 
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
 
-// ============================================
-// STYLES
-// ============================================
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -197,9 +189,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// ============================================
-// PROPS
-// ============================================
 
 interface Props {
   request: QueuedRequest;
@@ -207,22 +196,19 @@ interface Props {
   onReject: (reason?: string) => void;
 }
 
-// ============================================
-// COMPONENT
-// ============================================
 
 export function SignApproval({ request, onApprove, onReject }: Props) {
   const [viewMode, setViewMode] = useState<'text' | 'hex'>('text');
 
-  // Use shared formatOrigin for IDN/homograph protection
+  
   const formattedOrigin = useMemo(() => formatOriginUtil(request.origin), [request.origin]);
 
-  // Parse and decode the message
+  
   const messageData = useMemo(() => {
     const params = request.params as unknown[];
     if (!params) return { text: '', hex: '', isHex: false, byteLength: 0 };
 
-    // EVM personal_sign: [message, address]
+    
     if (request.method === 'personal_sign' && Array.isArray(params)) {
       const message = params[0] as string;
       if (message.startsWith('0x')) {
@@ -243,11 +229,11 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       };
     }
 
-    // Solana signMessage
+    
     if (request.method === 'signMessage') {
       const { message } = request.params as { message: string };
       try {
-        // Decode base64
+        
         const decoded = atob(message);
         const bytes = Uint8Array.from(decoded, (c) => c.charCodeAt(0));
         return {
@@ -266,7 +252,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       }
     }
 
-    // Switch chain
+    
     if (request.method === 'wallet_switchEthereumChain') {
       const { chainId } = params[0] as { chainId: string };
       return {
@@ -277,7 +263,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       };
     }
 
-    // Add chain
+    
     if (request.method === 'wallet_addEthereumChain') {
       const chainParams = params[0] as {
         chainId: string;
@@ -320,7 +306,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
   const getWarnings = (): { type: 'warning' | 'danger'; message: string }[] => {
     const warnings: { type: 'warning' | 'danger'; message: string }[] = [];
 
-    // eth_sign is dangerous
+    
     if (request.method === 'eth_sign') {
       warnings.push({
         type: 'danger',
@@ -329,12 +315,12 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       });
     }
 
-    // Check if message looks like it might be transaction data
+    
     if (messageData.text.includes('0x') && messageData.byteLength > 100) {
       const looksLikeTx =
-        messageData.hex.includes('095ea7b3') || // approve
-        messageData.hex.includes('a9059cbb') || // transfer
-        messageData.hex.includes('23b872dd');   // transferFrom
+        messageData.hex.includes('095ea7b3') || 
+        messageData.hex.includes('a9059cbb') || 
+        messageData.hex.includes('23b872dd');   
 
       if (looksLikeTx) {
         warnings.push({
@@ -345,7 +331,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       }
     }
 
-    // Generic warning for long messages
+    
     if (messageData.byteLength > 1000) {
       warnings.push({
         type: 'warning',
@@ -361,7 +347,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
 
   return (
     <div style={styles.container}>
-      {/* Site Info */}
+      {}
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
@@ -386,7 +372,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         <span style={styles.requestText}>{getRequestTitle()}</span>
       </div>
 
-      {/* Warnings */}
+      {}
       {warnings.map((warning, idx) =>
         warning.type === 'danger' ? (
           <div key={idx} style={styles.dangerBox}>
@@ -427,7 +413,7 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         )
       )}
 
-      {/* Message Content */}
+      {}
       <div style={styles.section}>
         <div style={styles.sectionHeader}>
           <span style={styles.sectionTitle}>
@@ -471,13 +457,13 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         )}
       </div>
 
-      {/* Method Info */}
+      {}
       <div style={styles.infoRow}>
         <span style={styles.infoLabel}>Method</span>
         <span style={styles.infoValue}>{request.method}</span>
       </div>
 
-      {/* Buttons */}
+      {}
       <div style={styles.buttons}>
         <button
           style={{ ...styles.button, ...styles.rejectButton }}
@@ -496,9 +482,6 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
   );
 }
 
-// ============================================
-// HELPERS
-// ============================================
 
 function hexToString(hex: string): string {
   let str = '';
@@ -507,7 +490,7 @@ function hexToString(hex: string): string {
     if (charCode > 0 && charCode < 128) {
       str += String.fromCharCode(charCode);
     } else if (charCode >= 128) {
-      // Non-ASCII, show as placeholder or try to decode
+      
       str += '�';
     }
   }

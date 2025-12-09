@@ -1,36 +1,17 @@
-/**
- * AINTIVIRUS Wallet - Explorer URL Utilities
- * 
- * Centralized utility for generating blockchain explorer URLs
- * for transactions, addresses, and tokens across all supported chains.
- */
+
 
 import type { ChainType, EVMChainId } from './types';
 
-// ============================================
-// TYPES
-// ============================================
 
-/**
- * Types of explorer pages
- */
 export type ExplorerType = 'tx' | 'address' | 'token';
 
-/**
- * Options for explorer URL generation
- */
+
 export interface ExplorerUrlOptions {
-  /** Whether this is a testnet network */
+  
   testnet?: boolean;
 }
 
-// ============================================
-// EXPLORER CONFIGURATION
-// ============================================
 
-/**
- * EVM explorer base URLs by chain
- */
 const EVM_EXPLORERS: Record<EVMChainId, { mainnet: string; testnet: string }> = {
   ethereum: {
     mainnet: 'https://etherscan.io',
@@ -54,45 +35,13 @@ const EVM_EXPLORERS: Record<EVMChainId, { mainnet: string; testnet: string }> = 
   },
 };
 
-/**
- * Solana explorer base URL
- */
+
 const SOLANA_EXPLORER = 'https://explorer.solana.com';
 
-/**
- * DexScreener URL for token lookups (better for meme coins)
- */
+
 const DEXSCREENER_SOLANA = 'https://dexscreener.com/solana';
 
-// ============================================
-// MAIN UTILITY FUNCTION
-// ============================================
 
-/**
- * Get explorer URL for a transaction, address, or token
- * 
- * @param type - Type of explorer page ('tx', 'address', or 'token')
- * @param id - The transaction hash, address, or token address
- * @param chain - Chain type ('solana' or 'evm')
- * @param evmChainId - For EVM chains, the specific chain ID
- * @param options - Additional options like testnet flag
- * @returns Full explorer URL
- * 
- * @example
- * // Solana mainnet transaction
- * getExplorerUrl('tx', '5abc...', 'solana')
- * // => 'https://explorer.solana.com/tx/5abc...'
- * 
- * @example
- * // Solana devnet address
- * getExplorerUrl('address', 'Abc...', 'solana', undefined, { testnet: true })
- * // => 'https://explorer.solana.com/address/Abc...?cluster=devnet'
- * 
- * @example
- * // Ethereum mainnet token
- * getExplorerUrl('token', '0x...', 'evm', 'ethereum')
- * // => 'https://etherscan.io/token/0x...'
- */
 export function getExplorerUrl(
   type: ExplorerType,
   id: string,
@@ -106,33 +55,28 @@ export function getExplorerUrl(
     return getSolanaExplorerUrl(type, id, isTestnet);
   }
 
-  // EVM chain
+  
   const chainId = evmChainId ?? 'ethereum';
   return getEVMExplorerUrl(type, id, chainId, isTestnet);
 }
 
-/**
- * Get Solana explorer URL
- * Uses DexScreener for token lookups (better meme coin coverage)
- */
+
 function getSolanaExplorerUrl(
   type: ExplorerType,
   id: string,
   isTestnet: boolean
 ): string {
-  // Use DexScreener for token lookups (better for meme coins)
+  
   if (type === 'token' && !isTestnet) {
     return `${DEXSCREENER_SOLANA}/${id}`;
   }
   
-  // Use Solana Explorer for transactions and addresses
+  
   const clusterParam = isTestnet ? '?cluster=devnet' : '';
   return `${SOLANA_EXPLORER}/${type}/${id}${clusterParam}`;
 }
 
-/**
- * Get EVM explorer URL
- */
+
 function getEVMExplorerUrl(
   type: ExplorerType,
   id: string,
@@ -141,7 +85,7 @@ function getEVMExplorerUrl(
 ): string {
   const explorer = EVM_EXPLORERS[chainId];
   if (!explorer) {
-    // Fallback to Ethereum if unknown chain
+    
     return `${EVM_EXPLORERS.ethereum.mainnet}/${type}/${id}`;
   }
 
@@ -149,13 +93,7 @@ function getEVMExplorerUrl(
   return `${baseUrl}/${type}/${id}`;
 }
 
-// ============================================
-// CONVENIENCE FUNCTIONS
-// ============================================
 
-/**
- * Get transaction explorer URL
- */
 export function getTxExplorerUrl(
   hash: string,
   chain: ChainType,
@@ -165,9 +103,7 @@ export function getTxExplorerUrl(
   return getExplorerUrl('tx', hash, chain, evmChainId, options);
 }
 
-/**
- * Get address explorer URL
- */
+
 export function getAddressExplorerUrl(
   address: string,
   chain: ChainType,
@@ -177,9 +113,7 @@ export function getAddressExplorerUrl(
   return getExplorerUrl('address', address, chain, evmChainId, options);
 }
 
-/**
- * Get token explorer URL
- */
+
 export function getTokenExplorerUrl(
   tokenAddress: string,
   chain: ChainType,
@@ -189,10 +123,7 @@ export function getTokenExplorerUrl(
   return getExplorerUrl('token', tokenAddress, chain, evmChainId, options);
 }
 
-/**
- * Open explorer URL in a new tab
- * Uses secure window.open with noopener,noreferrer
- */
+
 export function openExplorerUrl(
   type: ExplorerType,
   id: string,

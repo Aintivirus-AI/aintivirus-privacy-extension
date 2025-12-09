@@ -1,10 +1,4 @@
-/**
- * AINTIVIRUS Wallet - Transaction Confirmation Progress Component
- * 
- * Displays confirmation progress for transactions:
- * - Solana: Shows processed → confirmed → finalized progression
- * - EVM: Shows N / Target confirmations with progress bar
- */
+
 
 import React from 'react';
 import {
@@ -18,28 +12,22 @@ import {
   isInProgress,
 } from '@wallet/txStatus';
 
-// ============================================
-// TYPES
-// ============================================
 
 export interface TxConfirmationProgressProps {
-  /** Chain type */
+  
   chainType: 'solana' | 'evm';
-  /** Current display status */
+  
   status: TxDisplayStatus;
-  /** Progress data */
+  
   progress: SolanaConfirmationProgress | EVMConfirmationProgress;
-  /** Chain identifier (for EVM time estimates) */
+  
   chainId?: string;
-  /** Show detailed view */
+  
   detailed?: boolean;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-// ============================================
-// SOLANA PROGRESS COMPONENT
-// ============================================
 
 interface SolanaProgressProps {
   progress: SolanaConfirmationProgress;
@@ -167,7 +155,6 @@ function SolanaProgress({ progress, status, detailed }: SolanaProgressProps) {
           background: var(--success);
         }
 
-        /* Active state */
         .progress-step.active .step-indicator {
           border-color: var(--accent-primary);
           background: var(--accent-muted);
@@ -182,7 +169,6 @@ function SolanaProgress({ progress, status, detailed }: SolanaProgressProps) {
           color: var(--accent-primary);
         }
 
-        /* Completed state */
         .progress-step.completed .step-indicator {
           border-color: var(--success);
           background: var(--success);
@@ -198,7 +184,6 @@ function SolanaProgress({ progress, status, detailed }: SolanaProgressProps) {
           height: 14px;
         }
 
-        /* Failed state */
         .progress-step.failed .step-indicator {
           border-color: var(--error);
           background: var(--error);
@@ -248,9 +233,6 @@ function SolanaProgress({ progress, status, detailed }: SolanaProgressProps) {
   );
 }
 
-// ============================================
-// EVM PROGRESS COMPONENT
-// ============================================
 
 interface EVMProgressProps {
   progress: EVMConfirmationProgress;
@@ -402,9 +384,6 @@ function EVMProgress({ progress, status, chainId, detailed }: EVMProgressProps) 
   );
 }
 
-// ============================================
-// ICONS
-// ============================================
 
 const CheckIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -418,9 +397,6 @@ const XIcon = () => (
   </svg>
 );
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 export function TxConfirmationProgress({
   chainType,
@@ -498,28 +474,23 @@ const InfoIcon = () => (
   </svg>
 );
 
-// ============================================
-// COMPACT PROGRESS INDICATOR
-// ============================================
 
 export interface TxProgressIndicatorProps {
-  /** Progress percentage (0-100) */
+  
   percentage: number;
-  /** Show as complete */
+  
   complete?: boolean;
-  /** Show as failed */
+  
   failed?: boolean;
-  /** Size in pixels */
+  
   size?: number;
-  /** Stroke width */
+  
   strokeWidth?: number;
-  /** Additional CSS class */
+  
   className?: string;
 }
 
-/**
- * Compact circular progress indicator
- */
+
 export function TxProgressIndicator({
   percentage,
   complete = false,
@@ -538,7 +509,7 @@ export function TxProgressIndicator({
       style={{ width: size, height: size }}
     >
       <svg viewBox={`0 0 ${size} ${size}`}>
-        {/* Background circle */}
+        {}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -547,7 +518,7 @@ export function TxProgressIndicator({
           stroke="var(--border-default)"
           strokeWidth={strokeWidth}
         />
-        {/* Progress circle */}
+        {}
         <circle
           cx={size / 2}
           cy={size / 2}

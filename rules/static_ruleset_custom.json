@@ -8,12 +8,13 @@
     "condition": {
       "urlFilter": "||sentry.io^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -31,12 +32,13 @@
     "condition": {
       "urlFilter": "||browser.sentry-cdn.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -54,12 +56,13 @@
     "condition": {
       "urlFilter": "||sentry-cdn.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -77,12 +80,13 @@
     "condition": {
       "urlFilter": "||bugsnag.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -100,12 +104,13 @@
     "condition": {
       "urlFilter": "||d2wy8f7a9ursnm.cloudfront.net^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -123,12 +128,13 @@
     "condition": {
       "urlFilter": "||sessions.bugsnag.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -146,12 +152,13 @@
     "condition": {
       "urlFilter": "||notify.bugsnag.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -169,12 +176,13 @@
     "condition": {
       "urlFilter": "||app.bugsnag.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -192,12 +200,13 @@
     "condition": {
       "urlFilter": "||rollbar.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -215,12 +224,13 @@
     "condition": {
       "urlFilter": "||raygun.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -238,12 +248,13 @@
     "condition": {
       "urlFilter": "||trackjs.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -261,12 +272,13 @@
     "condition": {
       "urlFilter": "||logrocket.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -284,12 +296,13 @@
     "condition": {
       "urlFilter": "||logrocket.io^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -307,12 +320,13 @@
     "condition": {
       "urlFilter": "||lr-ingest.io^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -330,12 +344,13 @@
     "condition": {
       "urlFilter": "||google-analytics.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -353,12 +368,13 @@
     "condition": {
       "urlFilter": "||googleadservices.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -376,12 +392,13 @@
     "condition": {
       "urlFilter": "||googlesyndication.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -399,12 +416,13 @@
     "condition": {
       "urlFilter": "||doubleclick.net^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -422,12 +440,13 @@
     "condition": {
       "urlFilter": "||googletagmanager.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -445,12 +464,13 @@
     "condition": {
       "urlFilter": "||googletagservices.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -468,12 +488,13 @@
     "condition": {
       "urlFilter": "||taboola.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -491,12 +512,13 @@
     "condition": {
       "urlFilter": "||outbrain.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -514,12 +536,13 @@
     "condition": {
       "urlFilter": "||criteo.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -537,12 +560,13 @@
     "condition": {
       "urlFilter": "||criteo.net^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -560,12 +584,13 @@
     "condition": {
       "urlFilter": "||adroll.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -583,12 +608,13 @@
     "condition": {
       "urlFilter": "||adsrvr.org^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -606,12 +632,13 @@
     "condition": {
       "urlFilter": "||pubmatic.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -629,12 +656,13 @@
     "condition": {
       "urlFilter": "||hotjar.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -652,12 +680,13 @@
     "condition": {
       "urlFilter": "||mixpanel.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -675,12 +704,13 @@
     "condition": {
       "urlFilter": "||segment.io^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -698,12 +728,13 @@
     "condition": {
       "urlFilter": "||segment.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -721,12 +752,13 @@
     "condition": {
       "urlFilter": "||amplitude.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -744,12 +776,13 @@
     "condition": {
       "urlFilter": "||heapanalytics.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -767,12 +800,13 @@
     "condition": {
       "urlFilter": "||fullstory.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -790,12 +824,13 @@
     "condition": {
       "urlFilter": "||facebook.net^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -813,12 +848,13 @@
     "condition": {
       "urlFilter": "||connect.facebook.net^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -836,12 +872,13 @@
     "condition": {
       "urlFilter": "||analytics.twitter.com^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -859,12 +896,13 @@
     "condition": {
       "urlFilter": "||trackersimulator.org^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -882,12 +920,13 @@
     "condition": {
       "urlFilter": "||eviltracker.net^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",
@@ -905,12 +944,13 @@
     "condition": {
       "urlFilter": "||do-not-tracker.org^",
       "resourceTypes": [
+        "main_frame",
+        "sub_frame",
         "script",
         "image",
         "stylesheet",
         "object",
         "xmlhttprequest",
-        "sub_frame",
         "ping",
         "media",
         "font",

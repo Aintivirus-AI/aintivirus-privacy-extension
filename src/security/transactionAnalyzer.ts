@@ -1,17 +1,4 @@
-/**
- * AINTIVIRUS Security Module - Transaction Analyzer
- * 
- * Parses and analyzes Solana transactions before signing.
- * Provides human-readable summaries and risk assessments.
- * 
- * CRITICAL LIMITATIONS:
- * - Analysis is best-effort and may miss complex transaction patterns
- * - Cannot simulate or predict actual outcomes
- * - Unknown programs may contain arbitrary logic
- * - Token metadata may be spoofed or unavailable
- * - This is INFORMATIONAL ONLY and does NOT guarantee safety
- * - Always verify transaction details independently
- */
+
 
 import {
   Transaction,
@@ -50,13 +37,7 @@ import {
 } from './storage';
 import { getPublicAddress } from '../wallet/storage';
 
-// ============================================
-// CONSTANTS
-// ============================================
 
-/**
- * SPL Token instruction discriminators
- */
 const TOKEN_INSTRUCTIONS = {
   TRANSFER: 3,
   APPROVE: 4,
@@ -69,9 +50,7 @@ const TOKEN_INSTRUCTIONS = {
   APPROVE_CHECKED: 13,
 };
 
-/**
- * System instruction types
- */
+
 const SYSTEM_INSTRUCTIONS = {
   CREATE_ACCOUNT: 0,
   ASSIGN: 1,
@@ -87,23 +66,17 @@ const SYSTEM_INSTRUCTIONS = {
   TRANSFER_WITH_SEED: 11,
 };
 
-// ============================================
-// TRANSACTION PARSING
-// ============================================
 
-/**
- * Deserialize a transaction from base64 or base58 string
- */
 export function deserializeTransaction(
   serialized: string
 ): Transaction | VersionedTransaction {
   let bytes: Uint8Array;
   
-  // Try base64 first
+  
   try {
     bytes = Uint8Array.from(atob(serialized), c => c.charCodeAt(0));
   } catch {
-    // Try base58
+    
     try {
       bytes = bs58.decode(serialized);
     } catch {
@@ -111,18 +84,16 @@ export function deserializeTransaction(
     }
   }
   
-  // Try versioned transaction first
+  
   try {
     return VersionedTransaction.deserialize(bytes);
   } catch {
-    // Fall back to legacy transaction
+    
     return Transaction.from(bytes);
   }
 }
 
-/**
- * Extract instructions from a transaction
- */
+
 function getInstructions(
   transaction: Transaction | VersionedTransaction
 ): { programId: PublicKey; keys: PublicKey[]; data: Buffer }[] {
@@ -144,17 +115,7 @@ function getInstructions(
   }
 }
 
-// ============================================
-// TRANSACTION ANALYSIS
-// ============================================
 
-/**
- * Analyze a transaction and return a human-readable summary
- * 
- * @param serializedTransaction - Base64 or base58 encoded transaction
- * @param domain - Domain requesting the signature
- * @returns Transaction summary with risk assessment
- */
 export async function analyzeTransaction(
   serializedTransaction: string,
   domain: string
@@ -162,7 +123,7 @@ export async function analyzeTransaction(
   const settings = await getSecuritySettings();
   const walletAddress = await getPublicAddress();
   
-  // Parse the transaction
+  
   let transaction: Transaction | VersionedTransaction;
   try {
     transaction = deserializeTransaction(serializedTransaction);
@@ -170,7 +131,7 @@ export async function analyzeTransaction(
     return createErrorSummary(serializedTransaction, domain, 'Failed to parse transaction');
   }
   
-  // Extract and analyze instructions
+  
   const rawInstructions = getInstructions(transaction);
   const instructions: InstructionSummary[] = [];
   const tokenTransfers: TokenTransferSummary[] = [];
@@ -184,14 +145,14 @@ export async function analyzeTransaction(
     const programInfo = await getProgramInfo(programId);
     const programRisk = programInfo?.riskLevel || ProgramRiskLevel.UNKNOWN;
     
-    // Track unknown programs
+    
     if (programRisk === ProgramRiskLevel.UNKNOWN) {
       if (!unknownPrograms.includes(programId)) {
         unknownPrograms.push(programId);
       }
     }
     
-    // Analyze based on program type
+    
     let instructionSummary: InstructionSummary;
     
     if (isSystemProgram(programId)) {
@@ -224,7 +185,7 @@ export async function analyzeTransaction(
         warnings: [],
       };
     } else {
-      // Unknown or other program
+      
       instructionSummary = {
         programId,
         programName: programInfo?.name || 'Unknown Program',
@@ -247,7 +208,7 @@ export async function analyzeTransaction(
     warnings.push(...instructionSummary.warnings);
   }
   
-  // Add warnings based on settings
+  
   if (settings.warnOnLargeTransfers && totalSolTransfer >= settings.largeTransferThreshold) {
     warnings.push(`Large transfer: ${totalSolTransfer.toFixed(4)} SOL`);
   }
@@ -267,7 +228,7 @@ export async function analyzeTransaction(
     warnings.push(`Transaction interacts with ${unknownPrograms.length} unknown program(s)`);
   }
   
-  // Calculate risk level
+  
   const riskLevel = calculateTransactionRisk(
     instructions,
     tokenTransfers,
@@ -277,7 +238,7 @@ export async function analyzeTransaction(
     settings
   );
   
-  // Determine if confirmation is required
+  
   const requiresConfirmation = riskLevel !== 'low' || warnings.length > 0;
   
   return {
@@ -296,9 +257,7 @@ export async function analyzeTransaction(
   };
 }
 
-/**
- * Analyze multiple transactions
- */
+
 export async function analyzeTransactions(
   serializedTransactions: string[],
   domain: string
@@ -313,13 +272,7 @@ export async function analyzeTransactions(
   return summaries;
 }
 
-// ============================================
-// INSTRUCTION ANALYSIS
-// ============================================
 
-/**
- * Analyze a System Program instruction
- */
 function analyzeSystemInstruction(
   ix: { programId: PublicKey; keys: PublicKey[]; data: Buffer },
   walletAddress: string | null
@@ -331,12 +284,12 @@ function analyzeSystemInstruction(
   const warnings: string[] = [];
   
   try {
-    // Decode instruction type from first 4 bytes
+    
     const instructionType = ix.data.readUInt32LE(0);
     
     switch (instructionType) {
       case SYSTEM_INSTRUCTIONS.TRANSFER:
-        // Transfer instruction: 4 bytes type + 8 bytes lamports
+        
         if (ix.data.length >= 12) {
           const lamports = ix.data.readBigUInt64LE(4);
           solAmount = Number(lamports) / LAMPORTS_PER_SOL;
@@ -380,9 +333,7 @@ function analyzeSystemInstruction(
   };
 }
 
-/**
- * Analyze a Token Program instruction
- */
+
 async function analyzeTokenInstruction(
   ix: { programId: PublicKey; keys: PublicKey[]; data: Buffer },
   walletAddress: string | null
@@ -411,7 +362,7 @@ async function analyzeTokenInstruction(
         type = 'token_transfer';
         
         transfer = {
-          mint: ix.keys[2]?.toBase58() || 'unknown', // Approximate - actual mint needs lookup
+          mint: ix.keys[2]?.toBase58() || 'unknown', 
           amount: Number(amount),
           rawAmount: amount.toString(),
           source,
@@ -511,13 +462,7 @@ async function analyzeTokenInstruction(
   };
 }
 
-// ============================================
-// RISK CALCULATION
-// ============================================
 
-/**
- * Calculate overall transaction risk level
- */
 function calculateTransactionRisk(
   instructions: InstructionSummary[],
   tokenTransfers: TokenTransferSummary[],
@@ -526,7 +471,7 @@ function calculateTransactionRisk(
   unknownPrograms: string[],
   settings: Awaited<ReturnType<typeof getSecuritySettings>>
 ): RiskLevel {
-  // High risk conditions
+  
   if (instructions.some(i => i.programRisk === ProgramRiskLevel.MALICIOUS)) {
     return 'high';
   }
@@ -543,7 +488,7 @@ function calculateTransactionRisk(
     return 'high';
   }
   
-  // Medium risk conditions
+  
   if (unknownPrograms.length > 0) {
     return 'medium';
   }
@@ -560,13 +505,11 @@ function calculateTransactionRisk(
     return 'medium';
   }
   
-  // Low risk
+  
   return 'low';
 }
 
-/**
- * Create error summary when transaction cannot be parsed
- */
+
 function createErrorSummary(
   serializedTransaction: string,
   domain: string,
@@ -588,13 +531,7 @@ function createErrorSummary(
   };
 }
 
-// ============================================
-// VERIFICATION REQUEST HANDLING
-// ============================================
 
-/**
- * Create a verification request for user approval
- */
 export async function createVerificationRequest(
   domain: string,
   serializedTransactions: string[],
@@ -613,33 +550,21 @@ export async function createVerificationRequest(
   return request;
 }
 
-/**
- * Complete a verification request
- */
+
 export async function completeVerificationRequest(
   requestId: string,
   approved: boolean
 ): Promise<void> {
   await removePendingVerification(requestId);
-  
-  console.log(`[AINTIVIRUS Security] Verification ${requestId}: ${approved ? 'approved' : 'rejected'}`);
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
 
-/**
- * Truncate address for display
- */
 function truncateAddress(address: string, chars: number = 4): string {
   if (address.length <= chars * 2 + 3) return address;
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-/**
- * Get human-readable summary of transaction
- */
+
 export function getTransactionDescription(summary: TransactionSummary): string {
   const parts: string[] = [];
   
@@ -674,9 +599,7 @@ export function getTransactionDescription(summary: TransactionSummary): string {
   return parts.join(', ');
 }
 
-/**
- * Get risk level badge color
- */
+
 export function getRiskLevelColor(riskLevel: RiskLevel): string {
   switch (riskLevel) {
     case 'low':
@@ -690,9 +613,7 @@ export function getRiskLevelColor(riskLevel: RiskLevel): string {
   }
 }
 
-/**
- * Get risk level icon name
- */
+
 export function getRiskLevelIcon(riskLevel: RiskLevel): string {
   switch (riskLevel) {
     case 'low':
@@ -705,5 +626,4 @@ export function getRiskLevelIcon(riskLevel: RiskLevel): string {
       return 'info';
   }
 }
-
 

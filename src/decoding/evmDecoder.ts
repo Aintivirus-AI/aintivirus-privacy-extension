@@ -1,8 +1,4 @@
-/**
- * AINTIVIRUS Decoding Module - EVM Transaction Decoder
- *
- * Decodes EVM transactions and provides human-readable summaries with risk analysis.
- */
+
 
 import {
   DecodedEvmTx,
@@ -25,9 +21,20 @@ import {
   warnUnverifiedContract,
 } from './warnings';
 
-// ============================================
-// MAIN DECODER
-// ============================================
+
+const decodingCache = new Map<string, DecodedEvmTx>();
+const MAX_CACHE_SIZE = 100;
+
+
+function getCacheKey(tx: EvmTxInput): string {
+  return `${tx.to || 'none'}_${tx.value || '0'}_${tx.data || '0x'}_${tx.chainId || 0}`;
+}
+
+
+export function clearDecodingCache(): void {
+  decodingCache.clear();
+}
+
 
 export interface EvmTxInput {
   to?: string;
@@ -42,19 +49,48 @@ export interface EvmTxInput {
   gasPrice?: string;
 }
 
-/**
- * Decode an EVM transaction into a human-readable format
- */
+
 export function decodeEvmTx(tx: EvmTxInput): DecodedEvmTx {
+  
+  const cacheKey = getCacheKey(tx);
+  const cached = decodingCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  
+  const decoded = decodeEvmTxInternal(tx);
+  
+  
+  if (decodingCache.size >= MAX_CACHE_SIZE) {
+    
+    const firstKey = decodingCache.keys().next().value;
+    if (firstKey) {
+      decodingCache.delete(firstKey);
+    }
+  }
+  decodingCache.set(cacheKey, decoded);
+  
+  return decoded;
+}
+
+
+function decodeEvmTxInternal(tx: EvmTxInput): DecodedEvmTx {
   const warnings: TxWarning[] = [];
 
-  // Parse basic values
+  
   const value = parseHexBigInt(tx.value);
   const valueEth = formatEthValue(value);
   const data = tx.data || '0x';
-  const dataSize = data.length > 2 ? Math.floor((data.length - 2) / 2) : 0;
+  
+  
+  let dataSize = 0;
+  if (data.length > 2) {
+    
+    dataSize = (data.length - 2) >> 1;
+  }
 
-  // Build details object
+  
   const details: TxDetails = {
     to: tx.to,
     value: value.toString(),
@@ -68,43 +104,43 @@ export function decodeEvmTx(tx: EvmTxInput): DecodedEvmTx {
     maxPriorityFee: tx.maxPriorityFeePerGas,
   };
 
-  // Determine transaction kind and decode
+  
   let kind: TxKind;
   let summary: string;
   let decodedCall: DecodedFunctionCall | undefined;
 
-  // Contract creation (no 'to' address)
+  
   if (!tx.to) {
     kind = 'contract_creation';
     summary = 'Deploy new smart contract';
     warnings.push(warnContractCreation());
     details.selector = undefined;
   }
-  // Native transfer (no data or just '0x')
+  
   else if (!data || data === '0x' || data.length < 10) {
     kind = 'transfer';
     summary = `Transfer ${valueEth} to ${getContractDisplayName(tx.to)}`;
 
-    // Check for large value
+    
     warnings.push(...analyzeEthValue(value, false));
   }
-  // Contract interaction
+  
   else {
     const selector = data.slice(0, 10).toLowerCase();
     details.selector = selector;
 
-    // Look up function signature
+    
     const sig = lookupSelector(selector);
 
     if (sig) {
-      // Decode based on category
+      
       const decoded = decodeKnownFunction(selector, data, tx.to, sig.category);
       kind = decoded.kind;
       summary = decoded.summary;
       decodedCall = decoded.call;
       warnings.push(...decoded.warnings);
     } else {
-      // Unknown function
+      
       kind = 'contract_call';
       const contractName = getContractDisplayName(tx.to);
       summary = `Call unknown function on ${contractName}`;
@@ -114,7 +150,7 @@ export function decodeEvmTx(tx: EvmTxInput): DecodedEvmTx {
       }
     }
 
-    // Add value warnings for contract calls with ETH
+    
     if (value > 0n) {
       warnings.push(...analyzeEthValue(value, true));
     }
@@ -129,9 +165,6 @@ export function decodeEvmTx(tx: EvmTxInput): DecodedEvmTx {
   };
 }
 
-// ============================================
-// FUNCTION DECODERS
-// ============================================
 
 interface DecodeResult {
   kind: TxKind;
@@ -150,23 +183,23 @@ function decodeKnownFunction(
   const contractName = getContractDisplayName(to);
 
   switch (selector.toLowerCase()) {
-    // ERC-20 transfer
+    
     case '0xa9059cbb':
       return decodeErc20Transfer(data, contractName);
 
-    // ERC-20 approve
+    
     case '0x095ea7b3':
       return decodeErc20Approve(data, contractName);
 
-    // ERC-20 transferFrom
+    
     case '0x23b872dd':
       return decodeTransferFrom(data, contractName);
 
-    // setApprovalForAll (ERC-721/ERC-1155)
+    
     case '0xa22cb465':
       return decodeSetApprovalForAll(data, contractName);
 
-    // ERC-721 safeTransferFrom (3 params)
+    
     case '0x42842e0e':
       return decodeNftTransfer(data, contractName);
 
@@ -178,7 +211,7 @@ function decodeKnownFunction(
 function decodeErc20Transfer(data: string, tokenName: string): DecodeResult {
   const warnings: TxWarning[] = [];
 
-  // Decode: transfer(address to, uint256 amount)
+  
   const toAddress = decodeAddress(data, 0);
   const amount = decodeUint256(data, 1);
 
@@ -218,14 +251,14 @@ function decodeErc20Transfer(data: string, tokenName: string): DecodeResult {
 function decodeErc20Approve(data: string, tokenName: string): DecodeResult {
   const warnings: TxWarning[] = [];
 
-  // Decode: approve(address spender, uint256 amount)
+  
   const spender = decodeAddress(data, 0);
   const amount = decodeUint256(data, 1);
 
   const spenderDisplay = getContractDisplayName(spender);
   const amountDisplay = formatAmount(amount);
 
-  // Check for infinite approval
+  
   warnings.push(...analyzeApprovalAmount(amount, spender));
 
   const call: DecodedFunctionCall = {
@@ -263,7 +296,7 @@ function decodeErc20Approve(data: string, tokenName: string): DecodeResult {
 }
 
 function decodeTransferFrom(data: string, tokenName: string): DecodeResult {
-  // Decode: transferFrom(address from, address to, uint256 amount/tokenId)
+  
   const from = decodeAddress(data, 0);
   const to = decodeAddress(data, 1);
   const value = decodeUint256(data, 2);
@@ -294,7 +327,7 @@ function decodeTransferFrom(data: string, tokenName: string): DecodeResult {
 function decodeSetApprovalForAll(data: string, collectionName: string): DecodeResult {
   const warnings: TxWarning[] = [];
 
-  // Decode: setApprovalForAll(address operator, bool approved)
+  
   const operator = decodeAddress(data, 0);
   const approved = decodeUint256(data, 1) !== 0n;
 
@@ -330,7 +363,7 @@ function decodeSetApprovalForAll(data: string, collectionName: string): DecodeRe
 }
 
 function decodeNftTransfer(data: string, collectionName: string): DecodeResult {
-  // Decode: safeTransferFrom(address from, address to, uint256 tokenId)
+  
   const from = decodeAddress(data, 0);
   const to = decodeAddress(data, 1);
   const tokenId = decodeUint256(data, 2);
@@ -366,7 +399,7 @@ function decodeGenericFunction(
   const warnings: TxWarning[] = [];
   const contractName = getContractDisplayName(to);
 
-  // Map category to kind
+  
   let kind: TxKind;
   switch (category) {
     case 'swap':
@@ -392,7 +425,7 @@ function decodeGenericFunction(
       kind = 'contract_call';
   }
 
-  // Check if contract is verified
+  
   if (!lookupContract(to)) {
     warnings.push(warnUnverifiedContract());
   }
@@ -401,7 +434,7 @@ function decodeGenericFunction(
     selector,
     name: functionName,
     category,
-    params: [], // Generic decoding doesn't parse params
+    params: [], 
   };
 
   return {
@@ -412,40 +445,47 @@ function decodeGenericFunction(
   };
 }
 
-// ============================================
-// ABI DECODING HELPERS
-// ============================================
 
-/**
- * Parse hex string to BigInt, handling empty/undefined
- */
 function parseHexBigInt(hex: string | undefined): bigint {
-  if (!hex || hex === '0x' || hex === '') return 0n;
+  if (!hex || hex === '0x' || hex === '' || hex === '0x0') return 0n;
+  
+  
+  if (hex.length <= 4) { 
+    const num = parseInt(hex, 16);
+    return BigInt(num);
+  }
+  
   return BigInt(hex);
 }
 
-/**
- * Decode an address from calldata at given parameter index
- */
+
 function decodeAddress(data: string, paramIndex: number): string {
-  const offset = 10 + paramIndex * 64; // 10 = '0x' + 4 byte selector
-  const paddedAddress = data.slice(offset, offset + 64);
-  return '0x' + paddedAddress.slice(24); // Last 20 bytes
+  const offset = 10 + paramIndex * 64; 
+  
+  const addressStart = offset + 24; 
+  return '0x' + data.substring(addressStart, addressStart + 40);
 }
 
-/**
- * Decode a uint256 from calldata at given parameter index
- */
+
 function decodeUint256(data: string, paramIndex: number): bigint {
   const offset = 10 + paramIndex * 64;
-  const value = data.slice(offset, offset + 64);
+  const end = offset + 64;
+  
+  
+  if (end > data.length) return 0n;
+  
+  const value = data.substring(offset, end);
   if (!value || value.length === 0) return 0n;
+  
+  
+  if (value === '0000000000000000000000000000000000000000000000000000000000000000') {
+    return 0n;
+  }
+  
   return BigInt('0x' + value);
 }
 
-/**
- * Decode bytes from calldata (for dynamic types)
- */
+
 function decodeBytes(data: string, paramIndex: number): string {
   const offsetPosition = 10 + paramIndex * 64;
   const offset = Number(BigInt('0x' + data.slice(offsetPosition, offsetPosition + 64)));
@@ -457,8 +497,5 @@ function decodeBytes(data: string, paramIndex: number): string {
   return '0x' + data.slice(bytesStart, bytesStart + length * 2);
 }
 
-// ============================================
-// EXPORTS
-// ============================================
 
 export { decodeAddress, decodeUint256, decodeBytes, parseHexBigInt };
