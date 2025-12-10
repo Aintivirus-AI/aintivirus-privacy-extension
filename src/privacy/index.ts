@@ -59,6 +59,7 @@ import {
   getFilteringMode,
   setDefaultFilteringMode,
   getDefaultFilteringMode,
+  setupInternalApiAllowlist,
   MODE_NONE,
   MODE_BASIC,
   MODE_OPTIMAL,
@@ -104,6 +105,10 @@ export async function initializePrivacyEngine(): Promise<void> {
     
     
     initializeBlockCountTracker();
+    
+    // Always set up internal API allowlist first (essential for wallet functionality)
+    // This must run regardless of ad blocker settings to allow Jupiter, CoinGecko, etc.
+    await setupInternalApiAllowlist();
     
     
     const settings = await getPrivacySettings();

@@ -395,6 +395,10 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
   const [showPassword, setShowPassword] = useState(false);
   const [selectedTokenForSend, setSelectedTokenForSend] = useState<SelectedTokenForSend | null>(null);
   const [dashboardKey, setDashboardKey] = useState(0);
+  
+  // State for passing to swap view
+  const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
+  const [swapBalance, setSwapBalance] = useState<WalletBalance | null>(null);
 
   const handleUnlock = async () => {
     if (!password) return;
@@ -537,7 +541,11 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
             }}
             onReceive={() => setView('receive')}
             onHistory={() => setView('history')}
-            onSwap={() => setView('swap')}
+            onSwap={(tokens, balance) => {
+              setSwapTokens(tokens || []);
+              setSwapBalance(balance || null);
+              setView('swap');
+            }}
             onLock={onStateChange}
             onManageWallets={() => setView('manage')}
             onWalletSwitch={() => setView('manage')}
@@ -609,6 +617,8 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
             network={walletState.network}
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
+            tokens={swapTokens}
+            balance={swapBalance}
             onClose={() => setView('dashboard')}
           />
         )}
@@ -1050,7 +1060,7 @@ interface WalletDashboardProps {
   onSendToken: (token: SelectedTokenForSend) => void;
   onReceive: () => void;
   onHistory: () => void;
-  onSwap: () => void;
+  onSwap: (tokens?: SPLTokenBalance[], balance?: WalletBalance | null) => void;
   onLock: () => void;
   onManageWallets: () => void;
   onWalletSwitch: () => void;
@@ -1924,7 +1934,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           <ReceiveIcon size={20} />
           <span className="action-label">Receive</span>
         </button>
-        <button className="wallet-action-btn" onClick={onSwap}>
+        <button className="wallet-action-btn" onClick={() => onSwap(tokens, balance)}>
           <SwapIcon size={20} />
           <span className="action-label">Swap</span>
         </button>
@@ -3668,16 +3678,171 @@ const HistoryView: React.FC<HistoryViewProps> = ({ address, network, activeChain
 
 // --- Swap View ---
 
+// Common Solana token info for swap UI
+const SWAP_TOKEN_LIST = [
+  { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', name: 'Solana', decimals: 9, logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png' },
+  { mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', symbol: 'USDC', name: 'USD Coin', decimals: 6, logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png' },
+  { mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', symbol: 'USDT', name: 'Tether USD', decimals: 6, logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png' },
+  { mint: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', symbol: 'JUP', name: 'Jupiter', decimals: 6, logoUri: 'https://static.jup.ag/jup/icon.png' },
+  { mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', symbol: 'BONK', name: 'Bonk', decimals: 5, logoUri: 'https://arweave.net/hQiPZOsRZXGXBJd_82PhVdlM_hACsT_q6wqwf5cSY7I' },
+  { mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', symbol: 'WIF', name: 'dogwifhat', decimals: 6, logoUri: 'https://bafkreibk3covs5ltyqxa272uodhculbr6kea6betiez62dpxfhqixvhyg4.ipfs.w3s.link/' },
+  { mint: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', symbol: 'RAY', name: 'Raydium', decimals: 6, logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png' },
+];
+
+interface SwapQuoteResult {
+  inputMint: string;
+  outputMint: string;
+  inputAmount: string;
+  outputAmount: string;
+  inputAmountFormatted: string;
+  outputAmountFormatted: string;
+  minimumReceivedFormatted: string;
+  priceImpact: string;
+  platformFeeFormatted: string | null;
+  route: string;
+  rawQuote: unknown;
+}
+
 interface SwapViewProps {
   address: string;
   network: string;
   activeChain: ChainType;
   activeEVMChain: EVMChainId | null;
+  tokens?: SPLTokenBalance[];
+  balance?: WalletBalance | null;
   onClose: () => void;
+  onSwapComplete?: () => void;
 }
 
-const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, activeEVMChain, onClose }) => {
+const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, activeEVMChain, tokens = [], balance, onClose, onSwapComplete }) => {
   const [copied, setCopied] = useState(false);
+  const [useInAppSwap, setUseInAppSwap] = useState(true);
+  
+  // In-app swap state
+  const [inputToken, setInputToken] = useState(SWAP_TOKEN_LIST[0]); // SOL
+  const [outputToken, setOutputToken] = useState(SWAP_TOKEN_LIST[1]); // USDC
+  const [inputAmount, setInputAmount] = useState('');
+  const [slippageBps, setSlippageBps] = useState(50); // 0.5%
+  const [quote, setQuote] = useState<SwapQuoteResult | null>(null);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState<{ signature: string; explorerUrl: string } | null>(null);
+  const [showTokenSelect, setShowTokenSelect] = useState<'input' | 'output' | null>(null);
+  const [swapAvailable, setSwapAvailable] = useState(false);
+  const [referralStatus, setReferralStatus] = useState<{ enabled: boolean; feeBps: number } | null>(null);
+  
+  // Debounce input amount for quote fetching
+  const debouncedInputAmount = useDebounce(inputAmount, 500);
+
+  // Check if in-app swap is available (mainnet Solana only)
+  useEffect(() => {
+    const checkSwapAvailable = async () => {
+      if (activeChain === 'solana' && network === 'mainnet-beta') {
+        try {
+          const response = await sendToBackground({ type: 'WALLET_SWAP_AVAILABLE', payload: undefined });
+          setSwapAvailable(response.success && response.data === true);
+          
+          // Get referral status
+          const refResponse = await sendToBackground({ type: 'WALLET_SWAP_REFERRAL_STATUS', payload: undefined });
+          if (refResponse.success && refResponse.data) {
+            setReferralStatus(refResponse.data as { enabled: boolean; feeBps: number });
+          }
+        } catch {
+          setSwapAvailable(false);
+        }
+      } else {
+        setSwapAvailable(false);
+      }
+    };
+    checkSwapAvailable();
+  }, [activeChain, network]);
+
+  // Fetch quote when input changes
+  useEffect(() => {
+    const fetchQuote = async () => {
+      if (!debouncedInputAmount || parseFloat(debouncedInputAmount) <= 0 || !swapAvailable) {
+        setQuote(null);
+        return;
+      }
+
+      setLoadingQuote(true);
+      setError('');
+      
+      try {
+        const response = await sendToBackground({
+          type: 'WALLET_SWAP_QUOTE',
+          payload: {
+            inputMint: inputToken.mint,
+            outputMint: outputToken.mint,
+            inputAmount: debouncedInputAmount,
+            inputDecimals: inputToken.decimals,
+            outputDecimals: outputToken.decimals,
+            slippageBps,
+          },
+        });
+
+        if (response.success && response.data) {
+          setQuote(response.data as SwapQuoteResult);
+        } else {
+          setError(response.error || 'Failed to get quote');
+          setQuote(null);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to get quote');
+        setQuote(null);
+      } finally {
+        setLoadingQuote(false);
+      }
+    };
+
+    fetchQuote();
+  }, [debouncedInputAmount, inputToken, outputToken, slippageBps, swapAvailable]);
+
+  // Execute swap
+  const handleSwap = async () => {
+    if (!quote || executing) return;
+
+    setExecuting(true);
+    setError('');
+    setSuccess(null);
+
+    try {
+      const response = await sendToBackground({
+        type: 'WALLET_SWAP_EXECUTE',
+        payload: {
+          inputMint: inputToken.mint,
+          outputMint: outputToken.mint,
+          inputAmount,
+          inputDecimals: inputToken.decimals,
+          slippageBps,
+        },
+      });
+
+      if (response.success && response.data) {
+        const result = response.data as { signature: string; explorerUrl: string };
+        setSuccess(result);
+        setInputAmount('');
+        setQuote(null);
+        onSwapComplete?.();
+      } else {
+        setError(response.error || 'Swap failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Swap failed');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  // Swap input/output tokens
+  const handleFlipTokens = () => {
+    const temp = inputToken;
+    setInputToken(outputToken);
+    setOutputToken(temp);
+    setInputAmount('');
+    setQuote(null);
+  };
 
   // Get chain name for display
   const getChainName = () => {
@@ -3686,7 +3851,7 @@ const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, acti
     return chain?.name || 'Ethereum';
   };
 
-  // Get DEX info based on chain
+  // Get DEX info based on chain (for external swap fallback)
   const getDexInfo = () => {
     if (activeChain === 'solana') {
       return {
@@ -3699,18 +3864,7 @@ const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, acti
       };
     }
 
-    // EVM chains - use Uniswap (supports Ethereum, Arbitrum, Optimism, Base, Polygon)
-    const chainIdMap: Record<EVMChainId, number> = {
-      ethereum: 1,
-      polygon: 137,
-      arbitrum: 42161,
-      optimism: 10,
-      base: 8453,
-    };
-
-    const chainId = activeEVMChain ? chainIdMap[activeEVMChain] : 1;
     const chainName = getChainName();
-
     return {
       name: 'Uniswap',
       description: `Swap tokens using Uniswap on ${chainName}. Get the best rates with automatic routing.`,
@@ -3723,12 +3877,10 @@ const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, acti
   const chainName = getChainName();
 
   const openDexPopup = () => {
-    // Open DEX in a popup window (sized for swap interface)
     const width = 420;
     const height = 700;
     const left = (screen.width - width) / 2;
     const top = (screen.height - height) / 2;
-
     window.open(
       dexInfo.url,
       'dex-swap',
@@ -3746,9 +3898,312 @@ const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, acti
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
+      // Ignore error
     }
   };
 
+  // Get user's token balance for input token
+  const getInputTokenBalance = () => {
+    if (inputToken.symbol === 'SOL') {
+      // SOL balance comes from main wallet balance
+      return balance?.lamports ? balance.lamports / 1e9 : 0;
+    }
+    const userToken = tokens.find(t => t.mint === inputToken.mint);
+    return userToken ? userToken.uiBalance : 0;
+  };
+
+  const inputBalance = getInputTokenBalance();
+
+  // Render token selector
+  const renderTokenSelector = (type: 'input' | 'output') => {
+    const selectedToken = type === 'input' ? inputToken : outputToken;
+    const otherToken = type === 'input' ? outputToken : inputToken;
+    
+    return (
+      <div className="swap-token-selector">
+        <button 
+          className="swap-token-btn"
+          onClick={() => setShowTokenSelect(type)}
+        >
+          <img 
+            src={selectedToken.logoUri} 
+            alt={selectedToken.symbol}
+            className="swap-token-icon"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
+            }}
+          />
+          <span className="swap-token-symbol">{selectedToken.symbol}</span>
+          <ChevronIcon size={14} direction="down" />
+        </button>
+        
+        {showTokenSelect === type && (
+          <div className="swap-token-dropdown">
+            <div className="swap-token-dropdown-header">
+              <span>Select Token</span>
+              <button onClick={() => setShowTokenSelect(null)}>
+                <CloseIcon size={14} />
+              </button>
+            </div>
+            <div className="swap-token-list">
+              {SWAP_TOKEN_LIST.filter(t => t.mint !== otherToken.mint).map(token => (
+                <button
+                  key={token.mint}
+                  className={`swap-token-option ${token.mint === selectedToken.mint ? 'selected' : ''}`}
+                  onClick={() => {
+                    if (type === 'input') setInputToken(token);
+                    else setOutputToken(token);
+                    setShowTokenSelect(null);
+                    setQuote(null);
+                  }}
+                >
+                  <img 
+                    src={token.logoUri} 
+                    alt={token.symbol}
+                    className="swap-token-icon"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
+                    }}
+                  />
+                  <div className="swap-token-info">
+                    <span className="swap-token-symbol">{token.symbol}</span>
+                    <span className="swap-token-name">{token.name}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // In-app swap UI for Solana mainnet
+  if (swapAvailable && useInAppSwap && activeChain === 'solana') {
+    return (
+      <div className="swap-view">
+        <div className="form-header">
+          <h3>Swap Tokens</h3>
+          <button className="close-btn" onClick={onClose}>
+            <CloseIcon size={14} />
+          </button>
+        </div>
+
+        <div className="swap-content">
+          {/* Success State */}
+          {success && (
+            <div className="swap-success">
+              <div className="swap-success-icon">
+                <CheckIcon size={32} />
+              </div>
+              <h4>Swap Successful!</h4>
+              <p>Your swap has been confirmed on the blockchain.</p>
+              <a 
+                href={success.explorerUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="swap-explorer-link"
+              >
+                <ExternalLinkIcon size={14} />
+                View on Explorer
+              </a>
+              <button 
+                className="btn btn-primary btn-block"
+                onClick={() => setSuccess(null)}
+                style={{ marginTop: '16px' }}
+              >
+                New Swap
+              </button>
+            </div>
+          )}
+
+          {/* Swap Form */}
+          {!success && (
+            <>
+              {/* Input Token */}
+              <div className="swap-input-group">
+                <label className="swap-label">You Pay</label>
+                <div className="swap-input-row">
+                  <input
+                    type="number"
+                    className="swap-amount-input"
+                    placeholder="0.00"
+                    value={inputAmount}
+                    onChange={(e) => setInputAmount(e.target.value)}
+                    disabled={executing}
+                  />
+                  {renderTokenSelector('input')}
+                </div>
+                {inputBalance !== null && (
+                  <div className="swap-balance">
+                    Balance: {inputBalance.toFixed(4)} {inputToken.symbol}
+                    <div className="swap-quick-btns">
+                      <button 
+                        className="swap-quick-btn"
+                        onClick={() => setInputAmount((inputBalance * 0.5).toString())}
+                        disabled={executing}
+                      >
+                        50%
+                      </button>
+                      <button 
+                        className="swap-quick-btn"
+                        onClick={() => {
+                          // Reserve SOL for transaction fees (0.01 SOL should be enough)
+                          if (inputToken.symbol === 'SOL') {
+                            const maxSwappable = Math.max(0, inputBalance - 0.01);
+                            setInputAmount(maxSwappable.toString());
+                          } else {
+                            setInputAmount(inputBalance.toString());
+                          }
+                        }}
+                        disabled={executing}
+                      >
+                        MAX
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Flip Button */}
+              <div className="swap-flip-container">
+                <button className="swap-flip-btn" onClick={handleFlipTokens}>
+                  <SwapIcon size={18} />
+                </button>
+              </div>
+
+              {/* Output Token */}
+              <div className="swap-input-group">
+                <label className="swap-label">You Receive</label>
+                <div className="swap-input-row">
+                  <input
+                    type="text"
+                    className="swap-amount-input"
+                    placeholder="0.00"
+                    value={loadingQuote ? 'Loading...' : (quote?.outputAmountFormatted || '')}
+                    readOnly
+                  />
+                  {renderTokenSelector('output')}
+                </div>
+              </div>
+
+              {/* Quote Details */}
+              {quote && !loadingQuote && (
+                <div className="swap-quote-details">
+                  <div className="swap-quote-row">
+                    <span>Rate</span>
+                    <span>1 {inputToken.symbol} ≈ {(parseFloat(quote.outputAmountFormatted) / parseFloat(inputAmount)).toFixed(6)} {outputToken.symbol}</span>
+                  </div>
+                  <div className="swap-quote-row">
+                    <span>Min. Received</span>
+                    <span>{quote.minimumReceivedFormatted} {outputToken.symbol}</span>
+                  </div>
+                  <div className="swap-quote-row">
+                    <span>Price Impact</span>
+                    <span className={parseFloat(quote.priceImpact) > 1 ? 'swap-warning' : ''}>{quote.priceImpact}</span>
+                  </div>
+                  <div className="swap-quote-row">
+                    <span>Route</span>
+                    <span className="swap-route">{quote.route}</span>
+                  </div>
+                  {quote.platformFeeFormatted && referralStatus?.enabled && (
+                    <div className="swap-quote-row">
+                      <span>Platform Fee ({referralStatus.feeBps / 100}%)</span>
+                      <span>{quote.platformFeeFormatted} {outputToken.symbol}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Slippage Setting */}
+              <div className="swap-slippage">
+                <span>Slippage Tolerance</span>
+                <div className="swap-slippage-options">
+                  {[50, 100, 200].map(bps => (
+                    <button
+                      key={bps}
+                      className={`swap-slippage-btn ${slippageBps === bps ? 'active' : ''}`}
+                      onClick={() => setSlippageBps(bps)}
+                    >
+                      {bps / 100}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="swap-error">
+                  {error}
+                </div>
+              )}
+
+              {/* Swap Button */}
+              <button
+                className="btn btn-primary btn-block swap-execute-btn"
+                onClick={handleSwap}
+                disabled={
+                  !quote || 
+                  executing || 
+                  loadingQuote || 
+                  !inputAmount || 
+                  parseFloat(inputAmount) <= 0 ||
+                  (inputBalance !== null && parseFloat(inputAmount) > inputBalance) ||
+                  !swapAvailable
+                }
+              >
+                {executing ? (
+                  <>
+                    <span className="spinner small" />
+                    Swapping...
+                  </>
+                ) : loadingQuote ? (
+                  'Getting Quote...'
+                ) : !swapAvailable ? (
+                  'Swap Not Available'
+                ) : !inputAmount || parseFloat(inputAmount) <= 0 ? (
+                  'Enter Amount'
+                ) : (inputBalance !== null && parseFloat(inputAmount) > inputBalance) ? (
+                  'Insufficient Balance'
+                ) : !quote ? (
+                  'Unable to Quote'
+                ) : (
+                  <>
+                    <SwapIcon size={16} />
+                    Swap {inputToken.symbol} for {outputToken.symbol}
+                  </>
+                )}
+              </button>
+
+              {/* External Swap Fallback */}
+              <div className="swap-external-option">
+                <button 
+                  className="swap-external-btn"
+                  onClick={() => setUseInAppSwap(false)}
+                >
+                  <ExternalLinkIcon size={14} />
+                  Use Jupiter Website Instead
+                </button>
+              </div>
+
+              {/* Powered by Jupiter */}
+              <div className="swap-powered-by">
+                <span>Powered by</span>
+                <img 
+                  src="https://static.jup.ag/jup/icon.png" 
+                  alt="Jupiter" 
+                  className="swap-jupiter-logo"
+                />
+                <span>Jupiter</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // External DEX UI (fallback for EVM chains, devnet, or user preference)
   return (
     <div className="swap-view">
       <div className="form-header">
@@ -3818,6 +4273,19 @@ const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, acti
           {dexInfo.note}
           {' '}Copy your address above if you need to send tokens back to this wallet.
         </p>
+
+        {/* Option to use in-app swap if available */}
+        {swapAvailable && activeChain === 'solana' && (
+          <div className="swap-inapp-option">
+            <button 
+              className="swap-inapp-btn"
+              onClick={() => setUseInAppSwap(true)}
+            >
+              <SwapIcon size={14} />
+              Use In-App Swap
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -4624,6 +5092,7 @@ const App: React.FC = () => {
     requestsModified: 0,
   });
   const [currentTabId, setCurrentTabId] = useState<number | null>(null);
+  const currentTabIdRef = useRef<number | null>(null);
   const [walletState, setWalletState] = useState<WalletState | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -4632,6 +5101,10 @@ const App: React.FC = () => {
 
   // Hide balances privacy mode (stored in session, clears on browser restart)
   const [hideBalances, toggleHideBalances] = useHideBalances();
+
+  // State for passing to swap view
+  const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
+  const [swapBalance, setSwapBalance] = useState<WalletBalance | null>(null);
 
   // Track network connectivity
   useEffect(() => {
@@ -4663,8 +5136,8 @@ const App: React.FC = () => {
         };
 
         let currentTabBlocked = 0;
-        if (currentTabId && metrics.recentBlocked) {
-          currentTabBlocked = metrics.recentBlocked.filter(r => r.tabId === currentTabId).length;
+        if (currentTabIdRef.current && metrics.recentBlocked) {
+          currentTabBlocked = metrics.recentBlocked.filter(r => r.tabId === currentTabIdRef.current).length;
         }
 
         setStats({
@@ -4680,7 +5153,7 @@ const App: React.FC = () => {
       }
     } catch (error) {
     }
-  }, [currentTabId]);
+  }, []);
 
   const fetchWalletState = useCallback(async () => {
     try {
@@ -4692,6 +5165,11 @@ const App: React.FC = () => {
     } catch (error) {
     }
   }, []);
+
+  // Keep currentTabIdRef in sync with currentTabId state
+  useEffect(() => {
+    currentTabIdRef.current = currentTabId;
+  }, [currentTabId]);
 
   useEffect(() => {
     // Get initial active tab

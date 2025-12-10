@@ -488,7 +488,12 @@ export type WalletMessageType =
   | 'WALLET_REVOKE_ALLOWANCE'
   
   | 'WALLET_IMPORT_PRIVATE_KEY'
-  | 'WALLET_EXPORT_PRIVATE_KEY';
+  | 'WALLET_EXPORT_PRIVATE_KEY'
+  // Jupiter Swap
+  | 'WALLET_SWAP_QUOTE'
+  | 'WALLET_SWAP_EXECUTE'
+  | 'WALLET_SWAP_AVAILABLE'
+  | 'WALLET_SWAP_REFERRAL_STATUS';
 
 
 export interface WalletMessagePayloads {
@@ -559,6 +564,24 @@ export interface WalletMessagePayloads {
   
   WALLET_IMPORT_PRIVATE_KEY: { privateKey: string; password?: string; label?: string };
   WALLET_EXPORT_PRIVATE_KEY: { walletId: string; password: string; chain: 'solana' | 'evm' };
+  // Jupiter Swap
+  WALLET_SWAP_QUOTE: {
+    inputMint: string;
+    outputMint: string;
+    inputAmount: string;
+    inputDecimals: number;
+    outputDecimals: number;
+    slippageBps?: number;
+  };
+  WALLET_SWAP_EXECUTE: {
+    inputMint: string;
+    outputMint: string;
+    inputAmount: string;
+    inputDecimals: number;
+    slippageBps?: number;
+  };
+  WALLET_SWAP_AVAILABLE: undefined;
+  WALLET_SWAP_REFERRAL_STATUS: undefined;
 }
 
 
@@ -626,6 +649,11 @@ export interface WalletMessageResponses {
   
   WALLET_IMPORT_PRIVATE_KEY: { publicAddress: string; evmAddress: string; walletId: string };
   WALLET_EXPORT_PRIVATE_KEY: { privateKey: string };
+  // Jupiter Swap
+  WALLET_SWAP_QUOTE: SwapQuoteResult;
+  WALLET_SWAP_EXECUTE: SwapExecuteResult;
+  WALLET_SWAP_AVAILABLE: boolean;
+  WALLET_SWAP_REFERRAL_STATUS: SwapReferralStatus;
 }
 
 
@@ -634,6 +662,57 @@ export interface RpcHealthSummary {
   bestEndpoint: string;
   healthyCount: number;
   unhealthyCount: number;
+}
+
+
+// Jupiter Swap Types
+export interface SwapQuoteResult {
+  /** Input token mint address */
+  inputMint: string;
+  /** Output token mint address */
+  outputMint: string;
+  /** Input amount in smallest units */
+  inputAmount: string;
+  /** Output amount in smallest units */
+  outputAmount: string;
+  /** Formatted input amount for display */
+  inputAmountFormatted: string;
+  /** Formatted output amount for display */
+  outputAmountFormatted: string;
+  /** Minimum received amount considering slippage */
+  minimumReceivedFormatted: string;
+  /** Price impact percentage */
+  priceImpact: string;
+  /** Platform fee if referral is enabled */
+  platformFeeFormatted: string | null;
+  /** Route description (e.g., "Raydium → Orca") */
+  route: string;
+  /** Raw quote data for execution */
+  rawQuote: unknown;
+}
+
+export interface SwapExecuteResult {
+  /** Transaction signature */
+  signature: string;
+  /** Explorer URL for the transaction */
+  explorerUrl: string;
+  /** Input amount in smallest units */
+  inputAmount: string;
+  /** Output amount in smallest units */
+  outputAmount: string;
+  /** Input token mint */
+  inputMint: string;
+  /** Output token mint */
+  outputMint: string;
+}
+
+export interface SwapReferralStatus {
+  /** Whether referral fees are enabled */
+  enabled: boolean;
+  /** Fee in basis points (e.g., 50 = 0.5%) */
+  feeBps: number;
+  /** Referral account public key if configured */
+  referralAccount: string | null;
 }
 
 

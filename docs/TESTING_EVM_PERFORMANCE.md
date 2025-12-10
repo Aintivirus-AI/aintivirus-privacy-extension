@@ -338,3 +338,4 @@ If you encounter any problems or have questions about the performance optimizati
 2. Chrome DevTools Performance tab
 3. docs/EVM_PERFORMANCE_OPTIMIZATIONS.md for implementation details
 
+

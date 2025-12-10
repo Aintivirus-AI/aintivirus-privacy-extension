@@ -443,3 +443,4 @@ export function calculateMaxSend(balance: bigint, estimatedFee: bigint): bigint 
   return max > 0n ? max : 0n;
 }
 
+

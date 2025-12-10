@@ -78,7 +78,7 @@
   --text-3xl: 34px;
   
   /* Semantic typography */
-  --text-balance-large: 34px;  /* Big balance display */
+  --text-balance-large: 38px;  /* Big balance display */
   --text-balance-small: 16px;  /* Secondary fiat value */
   --text-label: 11px;          /* Small labels */
   --text-body: 14px;           /* Default body text */

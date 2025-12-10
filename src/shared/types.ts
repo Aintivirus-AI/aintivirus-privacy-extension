@@ -308,6 +308,12 @@ export type WalletGetAllowancesMessage = BaseMessage<'WALLET_GET_ALLOWANCES', Wa
 export type WalletEstimateRevokeFeeMessage = BaseMessage<'WALLET_ESTIMATE_REVOKE_FEE', WalletMessagePayloads['WALLET_ESTIMATE_REVOKE_FEE']>;
 export type WalletRevokeAllowanceMessage = BaseMessage<'WALLET_REVOKE_ALLOWANCE', WalletMessagePayloads['WALLET_REVOKE_ALLOWANCE']>;
 
+// Jupiter Swap messages
+export type WalletSwapQuoteMessage = BaseMessage<'WALLET_SWAP_QUOTE', WalletMessagePayloads['WALLET_SWAP_QUOTE']>;
+export type WalletSwapExecuteMessage = BaseMessage<'WALLET_SWAP_EXECUTE', WalletMessagePayloads['WALLET_SWAP_EXECUTE']>;
+export type WalletSwapAvailableMessage = BaseMessage<'WALLET_SWAP_AVAILABLE'>;
+export type WalletSwapReferralStatusMessage = BaseMessage<'WALLET_SWAP_REFERRAL_STATUS'>;
+
 export type SecurityConnectionRequestMessage = BaseMessage<'SECURITY_CONNECTION_REQUEST', SecurityMessagePayloads['SECURITY_CONNECTION_REQUEST']>;
 export type SecurityConnectionApproveMessage = BaseMessage<'SECURITY_CONNECTION_APPROVE', SecurityMessagePayloads['SECURITY_CONNECTION_APPROVE']>;
 export type SecurityConnectionDenyMessage = BaseMessage<'SECURITY_CONNECTION_DENY', SecurityMessagePayloads['SECURITY_CONNECTION_DENY']>;
@@ -483,6 +489,13 @@ export type ExtensionMessage =
   | WalletGetAllowancesMessage
   | WalletEstimateRevokeFeeMessage
   | WalletRevokeAllowanceMessage
+  
+  // Jupiter Swap
+  | WalletSwapQuoteMessage
+  | WalletSwapExecuteMessage
+  | WalletSwapAvailableMessage
+  | WalletSwapReferralStatusMessage
+  
   | SecurityConnectionRequestMessage
   | SecurityConnectionApproveMessage
   | SecurityConnectionDenyMessage
@@ -650,6 +663,11 @@ export type {
   RecentRecipient,
   RecentRecipientsMap,
   RecentRecipientChainId,
+  
+  // Jupiter Swap types
+  SwapQuoteResult,
+  SwapExecuteResult,
+  SwapReferralStatus,
 } from '../wallet/types';
 export { MAX_RECENT_RECIPIENTS } from '../wallet/types';
 

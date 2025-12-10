@@ -129,6 +129,14 @@ import {
   type PopularToken,
 } from './tokens';
 
+// Jupiter Swap imports
+import {
+  getFormattedSwapQuote,
+  performSwap,
+  isSwapAvailable,
+  getReferralStatus,
+  type SwapQuote,
+} from './jupiterSwap';
 
 import { balanceDedup } from './requestDedup';
 
@@ -332,6 +340,19 @@ export async function handleWalletMessage(
     
     case 'EVM_ESTIMATE_REPLACEMENT_FEE':
       return handleEstimateReplacementFee(payload as WalletMessagePayloads['EVM_ESTIMATE_REPLACEMENT_FEE']);
+    
+    // Jupiter Swap
+    case 'WALLET_SWAP_QUOTE':
+      return handleSwapQuote(payload as WalletMessagePayloads['WALLET_SWAP_QUOTE']);
+    
+    case 'WALLET_SWAP_EXECUTE':
+      return handleSwapExecute(payload as WalletMessagePayloads['WALLET_SWAP_EXECUTE']);
+    
+    case 'WALLET_SWAP_AVAILABLE':
+      return handleSwapAvailable();
+    
+    case 'WALLET_SWAP_REFERRAL_STATUS':
+      return handleSwapReferralStatus();
     
     default:
       throw new WalletError(
@@ -1641,6 +1662,68 @@ async function handleEstimateReplacementFee(
 }
 
 
+// ============================================================================
+// Jupiter Swap Handlers
+// ============================================================================
+
+/**
+ * Get a swap quote from Jupiter
+ */
+async function handleSwapQuote(
+  payload: WalletMessagePayloads['WALLET_SWAP_QUOTE']
+): Promise<WalletMessageResponses['WALLET_SWAP_QUOTE']> {
+  const { inputMint, outputMint, inputAmount, inputDecimals, outputDecimals, slippageBps } = payload;
+  
+  const result = await getFormattedSwapQuote(
+    inputMint,
+    outputMint,
+    inputAmount,
+    inputDecimals,
+    outputDecimals,
+    slippageBps
+  );
+  
+  return {
+    inputMint: result.quote.inputMint,
+    outputMint: result.quote.outputMint,
+    inputAmount: result.quote.inputAmount,
+    outputAmount: result.quote.outputAmount,
+    inputAmountFormatted: result.inputAmountFormatted,
+    outputAmountFormatted: result.outputAmountFormatted,
+    minimumReceivedFormatted: result.minimumReceivedFormatted,
+    priceImpact: result.priceImpact,
+    platformFeeFormatted: result.platformFeeFormatted,
+    route: result.route,
+    rawQuote: result.quote.rawQuote,
+  };
+}
+
+/**
+ * Execute a swap via Jupiter
+ */
+async function handleSwapExecute(
+  payload: WalletMessagePayloads['WALLET_SWAP_EXECUTE']
+): Promise<WalletMessageResponses['WALLET_SWAP_EXECUTE']> {
+  const { inputMint, outputMint, inputAmount, inputDecimals, slippageBps } = payload;
+  
+  return performSwap(inputMint, outputMint, inputAmount, inputDecimals, slippageBps);
+}
+
+/**
+ * Check if Jupiter swap is available (mainnet only)
+ */
+async function handleSwapAvailable(): Promise<boolean> {
+  return isSwapAvailable();
+}
+
+/**
+ * Get the current referral program status
+ */
+function handleSwapReferralStatus(): WalletMessageResponses['WALLET_SWAP_REFERRAL_STATUS'] {
+  return getReferralStatus();
+}
+
+
 export async function initializeWalletModule(): Promise<void> {
   await walletExists();
   await getWalletSettings();
@@ -1716,6 +1799,20 @@ export {
   calculatePortfolioValue,
   clearPriceCache,
 } from './prices';
+
+// Jupiter Swap exports
+export {
+  getSwapQuote,
+  getFormattedSwapQuote,
+  performSwap,
+  executeSwap,
+  isSwapAvailable,
+  getReferralStatus,
+  formatTokenAmount,
+  parseInputAmount,
+  JUPITER_REFERRAL_CONFIG,
+  COMMON_TOKEN_MINTS,
+} from './jupiterSwap';
 
 export {
   getUserFriendlyMessage,

@@ -294,3 +294,4 @@ export function calculateMaxSendable(balance: bigint, gasEstimate: GasEstimate):
   return maxAmount > 0n ? maxAmount : 0n;
 }
 
+

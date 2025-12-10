@@ -316,6 +316,8 @@ async function handleMessage(
     case 'WALLET_GET_TOKENS':
     case 'WALLET_ADD_TOKEN':
     case 'WALLET_REMOVE_TOKEN':
+    case 'WALLET_GET_POPULAR_TOKENS':
+    case 'WALLET_GET_TOKEN_METADATA':
     case 'WALLET_GET_RPC_HEALTH':
     case 'WALLET_ADD_RPC':
     case 'WALLET_REMOVE_RPC':
@@ -327,7 +329,12 @@ async function handleMessage(
     case 'WALLET_RENAME':
     case 'WALLET_DELETE_ONE':
     case 'WALLET_EXPORT_ONE':
+    case 'WALLET_IMPORT_PRIVATE_KEY':
+    case 'WALLET_EXPORT_PRIVATE_KEY':
     case 'WALLET_GET_ACTIVE':
+    case 'WALLET_GET_ALLOWANCES':
+    case 'WALLET_ESTIMATE_REVOKE_FEE':
+    case 'WALLET_REVOKE_ALLOWANCE':
     case 'WALLET_SET_CHAIN':
     case 'WALLET_SET_EVM_CHAIN':
     case 'WALLET_GET_EVM_BALANCE':
@@ -342,6 +349,11 @@ async function handleMessage(
     case 'EVM_CANCEL_TX':
     case 'EVM_GET_GAS_PRESETS':
     case 'EVM_ESTIMATE_REPLACEMENT_FEE':
+    // Jupiter Swap
+    case 'WALLET_SWAP_QUOTE':
+    case 'WALLET_SWAP_EXECUTE':
+    case 'WALLET_SWAP_AVAILABLE':
+    case 'WALLET_SWAP_REFERRAL_STATUS':
       return handleWalletMessageWrapper(extMessage.type as WalletMessageType, extMessage.payload);
 
     case 'SECURITY_CONNECTION_REQUEST':

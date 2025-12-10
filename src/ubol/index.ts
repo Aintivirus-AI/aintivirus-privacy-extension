@@ -22,6 +22,20 @@ const STORAGE_KEYS = {
 const ALLOWLIST_RULE_BASE_ID = 10000000;
 const TRUSTED_DIRECTIVE_BASE_RULE_ID = 8000000;
 const TRUSTED_DIRECTIVE_PRIORITY = 2000000;
+const INTERNAL_API_RULE_BASE_ID = 9000000;
+
+// API domains that should never be blocked (for extension functionality)
+const INTERNAL_API_ALLOWLIST = [
+  'quote-api.jup.ag',
+  'api.jup.ag',
+  'tokens.jup.ag',
+  'price.jup.ag',
+  'api.coingecko.com',
+  'api.dexscreener.com',
+  'mainnet.helius-rpc.com',
+  'devnet.helius-rpc.com',
+  'rpc.ankr.com',
+];
 
 
 export const DEFAULT_RULESETS = [
@@ -410,6 +424,45 @@ export async function updateAllowlistRules(allowlist: string[]): Promise<void> {
     ubolLog('Allowlist rules updated:', allowlist);
   } catch (error) {
 
+  }
+}
+
+/**
+ * Set up rules to allow internal API requests (Jupiter, CoinGecko, etc.)
+ * These are essential for wallet functionality and should never be blocked
+ */
+export async function setupInternalApiAllowlist(): Promise<void> {
+  try {
+    const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const internalApiRules = existingRules.filter(
+      rule => rule.id >= INTERNAL_API_RULE_BASE_ID && rule.id < INTERNAL_API_RULE_BASE_ID + 100
+    );
+    const removeRuleIds = internalApiRules.map(rule => rule.id);
+    
+    // IMPORTANT: In Manifest V3, declarativeNetRequest rules DO NOT affect
+    // requests made by the extension's own service worker (background script).
+    // These rules only affect requests from web pages.
+    // Service worker fetch() should work without these rules.
+    //
+    // However, we still create these rules to allow web page requests to these APIs
+    // (e.g., if a dApp page tries to fetch from Jupiter directly)
+    const addRules: chrome.declarativeNetRequest.Rule[] = [
+      {
+        id: INTERNAL_API_RULE_BASE_ID,
+        priority: TRUSTED_DIRECTIVE_PRIORITY + 2000, // Highest priority
+        action: { type: 'allow' as chrome.declarativeNetRequest.RuleActionType },
+        condition: {
+          requestDomains: INTERNAL_API_ALLOWLIST,
+        },
+      },
+    ];
+
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds,
+      addRules,
+    });
+  } catch (error) {
+    // Silently fail - allowlist is optional
   }
 }
 
