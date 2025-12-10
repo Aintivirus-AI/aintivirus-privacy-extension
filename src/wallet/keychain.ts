@@ -314,11 +314,11 @@ export function isValidAddressForChain(
 
 export function getAllAddressesFromMnemonic(
   mnemonic: string,
-  evmIndex: number = 0
+  accountIndex: number = 0
 ): { solanaAddress: string; evmAddress: string } {
   return {
-    solanaAddress: getPublicKeyFromMnemonic(mnemonic),
-    evmAddress: getEVMAddressFromMnemonic(mnemonic, evmIndex),
+    solanaAddress: getSolanaAddressFromMnemonic(mnemonic, accountIndex),
+    evmAddress: getEVMAddressFromMnemonic(mnemonic, accountIndex),
   };
 }
 

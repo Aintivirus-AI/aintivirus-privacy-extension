@@ -12,7 +12,7 @@ export type SessionKey = typeof SESSION_KEYS[keyof typeof SESSION_KEYS];
 export function useSessionSetting<T>(
   key: SessionKey,
   defaultValue: T
-): [T, (value: T) => Promise<void>, boolean] {
+): [T, (value: T | ((prev: T) => T)) => Promise<void>, boolean] {
   const [value, setValueState] = useState<T>(defaultValue);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,19 +56,26 @@ export function useSessionSetting<T>(
 
   
   const setValue = useCallback(
-    async (newValue: T) => {
+    async (newValue: T | ((prev: T) => T)) => {
       try {
+        const valueToSet = typeof newValue === 'function' 
+          ? (newValue as (prev: T) => T)(value) 
+          : newValue;
+        
         if (chrome?.storage?.session) {
-          await chrome.storage.session.set({ [key]: newValue });
+          await chrome.storage.session.set({ [key]: valueToSet });
         }
-        setValueState(newValue);
+        setValueState(valueToSet);
       } catch (error) {
 
         
-        setValueState(newValue);
+        const valueToSet = typeof newValue === 'function' 
+          ? (newValue as (prev: T) => T)(value) 
+          : newValue;
+        setValueState(valueToSet);
       }
     },
-    [key]
+    [key, value]
   );
 
   return [value, setValue, isLoading];

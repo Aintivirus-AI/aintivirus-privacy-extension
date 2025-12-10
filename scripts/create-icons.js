@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const dir = path.join(__dirname, '..', 'public', 'icons');
-const sourceImage = path.join(dir, 'binary_john.jpg');
+const sourceImage = path.join(dir, 'ainti_l1.png');
 
 async function createIcons() {
   let sharp;

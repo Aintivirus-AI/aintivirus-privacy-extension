@@ -186,7 +186,7 @@ function createFloatingPanel(): HTMLElement {
 
   const logo = document.createElement('img');
   logo.className = 'panel-logo';
-  logo.src = chrome.runtime.getURL('icons/icon48.png');
+  logo.src = chrome.runtime.getURL('icons/ainti_l1.png');
   logo.alt = 'Aintivirus';
 
   const title = document.createElement('span');

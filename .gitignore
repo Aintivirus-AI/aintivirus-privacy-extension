@@ -4,6 +4,11 @@ node_modules/
 /.env
 .DS_Store
 
+# Test reports
+test-report.html
+test-report-all.html
+coverage/
+
 
 
 

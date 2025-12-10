@@ -553,6 +553,18 @@ export function formatSolAmount(sol: number, decimals: number = 6): string {
 
 export function parseSolInput(input: string): number | null {
   const cleaned = input.trim().replace(/,/g, '');
+  
+  // Check if the cleaned string is empty
+  if (cleaned === '') {
+    return null;
+  }
+  
+  // Validate that it's a valid number format (digits with optional single decimal point)
+  const validNumberRegex = /^[0-9]+(\.[0-9]+)?$/;
+  if (!validNumberRegex.test(cleaned)) {
+    return null;
+  }
+  
   const parsed = parseFloat(cleaned);
   
   if (isNaN(parsed) || !isFinite(parsed) || parsed < 0) {

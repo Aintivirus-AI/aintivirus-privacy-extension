@@ -406,6 +406,33 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   const [rpcError, setRpcError] = useState<string | null>(null);
   const [testingRpc, setTestingRpc] = useState<string | null>(null);
 
+  // Helper function to mask API keys in URLs
+  const maskApiKey = (url: string): string => {
+    try {
+      const urlObj = new URL(url);
+      
+      // Check for various API key parameter names
+      const apiKeyParams = ['api-key', 'apikey', 'apiKey'];
+      
+      for (const param of apiKeyParams) {
+        const apiKey = urlObj.searchParams.get(param);
+        
+        if (apiKey && apiKey.length > 8) {
+          // Show first 4 and last 4 characters, mask the rest
+          const masked = apiKey.substring(0, 4) + '•'.repeat(Math.min(apiKey.length - 8, 20)) + apiKey.substring(apiKey.length - 4);
+          
+          // Do a simple string replacement to avoid URL encoding
+          return url.replace(apiKey, masked);
+        }
+      }
+      
+      return url;
+    } catch {
+      // If URL parsing fails, return original
+      return url;
+    }
+  };
+
   
   const [threatIntelHealth, setThreatIntelHealth] = useState<ThreatIntelHealth | null>(null);
   const [threatIntelSources, setThreatIntelSources] = useState<ThreatIntelSource[]>([]);
@@ -1044,7 +1071,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
                         }}
                       />
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
-                        {endpoint.url}
+                        {maskApiKey(endpoint.url)}
                       </span>
                       {endpoint.isCustom && (
                         <span
@@ -1318,7 +1345,7 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
                 </div>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
-                {source.url}
+                {maskApiKey(source.url)}
               </div>
               <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 <span>Refresh: every {source.refreshIntervalHours}h</span>
@@ -1554,6 +1581,28 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Listen for ad blocker status changes from other sources (e.g., popup)
+  useEffect(() => {
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.privacySettings) {
+        const newSettings = changes.privacySettings.newValue;
+        if (newSettings) {
+          setPrivacySettings(newSettings);
+          // Also refresh privacy status to keep adBlockerEnabled in sync
+          fetchPrivacyStatus().then(status => {
+            if (status) setPrivacyStatus(status);
+          });
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
+
   const loadInitialData = async () => {
     try {
       const [loadedFlags, privSettings, siteSets, filterStatsData, metricsData, fpSettings, blocked, filterHealth, rulesetStatsData, privacyStatusData] = await Promise.all([
@@ -1674,6 +1723,39 @@ const App: React.FC = () => {
     });
   };
 
+  const handleAdBlockerToggle = async (enabled: boolean) => {
+    console.log('[AdBlocker] Toggling to:', enabled);
+    
+    // Update local state immediately for responsive UI (only if privacyStatus exists)
+    if (privacyStatus) {
+      setPrivacyStatus({ ...privacyStatus, adBlockerEnabled: enabled });
+    }
+
+    try {
+      const response = await sendToBackground({ type: 'SET_AD_BLOCKER_STATUS', payload: { enabled } });
+      console.log('[AdBlocker] Backend response:', response);
+      
+      // Refresh privacy status to get updated state
+      const newStatus = await fetchPrivacyStatus();
+      if (newStatus) {
+        console.log('[AdBlocker] New status:', newStatus.adBlockerEnabled);
+        setPrivacyStatus(newStatus);
+      }
+      
+      // Refresh metrics and ruleset stats
+      const newMetrics = await fetchMetrics();
+      if (newMetrics) setMetrics(newMetrics);
+      const newRulesetStats = await fetchRulesetStats();
+      if (newRulesetStats) setRulesetStats(newRulesetStats);
+    } catch (error) {
+      console.error('[AdBlocker] Failed to toggle:', error);
+      // Revert on error
+      if (privacyStatus) {
+        setPrivacyStatus({ ...privacyStatus, adBlockerEnabled: !enabled });
+      }
+    }
+  };
+
   const handleRefreshFilterLists = async () => {
     setRefreshing(true);
     try {
@@ -1764,7 +1846,7 @@ const App: React.FC = () => {
       <header className="settings-header">
         <div className="settings-header-content">
           <div className="settings-brand">
-            <img src="icons/binary_john.jpg" alt="AINTIVIRUS" className="logo-icon" />
+            <img src="icons/ainti_l1.png" alt="AINTIVIRUS" className="logo-icon" />
             <h1>Aintivirus Privacy Settings</h1>
           </div>
           <p className="settings-tagline">Configure your browser privacy protection.</p>
@@ -2588,8 +2670,8 @@ const App: React.FC = () => {
                     <label className="toggle">
                       <input
                         type="checkbox"
-                        checked={flags.privacy && privacySettings.blockTrackers}
-                        onChange={() => handlePrivacySettingChange('blockTrackers', !privacySettings.blockTrackers)}
+                        checked={privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled}
+                        onChange={() => handleAdBlockerToggle(!(privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled))}
                         disabled={!flags.privacy}
                       />
                       <span className="toggle-track" aria-hidden="true" />
@@ -3229,7 +3311,7 @@ const App: React.FC = () => {
 
               <div className="about-content">
                 <div className="about-logo">
-                  <img src="icons/binary_john.jpg" alt="AINTIVIRUS" className="logo-icon" />
+                  <img src="icons/ainti_l1.png" alt="AINTIVIRUS" className="logo-icon" />
                   <h3>Aintivirus</h3>
                   <span className="version-badge">Version 0.2.0</span>
                 </div>

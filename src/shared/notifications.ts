@@ -34,7 +34,7 @@ function getPriorityLevel(priority: NotificationPriority): 0 | 1 | 2 {
 }
 
 function getIconForType(type: NotificationType): string {
-  return 'icons/icon128.png';
+  return 'icons/ainti_l1.png';
 }
 
 function generateNotificationId(type: NotificationType, contextId?: string): string {

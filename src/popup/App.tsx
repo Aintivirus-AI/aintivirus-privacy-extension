@@ -4779,6 +4779,24 @@ const App: React.FC = () => {
     fetchAdBlockerStatus();
   }, [fetchAdBlockerStatus]);
 
+  // Listen for ad blocker changes from settings page
+  useEffect(() => {
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.privacySettings) {
+        const newSettings = changes.privacySettings.newValue;
+        if (newSettings && newSettings.adBlockerEnabled !== undefined) {
+          setAdBlockerEnabled(newSettings.adBlockerEnabled);
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
+
   useEffect(() => {
     if (adBlockerEnabled) {
       fetchStats();

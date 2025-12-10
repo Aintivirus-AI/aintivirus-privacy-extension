@@ -190,7 +190,7 @@ export async function searchSiteSettings(
   const normalizedQuery = query.toLowerCase();
   
   return Object.entries(settings)
-    .filter(([domain, _]) => domain.includes(normalizedQuery))
+    .filter(([domain, _]) => domain.toLowerCase().includes(normalizedQuery))
     .map(([domain, mode]) => ({ domain, mode }))
     .sort((a, b) => a.domain.localeCompare(b.domain));
 }
