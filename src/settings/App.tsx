@@ -1724,21 +1724,16 @@ const App: React.FC = () => {
   };
 
   const handleAdBlockerToggle = async (enabled: boolean) => {
-    console.log('[AdBlocker] Toggling to:', enabled);
     
-    // Update local state immediately for responsive UI (only if privacyStatus exists)
     if (privacyStatus) {
       setPrivacyStatus({ ...privacyStatus, adBlockerEnabled: enabled });
     }
 
     try {
       const response = await sendToBackground({ type: 'SET_AD_BLOCKER_STATUS', payload: { enabled } });
-      console.log('[AdBlocker] Backend response:', response);
       
-      // Refresh privacy status to get updated state
       const newStatus = await fetchPrivacyStatus();
       if (newStatus) {
-        console.log('[AdBlocker] New status:', newStatus.adBlockerEnabled);
         setPrivacyStatus(newStatus);
       }
       
@@ -1748,8 +1743,6 @@ const App: React.FC = () => {
       const newRulesetStats = await fetchRulesetStats();
       if (newRulesetStats) setRulesetStats(newRulesetStats);
     } catch (error) {
-      console.error('[AdBlocker] Failed to toggle:', error);
-      // Revert on error
       if (privacyStatus) {
         setPrivacyStatus({ ...privacyStatus, adBlockerEnabled: !enabled });
       }

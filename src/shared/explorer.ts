@@ -1,16 +1,10 @@
-
-
 import type { ChainType, EVMChainId } from './types';
-
 
 export type ExplorerType = 'tx' | 'address' | 'token';
 
-
 export interface ExplorerUrlOptions {
-  
   testnet?: boolean;
 }
-
 
 const EVM_EXPLORERS: Record<EVMChainId, { mainnet: string; testnet: string }> = {
   ethereum: {
@@ -35,12 +29,9 @@ const EVM_EXPLORERS: Record<EVMChainId, { mainnet: string; testnet: string }> = 
   },
 };
 
-
 const SOLANA_EXPLORER = 'https://explorer.solana.com';
 
-
 const DEXSCREENER_SOLANA = 'https://dexscreener.com/solana';
-
 
 export function getExplorerUrl(
   type: ExplorerType,
@@ -55,27 +46,22 @@ export function getExplorerUrl(
     return getSolanaExplorerUrl(type, id, isTestnet);
   }
 
-  
   const chainId = evmChainId ?? 'ethereum';
   return getEVMExplorerUrl(type, id, chainId, isTestnet);
 }
-
 
 function getSolanaExplorerUrl(
   type: ExplorerType,
   id: string,
   isTestnet: boolean
 ): string {
-  
   if (type === 'token' && !isTestnet) {
     return `${DEXSCREENER_SOLANA}/${id}`;
   }
   
-  
   const clusterParam = isTestnet ? '?cluster=devnet' : '';
   return `${SOLANA_EXPLORER}/${type}/${id}${clusterParam}`;
 }
-
 
 function getEVMExplorerUrl(
   type: ExplorerType,
@@ -85,14 +71,12 @@ function getEVMExplorerUrl(
 ): string {
   const explorer = EVM_EXPLORERS[chainId];
   if (!explorer) {
-    
     return `${EVM_EXPLORERS.ethereum.mainnet}/${type}/${id}`;
   }
 
   const baseUrl = isTestnet ? explorer.testnet : explorer.mainnet;
   return `${baseUrl}/${type}/${id}`;
 }
-
 
 export function getTxExplorerUrl(
   hash: string,
@@ -103,7 +87,6 @@ export function getTxExplorerUrl(
   return getExplorerUrl('tx', hash, chain, evmChainId, options);
 }
 
-
 export function getAddressExplorerUrl(
   address: string,
   chain: ChainType,
@@ -113,7 +96,6 @@ export function getAddressExplorerUrl(
   return getExplorerUrl('address', address, chain, evmChainId, options);
 }
 
-
 export function getTokenExplorerUrl(
   tokenAddress: string,
   chain: ChainType,
@@ -122,7 +104,6 @@ export function getTokenExplorerUrl(
 ): string {
   return getExplorerUrl('token', tokenAddress, chain, evmChainId, options);
 }
-
 
 export function openExplorerUrl(
   type: ExplorerType,

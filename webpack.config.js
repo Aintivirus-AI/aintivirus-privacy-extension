@@ -118,7 +118,6 @@ module.exports = (env, argv) => {
           terserOptions: {
             compress: {
               drop_console: false,
-              pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
             },
             mangle: true,
             format: {
@@ -131,4 +130,3 @@ module.exports = (env, argv) => {
     },
   };
 };
-

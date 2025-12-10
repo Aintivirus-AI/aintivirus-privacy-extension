@@ -143,14 +143,14 @@ export async function initializeDAppHandlers(): Promise<void> {
 
   
   chrome.tabs.onRemoved.addListener(async (tabId) => {
-    handleTabClosed(tabId).catch(console.error);
+    handleTabClosed(tabId).catch(() => {});
     await removeConnectedTab(tabId);
   });
   
   
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'walletAutoLock') {
-      handleWalletLocked().catch(console.error);
+      handleWalletLocked().catch(() => {});
     }
   });
 

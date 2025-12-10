@@ -542,14 +542,11 @@ const WalletTab: React.FC<WalletTabProps> = ({ walletState, onStateChange, hideB
             onManageWallets={() => setView('manage')}
             onWalletSwitch={() => setView('manage')}
             onChainChange={async (chain, evmChainId) => {
-              console.log('[ChainChange] Switching to:', chain, evmChainId);
               const result = await sendToBackground({
                 type: 'WALLET_SET_CHAIN',
                 payload: { chain, evmChainId },
               });
-              console.log('[ChainChange] SET_CHAIN result:', result);
               await onStateChange();
-              console.log('[ChainChange] State refreshed');
             }}
             hideBalances={hideBalances}
             onToggleHideBalances={onToggleHideBalances}
@@ -1172,8 +1169,6 @@ const ChainSelector: React.FC<{
     }
   }, [forceClose]);
 
-  console.log('[ChainSelector] Rendering, activeChain:', activeChain, 'SUPPORTED_CHAINS:', SUPPORTED_CHAINS.length);
-
   const getCurrentChainName = () => {
     if (activeChain === 'solana') return 'Solana';
     const chain = SUPPORTED_CHAINS.find(
@@ -1187,7 +1182,6 @@ const ChainSelector: React.FC<{
       <button
         className="chain-selector-btn"
         onClick={() => {
-          console.log('[ChainSelector] Toggle dropdown, isOpen:', !isOpen);
           if (!isOpen && onOpen) {
             onOpen();
           }
@@ -1219,7 +1213,6 @@ const ChainSelector: React.FC<{
                   key={chain.type === 'solana' ? 'solana' : chain.evmChainId}
                   className={`chain-selector-item ${isActive ? 'active' : ''}`}
                   onClick={() => {
-                    console.log('[ChainSelector] Clicked:', chain.type, chain.evmChainId);
                     onChainChange(chain.type, chain.evmChainId);
                     setIsOpen(false);
                   }}
@@ -1627,7 +1620,6 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             }));
           }
         } catch (error) {
-          console.warn(`[Dashboard] Failed to enrich metadata for ${mint}:`, error);
         }
       }
     };
@@ -2641,7 +2633,6 @@ const SendForm: React.FC<SendFormProps> = ({
           }
         }
       } catch (e) {
-        console.warn('Failed to load security settings or price:', e);
       }
     };
     loadData();
@@ -3023,8 +3014,6 @@ const SendForm: React.FC<SendFormProps> = ({
         try {
           await addRecipient(recipient);
         } catch (e) {
-          // Don't fail the transaction if saving recipient fails
-          console.warn('Failed to save recent recipient:', e);
         }
       } else {
         setError(res.error || 'Transaction failed');
@@ -3530,7 +3519,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ address, network, activeChain
             }));
           }
         } catch (error) {
-          console.warn(`[HistoryView] Failed to enrich metadata for ${mint}:`, error);
         }
       }
     };
@@ -3758,7 +3746,6 @@ const SwapView: React.FC<SwapViewProps> = ({ address, network, activeChain, acti
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 
@@ -4620,7 +4607,6 @@ const AddWalletView: React.FC<AddWalletViewProps> = ({ onClose, onComplete }) =>
 // --- Main App ---
 
 const App: React.FC = () => {
-  console.log('=== AINTIVIRUS POPUP LOADED ===');
   const [flags, setFlags] = useState<FeatureFlags>(DEFAULT_FEATURE_FLAGS);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTabSession] = useSessionSetting<MainTab>(SESSION_KEYS.ACTIVE_TAB, 'security');
@@ -4693,21 +4679,17 @@ const App: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to fetch privacy stats:', error);
     }
   }, [currentTabId]);
 
   const fetchWalletState = useCallback(async () => {
     try {
       const response = await sendToBackground({ type: 'WALLET_GET_STATE', payload: undefined });
-      console.log('[fetchWalletState] Response:', response);
       if (response.success && response.data) {
         const state = response.data as WalletState;
-        console.log('[fetchWalletState] activeChain:', state.activeChain, 'activeEVMChain:', state.activeEVMChain);
         setWalletState(state);
       }
     } catch (error) {
-      console.error('Failed to fetch wallet state:', error);
     }
   }, []);
 
@@ -4751,7 +4733,6 @@ const App: React.FC = () => {
         setAdBlockerEnabled(response.data as boolean);
       }
     } catch (error) {
-      console.error('Failed to fetch ad blocker status:', error);
     }
   }, []);
 
@@ -4768,8 +4749,7 @@ const App: React.FC = () => {
         await chrome.tabs.reload(activeTab.id);
       }
     } catch (error) {
-      console.error('Failed to toggle ad blocker:', error);
-      // Revert on error
+
       setAdBlockerEnabled(!enabled);
     }
   };

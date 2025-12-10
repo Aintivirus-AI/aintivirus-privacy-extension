@@ -80,19 +80,13 @@ import {
 } from '../dapp/handlers';
 import { handleRequestQueueAlarm } from '../dapp/queue/requestQueue';
 
-console.log('[AINTIVIRUS] Background service worker starting...');
-
 initializeNotificationHandlers();
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('[AINTIVIRUS] Extension installed/updated:', details.reason);
-
   await initializeStorage();
 
   if (details.reason === 'install') {
-    console.log('[AINTIVIRUS] First install - storage initialized');
   } else if (details.reason === 'update') {
-    console.log('[AINTIVIRUS] Updated from version:', details.previousVersion);
   }
 
   await initializePrivacyEngine();
@@ -106,10 +100,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  console.log('[AINTIVIRUS] Browser started - extension waking up');
-  
   const flags = await getFeatureFlags();
-  console.log('[AINTIVIRUS] Current feature flags:', flags);
 
   await initializePrivacyEngine();
   await initializeFingerprintProtection();
@@ -148,9 +139,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   
   try {
     await chrome.sidePanel.open({ windowId: tab.windowId });
-    console.log('[AINTIVIRUS] Side panel opened');
   } catch (error) {
-    console.error('[AINTIVIRUS] Failed to open side panel:', error);
     chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
   }
 });
@@ -159,7 +148,6 @@ createMessageListener((message, sender, sendResponse) => {
   handleMessage(message, sender)
     .then(sendResponse)
     .catch((error) => {
-      console.error('[AINTIVIRUS] Message handler error:', error);
       sendResponse({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -179,8 +167,6 @@ async function handleMessage(
     const tabId = sender.tab?.id;
     const frameId = sender.frameId ?? 0;
 
-    console.log('[AINTIVIRUS] Received uBOL message:', legacyMessage.what, 'from:', sender.tab?.url || 'extension');
-
     switch (legacyMessage.what) {
       case 'insertCSS': {
         if (tabId === undefined || frameId === undefined) return { success: false };
@@ -192,7 +178,6 @@ async function handleMessage(
           });
           return { success: true };
         } catch (error) {
-          console.error('[AINTIVIRUS] insertCSS error:', error);
           return { success: false, error: String(error) };
         }
       }
@@ -207,7 +192,6 @@ async function handleMessage(
           });
           return { success: true };
         } catch (error) {
-          console.error('[AINTIVIRUS] removeCSS error:', error);
           return { success: false, error: String(error) };
         }
       }
@@ -222,7 +206,6 @@ async function handleMessage(
           });
           return { success: true };
         } catch (error) {
-          console.error('[AINTIVIRUS] injectCSSProceduralAPI error:', error);
           return { success: false, error: String(error) };
         }
       }
@@ -234,7 +217,6 @@ async function handleMessage(
 
   
   const extMessage = message as ExtensionMessage;
-  console.log('[AINTIVIRUS] Received message:', extMessage.type, 'from:', sender.tab?.url || 'extension');
 
   switch (extMessage.type) {
     case 'GET_FEATURE_FLAGS':
@@ -421,7 +403,6 @@ async function handleSetFeatureFlag(
   payload: { id: 'privacy' | 'wallet' | 'notifications'; enabled: boolean }
 ): Promise<MessageResponse> {
   await setFeatureFlag(payload.id, payload.enabled);
-  console.log('[AINTIVIRUS] Feature flag updated:', payload.id, '=', payload.enabled);
 
   if (payload.id === 'privacy') {
     await togglePrivacyProtection(payload.enabled);
@@ -434,7 +415,6 @@ async function handleContentScriptReady(
   payload: { url: string },
   sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse> {
-  console.log('[AINTIVIRUS] Content script ready on tab:', sender.tab?.id, 'url:', payload.url);
   return { success: true };
 }
 
@@ -446,7 +426,6 @@ async function handlePrivacyMessageWrapper(
     const result = await handlePrivacyMessage(type, payload);
     return { success: true, data: result };
   } catch (error) {
-    console.error('[AINTIVIRUS] Privacy message error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -462,7 +441,6 @@ async function handleFingerprintMessageWrapper(
     const result = await handleFingerprintMessage(type, payload);
     return { success: true, data: result };
   } catch (error) {
-    console.error('[AINTIVIRUS] Fingerprint message error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -478,7 +456,6 @@ async function handleWalletMessageWrapper(
     const result = await handleWalletMessage(type, payload);
     return { success: true, data: result };
   } catch (error) {
-    console.error('[AINTIVIRUS] Wallet message error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -495,7 +472,6 @@ async function handleSecurityMessageWrapper(
     const result = await handleSecurityMessage(type, payload, senderTabId);
     return { success: true, data: result };
   } catch (error) {
-    console.error('[AINTIVIRUS] Security message error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -508,7 +484,6 @@ async function handleGetFilterListHealth(): Promise<MessageResponse> {
     const health = await getFilterListHealth();
     return { success: true, data: health };
   } catch (error) {
-    console.error('[AINTIVIRUS] Filter list health error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -523,7 +498,6 @@ async function handleResetFilterList(
     await resetFilterList(payload.url);
     return { success: true };
   } catch (error) {
-    console.error('[AINTIVIRUS] Filter list reset error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -536,7 +510,6 @@ async function handleGetRulesetStats(): Promise<MessageResponse> {
     const stats = await getRulesetStats();
     return { success: true, data: stats };
   } catch (error) {
-    console.error('[AINTIVIRUS] Get ruleset stats error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -551,7 +524,6 @@ async function handleEnableRuleset(
     await enableRuleset(payload.rulesetId);
     return { success: true };
   } catch (error) {
-    console.error('[AINTIVIRUS] Enable ruleset error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -566,7 +538,6 @@ async function handleDisableRuleset(
     await disableRuleset(payload.rulesetId);
     return { success: true };
   } catch (error) {
-    console.error('[AINTIVIRUS] Disable ruleset error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -581,7 +552,6 @@ async function handleToggleRuleset(
     const enabled = await toggleRuleset(payload.rulesetId);
     return { success: true, data: { enabled } };
   } catch (error) {
-    console.error('[AINTIVIRUS] Toggle ruleset error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -594,7 +564,6 @@ async function handleGetThreatIntelHealth(): Promise<MessageResponse> {
     const health = await getThreatIntelHealth();
     return { success: true, data: health };
   } catch (error) {
-    console.error('[AINTIVIRUS] Threat intel health error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -607,7 +576,6 @@ async function handleRefreshThreatIntel(): Promise<MessageResponse> {
     const success = await refreshThreatIntel(true);
     return { success: true, data: { refreshed: success } };
   } catch (error) {
-    console.error('[AINTIVIRUS] Threat intel refresh error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -620,7 +588,6 @@ async function handleGetThreatIntelSources(): Promise<MessageResponse> {
     const sources = await getThreatIntelSources();
     return { success: true, data: sources };
   } catch (error) {
-    console.error('[AINTIVIRUS] Get threat intel sources error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -643,7 +610,6 @@ async function handleAddThreatIntelSource(
     });
     return { success: true };
   } catch (error) {
-    console.error('[AINTIVIRUS] Add threat intel source error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -658,7 +624,6 @@ async function handleRemoveThreatIntelSource(
     await removeThreatIntelSource(payload.sourceId);
     return { success: true };
   } catch (error) {
-    console.error('[AINTIVIRUS] Remove threat intel source error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -673,7 +638,6 @@ async function handleToggleThreatIntelSource(
     await toggleThreatIntelSource(payload.sourceId, payload.enabled);
     return { success: true };
   } catch (error) {
-    console.error('[AINTIVIRUS] Toggle threat intel source error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -686,7 +650,6 @@ async function handleGetSolPrice(): Promise<MessageResponse> {
     const result = await getSolPriceWithChange();
     return { success: true, data: result };
   } catch (error) {
-    console.error('[AINTIVIRUS] Get SOL price error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -699,7 +662,6 @@ async function handleGetEthPrice(): Promise<MessageResponse> {
     const result = await getEthPriceWithChange();
     return { success: true, data: result };
   } catch (error) {
-    console.error('[AINTIVIRUS] Get ETH price error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -718,7 +680,6 @@ async function handleGetTokenPrices(
     });
     return { success: true, data: pricesObj };
   } catch (error) {
-    console.error('[AINTIVIRUS] Get token prices error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -739,12 +700,9 @@ async function handleDAppMessageWrapper(
       error: result.error,
     };
   } catch (error) {
-    console.error('[AINTIVIRUS] dApp message error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
-
-console.log('[AINTIVIRUS] Background service worker ready');
