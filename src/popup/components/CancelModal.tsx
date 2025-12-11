@@ -1,7 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { sendToBackground } from '@shared/messaging';
-import type { EVMPendingTxInfo, EVMReplacementFeeEstimate, EVMTransactionResult } from '@shared/types';
-
+import type {
+  EVMPendingTxInfo,
+  EVMReplacementFeeEstimate,
+  EVMTransactionResult,
+} from '@shared/types';
 
 export interface CancelModalProps {
   tx: EVMPendingTxInfo;
@@ -9,14 +12,12 @@ export interface CancelModalProps {
   onSuccess: (newHash: string) => void;
 }
 
-
 export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
   const [feeEstimate, setFeeEstimate] = useState<EVMReplacementFeeEstimate | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  
   useEffect(() => {
     async function loadEstimate() {
       try {
@@ -28,8 +29,8 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
         if (response.success && response.data) {
           setFeeEstimate(response.data);
         }
-      } catch (err) {
-
+      } catch {
+        // Fee estimation is best-effort; cancellation can still be attempted.
       }
     }
 
@@ -58,21 +59,20 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
     }
   }, [tx.hash, onSuccess]);
 
-  
-  const cancellationFee = feeEstimate
-    ? (feeEstimate.maxFeeGwei * 21000) / 1e9
-    : null;
+  const cancellationFee = feeEstimate ? (feeEstimate.maxFeeGwei * 21000) / 1e9 : null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>🚫 Cancel Transaction</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button className="close-btn" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         <div className="cancel-body">
-          {}
+          {/* Explain what “cancel” means for EVM transactions (a replacement self-send). */}
           <div className="warning-section">
             <div className="warning-icon">⚠️</div>
             <p>
@@ -81,7 +81,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             </p>
           </div>
 
-          {}
+          {/* Snapshot of the pending transaction being replaced. */}
           <div className="tx-info-section">
             <h3>Transaction to Cancel</h3>
             <div className="info-row">
@@ -100,11 +100,13 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             </div>
             <div className="info-row">
               <span className="label">To</span>
-              <span className="value monospace">{tx.to.slice(0, 10)}...{tx.to.slice(-8)}</span>
+              <span className="value monospace">
+                {tx.to.slice(0, 10)}...{tx.to.slice(-8)}
+              </span>
             </div>
           </div>
 
-          {}
+          {/* Rough “max cost” estimate for the replacement transaction. */}
           <div className="cost-section">
             <h3>Cancellation Cost</h3>
             <div className="cost-amount">
@@ -113,7 +115,7 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             </div>
           </div>
 
-          {}
+          {/* Explicit acknowledgement before doing something irreversible / paid. */}
           <label className="confirm-checkbox">
             <input
               type="checkbox"
@@ -123,24 +125,16 @@ export function CancelModal({ tx, onClose, onSuccess }: CancelModalProps) {
             <span>I understand this will cost gas and cannot be undone</span>
           </label>
 
-          {}
-          {error && (
-            <div className="error-box">
-              ❌ {error}
-            </div>
-          )}
+          {/* Transaction errors (RPC failures, insufficient funds, etc.). */}
+          {error && <div className="error-box">❌ {error}</div>}
         </div>
 
-        {}
+        {/* Primary actions. */}
         <div className="modal-actions">
           <button className="btn secondary" onClick={onClose} disabled={loading}>
             Keep Transaction
           </button>
-          <button
-            className="btn danger"
-            onClick={handleCancel}
-            disabled={loading || !confirmed}
-          >
+          <button className="btn danger" onClick={handleCancel} disabled={loading || !confirmed}>
             {loading ? 'Canceling...' : 'Cancel Transaction'}
           </button>
         </div>

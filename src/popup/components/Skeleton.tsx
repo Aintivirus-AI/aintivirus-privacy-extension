@@ -1,57 +1,50 @@
-
-
 import React from 'react';
 
-
 export interface SkeletonProps {
-  
   variant?: 'text' | 'circle' | 'rect';
-  
+
   width?: number | string;
-  
+
   height?: number | string;
-  
+
   size?: number;
-  
+
   borderRadius?: number | string;
-  
+
   animation?: boolean;
-  
+
   className?: string;
-  
+
   style?: React.CSSProperties;
-  
+
   'aria-label'?: string;
 }
 
 export interface SkeletonTextProps {
-  
   lines?: number;
-  
+
   lastLineWidth?: number | string;
-  
+
   gap?: number;
-  
+
   lineHeight?: number;
-  
+
   animation?: boolean;
-  
+
   className?: string;
 }
 
 export interface SkeletonGroupProps {
-  
   loading: boolean;
-  
+
   skeleton: React.ReactNode;
-  
+
   children: React.ReactNode;
-  
+
   fadeDuration?: number;
-  
+
   className?: string;
 }
-
 
 export const Skeleton: React.FC<SkeletonProps> = ({
   variant = 'text',
@@ -64,7 +57,6 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   style,
   'aria-label': ariaLabel,
 }) => {
-  
   let computedWidth: number | string | undefined = width;
   let computedHeight: number | string | undefined = height;
   let computedRadius: number | string | undefined = borderRadius;
@@ -105,7 +97,6 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   );
 };
 
-
 export const SkeletonText: React.FC<SkeletonTextProps> = ({
   lines = 3,
   lastLineWidth = '70%',
@@ -115,7 +106,10 @@ export const SkeletonText: React.FC<SkeletonTextProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`skeleton-text ${className}`.trim()} style={{ display: 'flex', flexDirection: 'column', gap }}>
+    <div
+      className={`skeleton-text ${className}`.trim()}
+      style={{ display: 'flex', flexDirection: 'column', gap }}
+    >
       {Array.from({ length: lines }).map((_, index) => (
         <Skeleton
           key={index}
@@ -129,7 +123,6 @@ export const SkeletonText: React.FC<SkeletonTextProps> = ({
   );
 };
 
-
 export const SkeletonGroup: React.FC<SkeletonGroupProps> = ({
   loading,
   skeleton,
@@ -140,15 +133,16 @@ export const SkeletonGroup: React.FC<SkeletonGroupProps> = ({
   return (
     <div
       className={`skeleton-group ${loading ? 'skeleton-loading' : 'skeleton-loaded'} ${className}`.trim()}
-      style={{
-        '--skeleton-fade-duration': `${fadeDuration}ms`,
-      } as React.CSSProperties}
+      style={
+        {
+          '--skeleton-fade-duration': `${fadeDuration}ms`,
+        } as React.CSSProperties
+      }
     >
       {loading ? skeleton : children}
     </div>
   );
 };
-
 
 export const SkeletonWalletBalance: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-wallet-balance ${className}`.trim()}>
@@ -160,7 +154,6 @@ export const SkeletonWalletBalance: React.FC<{ className?: string }> = ({ classN
     <Skeleton variant="text" width={80} height={16} style={{ marginTop: 8 }} />
   </div>
 );
-
 
 export const SkeletonTokenItem: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-token-item ${className}`.trim()}>
@@ -176,7 +169,6 @@ export const SkeletonTokenItem: React.FC<{ className?: string }> = ({ className 
   </div>
 );
 
-
 export const SkeletonTxItem: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-tx-item ${className}`.trim()}>
     <Skeleton variant="circle" size={32} />
@@ -191,14 +183,12 @@ export const SkeletonTxItem: React.FC<{ className?: string }> = ({ className = '
   </div>
 );
 
-
 export const SkeletonStatCard: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-stat-card ${className}`.trim()}>
     <Skeleton variant="text" width={50} height={28} borderRadius={6} />
     <Skeleton variant="text" width={60} height={10} style={{ marginTop: 6 }} />
   </div>
 );
-
 
 export const SkeletonFeatureItem: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-feature-item ${className}`.trim()}>
@@ -211,7 +201,6 @@ export const SkeletonFeatureItem: React.FC<{ className?: string }> = ({ classNam
   </div>
 );
 
-
 export const SkeletonConnectedSite: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-connected-site ${className}`.trim()}>
     <Skeleton variant="circle" size={24} />
@@ -219,7 +208,6 @@ export const SkeletonConnectedSite: React.FC<{ className?: string }> = ({ classN
     <Skeleton variant="rect" width={60} height={24} borderRadius={4} />
   </div>
 );
-
 
 export const SkeletonAllowanceCard: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-allowance-card ${className}`.trim()}>
@@ -244,7 +232,6 @@ export const SkeletonAllowanceCard: React.FC<{ className?: string }> = ({ classN
   </div>
 );
 
-
 export const SkeletonPendingTx: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-pending-tx ${className}`.trim()}>
     <div className="skeleton-tx-main">
@@ -266,14 +253,12 @@ export const SkeletonPendingTx: React.FC<{ className?: string }> = ({ className 
   </div>
 );
 
-
 export const SkeletonAddress: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-address ${className}`.trim()}>
     <Skeleton variant="text" width={120} height={12} />
     <Skeleton variant="circle" size={14} />
   </div>
 );
-
 
 export const SkeletonWalletView: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-wallet-view ${className}`.trim()}>
@@ -302,7 +287,6 @@ export const SkeletonWalletView: React.FC<{ className?: string }> = ({ className
   </div>
 );
 
-
 export const SkeletonSecurityStats: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`skeleton-security-stats ${className}`.trim()}>
     <div className="skeleton-stats-grid">
@@ -316,6 +300,5 @@ export const SkeletonSecurityStats: React.FC<{ className?: string }> = ({ classN
     </div>
   </div>
 );
-
 
 export default Skeleton;

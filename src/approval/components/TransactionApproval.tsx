@@ -1,12 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
-import {
-  decodeEvmTx,
-  DecodedEvmTx,
-  TxWarning,
-  getContractDisplayName,
-  formatEthValue,
-} from '../../decoding';
+import { decodeEvmTx, DecodedEvmTx, getContractDisplayName } from '../../decoding';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -313,7 +307,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
       }
 
       try {
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
         if (cancelled) return;
 
         const decodedTx = decodeEvmTx(params);
@@ -440,13 +434,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
                 display: 'inline-block',
               }}
             >
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                stroke="rgba(91, 95, 199, 0.2)"
-                strokeWidth="3"
-              />
+              <circle cx="20" cy="20" r="16" stroke="rgba(91, 95, 199, 0.2)" strokeWidth="3" />
               <path
                 d="M 20 4 A 16 16 0 0 1 36 20"
                 stroke="#5b5fc7"
@@ -463,8 +451,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
   }
 
   if (decoded) {
-    const hasValue =
-      decoded.details.valueEth !== '0 ETH' && decoded.details.value !== '0';
+    const hasValue = decoded.details.valueEth !== '0 ETH' && decoded.details.value !== '0';
 
     return (
       <div style={styles.container}>
@@ -525,9 +512,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
             {decoded.details.to && (
               <div style={styles.txRow}>
                 <span style={styles.txLabel}>To</span>
-                <span style={styles.txValue}>
-                  {getContractDisplayName(decoded.details.to)}
-                </span>
+                <span style={styles.txValue}>{getContractDisplayName(decoded.details.to)}</span>
               </div>
             )}
 
@@ -537,9 +522,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
                 <span
                   style={{
                     ...styles.txValue,
-                    ...(decoded.kind === 'transfer'
-                      ? styles.txAmountNegative
-                      : {}),
+                    ...(decoded.kind === 'transfer' ? styles.txAmountNegative : {}),
                   }}
                 >
                   {decoded.kind === 'transfer' ? '−' : ''}
@@ -550,9 +533,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
 
             <div style={styles.txRow}>
               <span style={styles.txLabel}>Network</span>
-              <span style={styles.txValue}>
-                {getChainName(decoded.details.chainId)}
-              </span>
+              <span style={styles.txValue}>{getChainName(decoded.details.chainId)}</span>
             </div>
 
             {decoded.details.selector && (
@@ -618,10 +599,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
 
         {decoded.details.data && decoded.details.data !== '0x' && (
           <div style={styles.dataSection}>
-            <button
-              style={styles.dataToggle}
-              onClick={() => setShowData(!showData)}
-            >
+            <button style={styles.dataToggle} onClick={() => setShowData(!showData)}>
               <svg
                 width="16"
                 height="16"
@@ -639,28 +617,18 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
                   strokeLinecap="round"
                 />
               </svg>
-              <span>
-                Raw Data ({decoded.details.dataSize} bytes)
-              </span>
+              <span>Raw Data ({decoded.details.dataSize} bytes)</span>
             </button>
 
-            {showData && (
-              <div style={styles.dataContent}>{decoded.details.data}</div>
-            )}
+            {showData && <div style={styles.dataContent}>{decoded.details.data}</div>}
           </div>
         )}
 
         <div style={styles.buttons}>
-          <button
-            style={{ ...styles.button, ...styles.rejectButton }}
-            onClick={() => onReject()}
-          >
+          <button style={{ ...styles.button, ...styles.rejectButton }} onClick={() => onReject()}>
             Reject
           </button>
-          <button
-            style={{ ...styles.button, ...styles.approveButton }}
-            onClick={onApprove}
-          >
+          <button style={{ ...styles.button, ...styles.approveButton }} onClick={onApprove}>
             Confirm
           </button>
         </div>
@@ -710,10 +678,7 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
 
       {solanaDetails?.data && (
         <div style={styles.dataSection}>
-          <button
-            style={styles.dataToggle}
-            onClick={() => setShowData(!showData)}
-          >
+          <button style={styles.dataToggle} onClick={() => setShowData(!showData)}>
             <svg
               width="16"
               height="16"
@@ -734,23 +699,15 @@ export function TransactionApproval({ request, onApprove, onReject }: Props) {
             <span>Transaction Data</span>
           </button>
 
-          {showData && (
-            <div style={styles.dataContent}>{solanaDetails.data}</div>
-          )}
+          {showData && <div style={styles.dataContent}>{solanaDetails.data}</div>}
         </div>
       )}
 
       <div style={styles.buttons}>
-        <button
-          style={{ ...styles.button, ...styles.rejectButton }}
-          onClick={() => onReject()}
-        >
+        <button style={{ ...styles.button, ...styles.rejectButton }} onClick={() => onReject()}>
           Reject
         </button>
-        <button
-          style={{ ...styles.button, ...styles.approveButton }}
-          onClick={onApprove}
-        >
+        <button style={{ ...styles.button, ...styles.approveButton }} onClick={onApprove}>
           Confirm
         </button>
       </div>
@@ -762,12 +719,7 @@ function WarningIcon({ color }: { color: string }) {
   return (
     <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="none">
       <path d="M12 2L2 22h20L12 2z" fill="none" stroke={color} strokeWidth="2" />
-      <path
-        d="M12 10v4M12 18h.01"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M12 10v4M12 18h.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -775,10 +727,7 @@ function WarningIcon({ color }: { color: string }) {
 function GlobeIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-        fill="#64748b"
-      />
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#64748b" />
     </svg>
   );
 }

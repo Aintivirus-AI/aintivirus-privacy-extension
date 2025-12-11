@@ -217,13 +217,13 @@ interface Props {
 
 export function ConnectApproval({ request, accounts, onApprove, onReject }: Props) {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(
-    accounts.filter(a => a.isActive).map(a => a.address)
+    accounts.filter((a) => a.isActive).map((a) => a.address),
   );
   const [remember, setRemember] = useState(false);
 
   const toggleAccount = (address: string) => {
     if (selectedAccounts.includes(address)) {
-      setSelectedAccounts(selectedAccounts.filter(a => a !== address));
+      setSelectedAccounts(selectedAccounts.filter((a) => a !== address));
     } else {
       setSelectedAccounts([...selectedAccounts, address]);
     }
@@ -256,9 +256,9 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
       <div style={styles.siteInfo}>
         <div style={styles.favicon}>
           {request.favicon ? (
-            <img 
-              src={request.favicon} 
-              alt="" 
+            <img
+              src={request.favicon}
+              alt=""
               style={styles.faviconImage}
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
@@ -266,7 +266,10 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
             />
           ) : (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="#64748b"/>
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
+                fill="#64748b"
+              />
             </svg>
           )}
         </div>
@@ -288,7 +291,7 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
       <div style={styles.section}>
         <span style={styles.sectionTitle}>Select Account</span>
         <div style={styles.accountList}>
-          {accounts.map(account => (
+          {accounts.map((account) => (
             <div
               key={account.address}
               style={{
@@ -305,7 +308,13 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
               >
                 {selectedAccounts.includes(account.address) && (
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path
+                      d="M2 6L5 9L10 3"
+                      stroke="white"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 )}
               </div>
@@ -314,9 +323,7 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
                 <div style={styles.accountAddress}>
                   {account.address.slice(0, 6)}...{account.address.slice(-4)}
                 </div>
-                {account.balance && (
-                  <div style={styles.accountBalance}>{account.balance}</div>
-                )}
+                {account.balance && <div style={styles.accountBalance}>{account.balance}</div>}
               </div>
             </div>
           ))}
@@ -345,10 +352,7 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
       </div>
 
       <div style={styles.buttons}>
-        <button
-          style={{ ...styles.button, ...styles.rejectButton }}
-          onClick={() => onReject()}
-        >
+        <button style={{ ...styles.button, ...styles.rejectButton }} onClick={() => onReject()}>
           Cancel
         </button>
         <button

@@ -45,11 +45,7 @@ export const LEGITIMATE_DOMAINS = [
   'metamask.io',
 ];
 
-export const SCAM_DOMAINS = [
-  'phantom-app.com',
-  'solana-airdrop.xyz',
-  'free-sol.net',
-];
+export const SCAM_DOMAINS = ['phantom-app.com', 'solana-airdrop.xyz', 'free-sol.net'];
 
 export const HOMOGLYPH_DOMAINS = [
   { domain: 'phant0m.app', target: 'phantom.app' },
@@ -69,11 +65,11 @@ export const MOCK_THREAT_INTEL_DATA = {
   scamDomains: SCAM_DOMAINS,
   suspiciousTlds: ['xyz', 'tk', 'ml', 'ga', 'cf', 'gq', 'top', 'click', 'link'],
   homoglyphMap: {
-    'o': ['0', 'ο', 'о'],
-    'a': ['а', '@', '4'],
-    'e': ['е', '3'],
-    'i': ['і', '1', 'l'],
-    'l': ['1', 'I', 'і'],
+    o: ['0', 'ο', 'о'],
+    a: ['а', '@', '4'],
+    e: ['е', '3'],
+    i: ['і', '1', 'l'],
+    l: ['1', 'I', 'і'],
   },
   solanaKeywords: ['sol', 'solana', 'phantom', 'airdrop', 'claim', 'wallet', 'nft'],
 };
@@ -267,4 +263,3 @@ export const MOCK_TYPOSQUAT_DOMAIN = 'phantmo.app';
 export const MOCK_SOLANA_ADDRESS = TEST_SOLANA_ADDRESS;
 export const MOCK_EVM_ADDRESS_VALID = TEST_EVM_ADDRESS;
 export const MOCK_EVM_ADDRESS_INVALID = INVALID_EVM_ADDRESS;
-

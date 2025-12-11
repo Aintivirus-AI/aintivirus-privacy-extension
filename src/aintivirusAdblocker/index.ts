@@ -1,15 +1,15 @@
-
-
 import { registerInjectables, unregisterAllInjectables } from './scripting-manager';
-
 
 export const MODE_NONE = 0;
 export const MODE_BASIC = 1;
 export const MODE_OPTIMAL = 2;
 export const MODE_COMPLETE = 3;
 
-export type FilteringMode = typeof MODE_NONE | typeof MODE_BASIC | typeof MODE_OPTIMAL | typeof MODE_COMPLETE;
-
+export type FilteringMode =
+  | typeof MODE_NONE
+  | typeof MODE_BASIC
+  | typeof MODE_OPTIMAL
+  | typeof MODE_COMPLETE;
 
 const STORAGE_KEYS = {
   RULESET_CONFIG: 'adblocker_rulesetConfig',
@@ -17,7 +17,6 @@ const STORAGE_KEYS = {
   ALLOWLIST: 'adblocker_allowlist',
   DEBUG: 'adblocker_debug',
 } as const;
-
 
 const ALLOWLIST_RULE_BASE_ID = 10000000;
 const TRUSTED_DIRECTIVE_BASE_RULE_ID = 8000000;
@@ -37,7 +36,6 @@ const INTERNAL_API_ALLOWLIST = [
   'rpc.ankr.com',
 ];
 
-
 export const DEFAULT_RULESETS = [
   'ublock-filters',
   'ublock-experimental',
@@ -49,7 +47,6 @@ export const DEFAULT_RULESETS = [
   'annoyances-overlays',
   'annoyances-others',
 ] as const;
-
 
 export const ALL_RULESETS = [
   'ublock-filters',
@@ -72,8 +69,7 @@ export const ALL_RULESETS = [
   'stevenblack-hosts',
 ] as const;
 
-export type RulesetId = typeof ALL_RULESETS[number];
-
+export type RulesetId = (typeof ALL_RULESETS)[number];
 
 interface RulesetConfig {
   version: string;
@@ -82,7 +78,7 @@ interface RulesetConfig {
   showBlockedCount: boolean;
   strictBlockMode: boolean;
   developerMode: boolean;
-  enabled: boolean; 
+  enabled: boolean;
 }
 
 interface FilteringModeDetails {
@@ -96,7 +92,7 @@ const defaultRulesetConfig: RulesetConfig = {
   version: '',
   enabledRulesets: [...DEFAULT_RULESETS],
   autoReload: true,
-  showBlockedCount: false, 
+  showBlockedCount: false,
   strictBlockMode: false,
   developerMode: false,
   enabled: true,
@@ -109,24 +105,19 @@ const defaultFilteringModes: FilteringModeDetails = {
   complete: new Set(['all-urls']),
 };
 
-
 let rulesetConfigCache: RulesetConfig | null = null;
 let filteringModesCache: FilteringModeDetails | null = null;
 let debugEnabled = false;
 
-
 function adblockerLog(...args: unknown[]): void {
   if (debugEnabled) {
-
   }
 }
 
 function adblockerDebug(...args: unknown[]): void {
   if (debugEnabled) {
-
   }
 }
-
 
 async function localRead<T>(key: string): Promise<T | undefined> {
   try {
@@ -153,25 +144,20 @@ async function sessionRead<T>(key: string): Promise<T | undefined> {
 async function sessionWrite(key: string, value: unknown): Promise<void> {
   try {
     await chrome.storage.session.set({ [key]: value });
-  } catch {
-    
-  }
+  } catch {}
 }
-
 
 export async function loadRulesetConfig(): Promise<RulesetConfig> {
   if (rulesetConfigCache) {
     return rulesetConfigCache;
   }
 
-  
   let config = await sessionRead<RulesetConfig>(STORAGE_KEYS.RULESET_CONFIG);
   if (config) {
     rulesetConfigCache = config;
     return config;
   }
 
-  
   config = await localRead<RulesetConfig>(STORAGE_KEYS.RULESET_CONFIG);
   if (config) {
     rulesetConfigCache = { ...defaultRulesetConfig, ...config };
@@ -179,7 +165,6 @@ export async function loadRulesetConfig(): Promise<RulesetConfig> {
     return rulesetConfigCache;
   }
 
-  
   rulesetConfigCache = { ...defaultRulesetConfig };
   await localWrite(STORAGE_KEYS.RULESET_CONFIG, rulesetConfigCache);
   await sessionWrite(STORAGE_KEYS.RULESET_CONFIG, rulesetConfigCache);
@@ -194,7 +179,6 @@ export async function saveRulesetConfig(config?: Partial<RulesetConfig>): Promis
   await sessionWrite(STORAGE_KEYS.RULESET_CONFIG, updated);
   adblockerLog('Config saved:', updated);
 }
-
 
 function serializeFilteringModes(details: FilteringModeDetails): Record<string, string[]> {
   return {
@@ -247,13 +231,11 @@ function lookupFilteringMode(modes: FilteringModeDetails, hostname: string): Fil
     return MODE_BASIC;
   }
 
-  
   if (modes.none.has(hostname)) return MODE_NONE;
   if (modes.basic.has(hostname)) return MODE_BASIC;
   if (modes.optimal.has(hostname)) return MODE_OPTIMAL;
   if (modes.complete.has(hostname)) return MODE_COMPLETE;
 
-  
   for (const hn of modes.none) {
     if (hn !== 'all-urls' && hostname.endsWith(`.${hn}`)) return MODE_NONE;
   }
@@ -267,7 +249,6 @@ function lookupFilteringMode(modes: FilteringModeDetails, hostname: string): Fil
     if (hn !== 'all-urls' && hostname.endsWith(`.${hn}`)) return MODE_COMPLETE;
   }
 
-  
   return lookupFilteringMode(modes, 'all-urls');
 }
 
@@ -280,16 +261,17 @@ export async function getDefaultFilteringMode(): Promise<FilteringMode> {
   return getFilteringMode('all-urls');
 }
 
-export async function setFilteringMode(hostname: string, mode: FilteringMode): Promise<FilteringMode> {
+export async function setFilteringMode(
+  hostname: string,
+  mode: FilteringMode,
+): Promise<FilteringMode> {
   const modes = await getFilteringModeDetails();
-  
-  
+
   modes.none.delete(hostname);
   modes.basic.delete(hostname);
   modes.optimal.delete(hostname);
   modes.complete.delete(hostname);
 
-  
   switch (mode) {
     case MODE_NONE:
       modes.none.add(hostname);
@@ -308,7 +290,7 @@ export async function setFilteringMode(hostname: string, mode: FilteringMode): P
   await saveFilteringModeDetails(modes);
   await updateTrustedDirectiveRules(modes);
   await registerInjectables();
-  
+
   return mode;
 }
 
@@ -316,26 +298,23 @@ export async function setDefaultFilteringMode(mode: FilteringMode): Promise<Filt
   return setFilteringMode('all-urls', mode);
 }
 
-
 async function updateTrustedDirectiveRules(modes: FilteringModeDetails): Promise<void> {
   try {
-    
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
     const trustedRules = existingRules.filter(
-      rule => rule.id >= TRUSTED_DIRECTIVE_BASE_RULE_ID && rule.id < ALLOWLIST_RULE_BASE_ID
+      (rule) => rule.id >= TRUSTED_DIRECTIVE_BASE_RULE_ID && rule.id < ALLOWLIST_RULE_BASE_ID,
     );
-    const removeRuleIds = trustedRules.map(rule => rule.id);
+    const removeRuleIds = trustedRules.map((rule) => rule.id);
 
     const addRules: chrome.declarativeNetRequest.Rule[] = [];
-    const noneHostnames = Array.from(modes.none).filter(h => h !== 'all-urls');
+    const noneHostnames = Array.from(modes.none).filter((h) => h !== 'all-urls');
 
     if (modes.none.has('all-urls')) {
-      
       const excludedDomains = [
         ...Array.from(modes.basic),
         ...Array.from(modes.optimal),
         ...Array.from(modes.complete),
-      ].filter(h => h !== 'all-urls');
+      ].filter((h) => h !== 'all-urls');
 
       if (excludedDomains.length > 0) {
         addRules.push({
@@ -358,7 +337,6 @@ async function updateTrustedDirectiveRules(modes: FilteringModeDetails): Promise
         });
       }
     } else if (noneHostnames.length > 0) {
-      
       addRules.push({
         id: TRUSTED_DIRECTIVE_BASE_RULE_ID,
         priority: TRUSTED_DIRECTIVE_PRIORITY,
@@ -377,24 +355,20 @@ async function updateTrustedDirectiveRules(modes: FilteringModeDetails): Promise
       });
       adblockerLog('Updated trusted directive rules');
     }
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
-
 
 export async function updateAllowlistRules(allowlist: string[]): Promise<void> {
   try {
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
     const allowlistRules = existingRules.filter(
-      rule => rule.id >= ALLOWLIST_RULE_BASE_ID && rule.id < ALLOWLIST_RULE_BASE_ID + 10000
+      (rule) => rule.id >= ALLOWLIST_RULE_BASE_ID && rule.id < ALLOWLIST_RULE_BASE_ID + 10000,
     );
-    const removeRuleIds = allowlistRules.map(rule => rule.id);
-    
+    const removeRuleIds = allowlistRules.map((rule) => rule.id);
+
     const addRules: chrome.declarativeNetRequest.Rule[] = [];
-    
+
     if (allowlist.length > 0) {
-      
       addRules.push({
         id: ALLOWLIST_RULE_BASE_ID,
         priority: TRUSTED_DIRECTIVE_PRIORITY + 1000,
@@ -404,8 +378,7 @@ export async function updateAllowlistRules(allowlist: string[]): Promise<void> {
           resourceTypes: ['main_frame' as chrome.declarativeNetRequest.ResourceType],
         },
       });
-      
-      
+
       addRules.push({
         id: ALLOWLIST_RULE_BASE_ID + 1,
         priority: TRUSTED_DIRECTIVE_PRIORITY + 1000,
@@ -420,11 +393,9 @@ export async function updateAllowlistRules(allowlist: string[]): Promise<void> {
       removeRuleIds,
       addRules,
     });
-    
-    adblockerLog('Allowlist rules updated:', allowlist);
-  } catch (error) {
 
-  }
+    adblockerLog('Allowlist rules updated:', allowlist);
+  } catch (error) {}
 }
 
 /**
@@ -435,10 +406,10 @@ export async function setupInternalApiAllowlist(): Promise<void> {
   try {
     const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
     const internalApiRules = existingRules.filter(
-      rule => rule.id >= INTERNAL_API_RULE_BASE_ID && rule.id < INTERNAL_API_RULE_BASE_ID + 100
+      (rule) => rule.id >= INTERNAL_API_RULE_BASE_ID && rule.id < INTERNAL_API_RULE_BASE_ID + 100,
     );
-    const removeRuleIds = internalApiRules.map(rule => rule.id);
-    
+    const removeRuleIds = internalApiRules.map((rule) => rule.id);
+
     // IMPORTANT: In Manifest V3, declarativeNetRequest rules DO NOT affect
     // requests made by the extension's own service worker (background script).
     // These rules only affect requests from web pages.
@@ -466,17 +437,15 @@ export async function setupInternalApiAllowlist(): Promise<void> {
   }
 }
 
-
 export async function enableRulesets(rulesetIds: string[]): Promise<void> {
   try {
     const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-    
-    
-    const validRulesets = rulesetIds.filter(id => ALL_RULESETS.includes(id as RulesetId));
-    
-    const toEnable = validRulesets.filter(id => !currentlyEnabled.includes(id));
-    const toDisable = currentlyEnabled.filter(id => 
-      ALL_RULESETS.includes(id as RulesetId) && !validRulesets.includes(id)
+
+    const validRulesets = rulesetIds.filter((id) => ALL_RULESETS.includes(id as RulesetId));
+
+    const toEnable = validRulesets.filter((id) => !currentlyEnabled.includes(id));
+    const toDisable = currentlyEnabled.filter(
+      (id) => ALL_RULESETS.includes(id as RulesetId) && !validRulesets.includes(id),
     );
 
     if (toEnable.length > 0 || toDisable.length > 0) {
@@ -487,19 +456,15 @@ export async function enableRulesets(rulesetIds: string[]): Promise<void> {
       adblockerLog('Updated rulesets - enabled:', toEnable, 'disabled:', toDisable);
     }
 
-    
     await saveRulesetConfig({ enabledRulesets: validRulesets });
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
-
 
 export async function disableAllRulesets(): Promise<void> {
   try {
     const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-    const adblockerRulesets = currentlyEnabled.filter(id => 
-      ALL_RULESETS.includes(id as RulesetId)
+    const adblockerRulesets = currentlyEnabled.filter((id) =>
+      ALL_RULESETS.includes(id as RulesetId),
     );
 
     if (adblockerRulesets.length > 0) {
@@ -510,52 +475,41 @@ export async function disableAllRulesets(): Promise<void> {
     }
 
     await saveRulesetConfig({ enabledRulesets: [] });
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
-
 
 export async function getEnabledRulesets(): Promise<string[]> {
   const enabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-  return enabled.filter(id => ALL_RULESETS.includes(id as RulesetId));
+  return enabled.filter((id) => ALL_RULESETS.includes(id as RulesetId));
 }
-
 
 export async function setAdBlockEnabled(enabled: boolean): Promise<void> {
   adblockerLog('Setting ad blocking:', enabled ? 'enabled' : 'disabled');
-  
+
   const config = await loadRulesetConfig();
-  
+
   if (enabled) {
-    
-    const rulesetsToEnable = config.enabledRulesets.length > 0 
-      ? config.enabledRulesets 
-      : [...DEFAULT_RULESETS];
+    const rulesetsToEnable =
+      config.enabledRulesets.length > 0 ? config.enabledRulesets : [...DEFAULT_RULESETS];
     await enableRulesets(rulesetsToEnable);
-    
-    
+
     await registerInjectables();
   } else {
-    
     await disableAllRulesets();
-    
-    
+
     await unregisterAllInjectables();
   }
 
   await saveRulesetConfig({ enabled });
 }
 
-
 export async function isAdBlockEnabled(): Promise<boolean> {
   const config = await loadRulesetConfig();
   return config.enabled;
 }
 
-
 export async function addToAllowlist(domain: string): Promise<void> {
-  const allowlist = await localRead<string[]>(STORAGE_KEYS.ALLOWLIST) || [];
+  const allowlist = (await localRead<string[]>(STORAGE_KEYS.ALLOWLIST)) || [];
   if (!allowlist.includes(domain)) {
     allowlist.push(domain);
     await localWrite(STORAGE_KEYS.ALLOWLIST, allowlist);
@@ -564,9 +518,8 @@ export async function addToAllowlist(domain: string): Promise<void> {
   }
 }
 
-
 export async function removeFromAllowlist(domain: string): Promise<void> {
-  const allowlist = await localRead<string[]>(STORAGE_KEYS.ALLOWLIST) || [];
+  const allowlist = (await localRead<string[]>(STORAGE_KEYS.ALLOWLIST)) || [];
   const index = allowlist.indexOf(domain);
   if (index !== -1) {
     allowlist.splice(index, 1);
@@ -576,95 +529,79 @@ export async function removeFromAllowlist(domain: string): Promise<void> {
   }
 }
 
-
 export async function isDomainAllowlisted(domain: string): Promise<boolean> {
-  const allowlist = await localRead<string[]>(STORAGE_KEYS.ALLOWLIST) || [];
-  
+  const allowlist = (await localRead<string[]>(STORAGE_KEYS.ALLOWLIST)) || [];
+
   if (allowlist.includes(domain)) {
     return true;
   }
-  
-  
+
   for (const allowed of allowlist) {
     if (domain.endsWith(`.${allowed}`)) {
       return true;
     }
   }
-  
+
   return false;
 }
 
-
 export async function getAllowlist(): Promise<string[]> {
-  return await localRead<string[]>(STORAGE_KEYS.ALLOWLIST) || [];
+  return (await localRead<string[]>(STORAGE_KEYS.ALLOWLIST)) || [];
 }
-
 
 export async function initializeAdblocker(): Promise<void> {
   adblockerLog('Initializing Aintivirus Adblocker integration...');
-  
-  
+
   const config = await loadRulesetConfig();
-  debugEnabled = await localRead<boolean>(STORAGE_KEYS.DEBUG) || false;
-  
+  debugEnabled = (await localRead<boolean>(STORAGE_KEYS.DEBUG)) || false;
+
   adblockerLog('Config loaded:', config);
-  
+
   if (config.enabled) {
-    
-    const rulesetsToEnable = config.enabledRulesets.length > 0 
-      ? config.enabledRulesets 
-      : [...DEFAULT_RULESETS];
+    const rulesetsToEnable =
+      config.enabledRulesets.length > 0 ? config.enabledRulesets : [...DEFAULT_RULESETS];
     await enableRulesets(rulesetsToEnable);
-    
-    
+
     const modes = await getFilteringModeDetails();
     await updateTrustedDirectiveRules(modes);
-    
-    
+
     const allowlist = await getAllowlist();
     await updateAllowlistRules(allowlist);
-    
-    
+
     await registerInjectables();
   } else {
     adblockerLog('Ad blocking is disabled, skipping initialization');
   }
-  
+
   adblockerLog('Aintivirus Adblocker initialization complete');
 }
 
-
 export async function reconcileAdblockerState(): Promise<void> {
   adblockerLog('Reconciling Aintivirus Adblocker state...');
-  
+
   const config = await loadRulesetConfig();
-  
+
   if (config.enabled) {
-    
     const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-    const expectedRulesets = config.enabledRulesets.length > 0 
-      ? config.enabledRulesets 
-      : [...DEFAULT_RULESETS];
-    
-    const needsUpdate = 
+    const expectedRulesets =
+      config.enabledRulesets.length > 0 ? config.enabledRulesets : [...DEFAULT_RULESETS];
+
+    const needsUpdate =
       currentlyEnabled.length !== expectedRulesets.length ||
-      !expectedRulesets.every(id => currentlyEnabled.includes(id));
-    
+      !expectedRulesets.every((id) => currentlyEnabled.includes(id));
+
     if (needsUpdate) {
       await enableRulesets(expectedRulesets);
     }
-    
-    
+
     await registerInjectables();
   } else {
-    
     await disableAllRulesets();
     await unregisterAllInjectables();
   }
-  
+
   adblockerLog('Aintivirus Adblocker state reconciled');
 }
-
 
 export async function getAdblockerStats(): Promise<{
   enabled: boolean;
@@ -677,18 +614,16 @@ export async function getAdblockerStats(): Promise<{
   const config = await loadRulesetConfig();
   const allowlist = await getAllowlist();
   const defaultMode = await getDefaultFilteringMode();
-  
+
   let availableStaticRuleCount = 0;
   let dynamicRuleCount = 0;
-  
+
   try {
     availableStaticRuleCount = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
     const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
     dynamicRuleCount = dynamicRules.length;
-  } catch {
-    
-  }
-  
+  } catch {}
+
   return {
     enabled: config.enabled,
     enabledRulesets: config.enabledRulesets,
@@ -699,22 +634,18 @@ export async function getAdblockerStats(): Promise<{
   };
 }
 
-
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  
-  
+
   if (changes[STORAGE_KEYS.DEBUG]) {
     debugEnabled = changes[STORAGE_KEYS.DEBUG].newValue ?? false;
   }
-  
-  
+
   if (changes[STORAGE_KEYS.ALLOWLIST]) {
     const newAllowlist = changes[STORAGE_KEYS.ALLOWLIST].newValue ?? [];
     adblockerLog('Detected allowlist change:', newAllowlist);
     updateAllowlistRules(newAllowlist);
   }
 });
-
 
 export { registerInjectables, unregisterAllInjectables };

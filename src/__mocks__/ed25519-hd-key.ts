@@ -48,6 +48,3 @@ export default {
   derivePath,
   getMasterKeyFromSeed,
 };
-
-
-

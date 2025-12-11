@@ -1,15 +1,17 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { sendToBackground } from '@shared/messaging';
-import type { EVMPendingTxInfo, EVMReplacementFeeEstimate, EVMTransactionResult } from '@shared/types';
+import type {
+  EVMPendingTxInfo,
+  EVMReplacementFeeEstimate,
+  EVMTransactionResult,
+} from '@shared/types';
 import { GasSettingsPanel, type GasSettings } from './GasSettingsPanel';
-
 
 export interface SpeedUpModalProps {
   tx: EVMPendingTxInfo;
   onClose: () => void;
   onSuccess: (newHash: string) => void;
 }
-
 
 export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
   const [gasSettings, setGasSettings] = useState<GasSettings | null>(null);
@@ -18,7 +20,6 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'configure' | 'confirm'>('configure');
 
-  
   useEffect(() => {
     async function loadEstimate() {
       try {
@@ -30,8 +31,8 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
         if (response.success && response.data) {
           setFeeEstimate(response.data);
         }
-      } catch (err) {
-
+      } catch {
+        // Fee estimation is best-effort; the user can still proceed.
       }
     }
 
@@ -81,16 +82,20 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>⚡ Speed Up Transaction</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button className="close-btn" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         {step === 'configure' && (
           <>
-            {}
+            {/* Current transaction snapshot (what we’re replacing). */}
             <div className="tx-info-section">
               <div className="info-row">
                 <span className="label">Transaction</span>
-                <span className="value monospace">{tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}</span>
+                <span className="value monospace">
+                  {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)}
+                </span>
               </div>
               <div className="info-row">
                 <span className="label">Nonce</span>
@@ -106,7 +111,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
               </div>
             </div>
 
-            {}
+            {/* Configure replacement fees (must bump the original). */}
             <div className="gas-section">
               <h3>New Gas Settings</h3>
               <GasSettingsPanel
@@ -117,12 +122,12 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
                   maxPriorityFeePerGas: BigInt(Math.floor(tx.maxPriorityFeeGwei * 1e9)),
                 }}
                 txHash={tx.hash}
-                gasLimit={21000n} 
+                gasLimit={21000n}
                 onFeesChange={handleGasChange}
               />
             </div>
 
-            {}
+            {/* Show the estimated delta cost (if available). */}
             {feeEstimate && (
               <div className="cost-comparison">
                 <div className="comparison-row">
@@ -136,14 +141,10 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
               </div>
             )}
 
-            {}
-            {feeEstimate?.warning && (
-              <div className="warning-box">
-                ⚠️ {feeEstimate.warning}
-              </div>
-            )}
+            {/* Warning from the estimator (e.g., unusually high fees). */}
+            {feeEstimate?.warning && <div className="warning-box">⚠️ {feeEstimate.warning}</div>}
 
-            {}
+            {/* Primary actions for this step. */}
             <div className="modal-actions">
               <button className="btn secondary" onClick={onClose}>
                 Cancel
@@ -179,11 +180,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
                 </div>
               </div>
 
-              {error && (
-                <div className="error-box">
-                  ❌ {error}
-                </div>
-              )}
+              {error && <div className="error-box">❌ {error}</div>}
             </div>
 
             <div className="modal-actions">
@@ -194,11 +191,7 @@ export function SpeedUpModal({ tx, onClose, onSuccess }: SpeedUpModalProps) {
               >
                 Back
               </button>
-              <button
-                className="btn primary"
-                onClick={handleConfirm}
-                disabled={loading}
-              >
+              <button className="btn primary" onClick={handleConfirm} disabled={loading}>
                 {loading ? 'Processing...' : 'Speed Up'}
               </button>
             </div>

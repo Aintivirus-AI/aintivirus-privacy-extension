@@ -1,6 +1,6 @@
 /**
  * Jupiter Swap Service with Referral Program Support
- * 
+ *
  * This module integrates with Jupiter's swap API to provide token swaps
  * with referral fee support. For more information, see:
  * https://dev.jup.ag/tool-kits/referral-program
@@ -13,11 +13,7 @@ import {
   TransactionMessage,
   AddressLookupTableAccount,
 } from '@solana/web3.js';
-import {
-  WalletError,
-  WalletErrorCode,
-  SolanaNetwork,
-} from './types';
+import { WalletError, WalletErrorCode, SolanaNetwork } from './types';
 import { getUnlockedKeypair, getWalletSettings } from './storage';
 import { executeWithFailover, getConnection } from './solanaClient';
 import { confirmTransaction } from './transactions';
@@ -29,7 +25,7 @@ import { getTransactionExplorerUrl } from './rpc';
 
 /**
  * Jupiter Referral Program Configuration
- * 
+ *
  * To earn referral fees:
  * 1. Create a referral account at https://referral.jup.ag
  * 2. Replace REFERRAL_ACCOUNT with your referral account public key
@@ -38,11 +34,11 @@ import { getTransactionExplorerUrl } from './rpc';
 export const JUPITER_REFERRAL_CONFIG = {
   // Your referral account public key from https://referral.jup.ag
   REFERRAL_ACCOUNT: 'ckrKLAG2CBwcwy25GH17bCMZ43wjcUbmbJ36fRQdvRx',
-  
+
   // Fee in basis points (100 = 1%, 50 = 0.5%, 20 = 0.2%)
   // Jupiter allows up to 100 bps (1%) for referral fees
   FEE_BPS: 50, // 0.5% referral fee
-  
+
   // Whether referral fees are enabled
   ENABLED: true,
 };
@@ -183,7 +179,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
   try {
     // Build fetch options with headers including API key if available
     const defaultHeaders: HeadersInit = {
-      'Accept': 'application/json',
+      Accept: 'application/json',
       'Accept-Language': 'en-US,en;q=0.9',
     };
 
@@ -200,12 +196,12 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
         ...options.headers,
       },
     };
-    
+
     // Add Content-Type for POST requests
     if (options.method === 'POST' && options.body) {
       (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/json';
     }
-    
+
     const response = await fetch(url, fetchOptions);
     return response;
   } catch (error) {
@@ -219,21 +215,18 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
  * Derives the referral token account for a specific token mint
  * This is used to collect referral fees in that token
  */
-export function deriveReferralTokenAccount(
-  referralAccount: string,
-  tokenMint: string
-): PublicKey {
+export function deriveReferralTokenAccount(referralAccount: string, tokenMint: string): PublicKey {
   const REFERRAL_PROGRAM_ID = new PublicKey('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3');
-  
+
   const [tokenAccount] = PublicKey.findProgramAddressSync(
     [
       Buffer.from('referral_ata'),
       new PublicKey(referralAccount).toBuffer(),
       new PublicKey(tokenMint).toBuffer(),
     ],
-    REFERRAL_PROGRAM_ID
+    REFERRAL_PROGRAM_ID,
   );
-  
+
   return tokenAccount;
 }
 
@@ -244,11 +237,11 @@ function getFeeAccount(outputMint: string): string | undefined {
   if (!JUPITER_REFERRAL_CONFIG.ENABLED) {
     return undefined;
   }
-  
+
   try {
     const feeAccount = deriveReferralTokenAccount(
       JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT,
-      outputMint
+      outputMint,
     );
     return feeAccount.toBase58();
   } catch (error) {
@@ -298,16 +291,14 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
       const errorText = await response.text();
       throw new WalletError(
         WalletErrorCode.NETWORK_ERROR,
-        `Jupiter quote failed: ${response.status} - ${errorText}`
+        `Jupiter quote failed: ${response.status} - ${errorText}`,
       );
     }
 
     const quoteResponse: JupiterQuoteResponse = await response.json();
 
     // Format route labels
-    const routeLabels = quoteResponse.routePlan.map(
-      step => step.swapInfo.label || 'Unknown DEX'
-    );
+    const routeLabels = quoteResponse.routePlan.map((step) => step.swapInfo.label || 'Unknown DEX');
 
     // Calculate minimum received (considering slippage)
     const minimumReceived = quoteResponse.otherAmountThreshold;
@@ -334,20 +325,17 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
     // Provide more specific error messages
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage.includes('AbortError') || errorMessage.includes('aborted')) {
-      throw new WalletError(
-        WalletErrorCode.NETWORK_ERROR,
-        'Request timed out. Please try again.'
-      );
+      throw new WalletError(WalletErrorCode.NETWORK_ERROR, 'Request timed out. Please try again.');
     }
     if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
       throw new WalletError(
         WalletErrorCode.NETWORK_ERROR,
-        'Network error. Check your connection or try disabling ad-blocker for this request.'
+        'Network error. Check your connection or try disabling ad-blocker for this request.',
       );
     }
     throw new WalletError(
       WalletErrorCode.NETWORK_ERROR,
-      `Failed to get swap quote: ${errorMessage}`
+      `Failed to get swap quote: ${errorMessage}`,
     );
   }
 }
@@ -358,7 +346,7 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
 export async function getSwapTransaction(
   quote: SwapQuote,
   userPublicKey: string,
-  options: Partial<JupiterSwapParams> = {}
+  options: Partial<JupiterSwapParams> = {},
 ): Promise<JupiterSwapResponse> {
   const feeAccount = getFeeAccount(quote.outputMint);
 
@@ -390,19 +378,20 @@ export async function getSwapTransaction(
       const errorText = await response.text();
       throw new WalletError(
         WalletErrorCode.TRANSACTION_FAILED,
-        `Jupiter swap build failed: ${response.status} - ${errorText}`
+        `Jupiter swap build failed: ${response.status} - ${errorText}`,
       );
     }
 
     const swapResponse: JupiterSwapResponse = await response.json();
 
     if (swapResponse.simulationError) {
-      const errorMsg = typeof swapResponse.simulationError === 'string' 
-        ? swapResponse.simulationError 
-        : JSON.stringify(swapResponse.simulationError);
+      const errorMsg =
+        typeof swapResponse.simulationError === 'string'
+          ? swapResponse.simulationError
+          : JSON.stringify(swapResponse.simulationError);
       throw new WalletError(
         WalletErrorCode.SIMULATION_FAILED,
-        `Swap simulation failed: ${errorMsg}`
+        `Swap simulation failed: ${errorMsg}`,
       );
     }
 
@@ -413,7 +402,7 @@ export async function getSwapTransaction(
     }
     throw new WalletError(
       WalletErrorCode.TRANSACTION_FAILED,
-      `Failed to build swap transaction: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to build swap transaction: ${error instanceof Error ? error.message : 'Unknown error'}`,
     );
   }
 }
@@ -423,14 +412,14 @@ export async function getSwapTransaction(
  */
 export async function executeSwap(
   quote: SwapQuote,
-  options: { slippageBps?: number } = {}
+  options: { slippageBps?: number } = {},
 ): Promise<SwapResult> {
   // Get the unlocked keypair
   const keypair = getUnlockedKeypair();
   if (!keypair) {
     throw new WalletError(
       WalletErrorCode.WALLET_LOCKED,
-      'Wallet is locked. Please unlock to perform swaps.'
+      'Wallet is locked. Please unlock to perform swaps.',
     );
   }
 
@@ -448,7 +437,7 @@ export async function executeSwap(
 
   // Get connection and send
   const settings = await getWalletSettings();
-  
+
   try {
     const signature = await executeWithFailover(
       settings.network,
@@ -460,12 +449,12 @@ export async function executeSwap(
         });
         return sig;
       },
-      settings.customRpcUrl
+      settings.customRpcUrl,
     );
 
     // Confirm the transaction
     const confirmResult = await confirmTransaction(signature);
-    
+
     // Get explorer URL
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
@@ -485,20 +474,14 @@ export async function executeSwap(
     if (error instanceof WalletError) {
       throw error;
     }
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+
     if (errorMessage.includes('insufficient') || errorMessage.includes('Insufficient')) {
-      throw new WalletError(
-        WalletErrorCode.INSUFFICIENT_FUNDS,
-        'Insufficient balance for swap'
-      );
+      throw new WalletError(WalletErrorCode.INSUFFICIENT_FUNDS, 'Insufficient balance for swap');
     }
-    
-    throw new WalletError(
-      WalletErrorCode.TRANSACTION_FAILED,
-      `Swap failed: ${errorMessage}`
-    );
+
+    throw new WalletError(WalletErrorCode.TRANSACTION_FAILED, `Swap failed: ${errorMessage}`);
   }
 }
 
@@ -516,7 +499,7 @@ export async function getFormattedSwapQuote(
   inputAmount: string,
   inputDecimals: number,
   outputDecimals: number,
-  slippageBps: number = 50
+  slippageBps: number = 50,
 ): Promise<{
   quote: SwapQuote;
   inputAmountFormatted: string;
@@ -528,7 +511,7 @@ export async function getFormattedSwapQuote(
 }> {
   // Convert input amount to smallest units
   const inputAmountRaw = Math.floor(
-    parseFloat(inputAmount) * Math.pow(10, inputDecimals)
+    parseFloat(inputAmount) * Math.pow(10, inputDecimals),
   ).toString();
 
   const quote = await getSwapQuote({
@@ -571,11 +554,11 @@ export async function performSwap(
   outputMint: string,
   inputAmount: string,
   inputDecimals: number,
-  slippageBps: number = 50
+  slippageBps: number = 50,
 ): Promise<SwapResult> {
   // Convert input amount to smallest units
   const inputAmountRaw = Math.floor(
-    parseFloat(inputAmount) * Math.pow(10, inputDecimals)
+    parseFloat(inputAmount) * Math.pow(10, inputDecimals),
   ).toString();
 
   // Get quote
@@ -613,8 +596,8 @@ export function getReferralStatus(): {
   return {
     enabled: JUPITER_REFERRAL_CONFIG.ENABLED,
     feeBps: JUPITER_REFERRAL_CONFIG.FEE_BPS,
-    referralAccount: JUPITER_REFERRAL_CONFIG.ENABLED 
-      ? JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT 
+    referralAccount: JUPITER_REFERRAL_CONFIG.ENABLED
+      ? JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT
       : null,
   };
 }
@@ -625,11 +608,11 @@ export function getReferralStatus(): {
 export function formatTokenAmount(
   amount: string | number,
   decimals: number,
-  maxDecimals: number = 6
+  maxDecimals: number = 6,
 ): string {
   const num = typeof amount === 'string' ? parseInt(amount) : amount;
   const formatted = num / Math.pow(10, decimals);
-  
+
   // Use fewer decimals for display
   const displayDecimals = Math.min(decimals, maxDecimals);
   return formatted.toFixed(displayDecimals).replace(/\.?0+$/, '');
@@ -641,11 +624,7 @@ export function formatTokenAmount(
 export function parseInputAmount(amount: string, decimals: number): string {
   const num = parseFloat(amount);
   if (isNaN(num) || num < 0) {
-    throw new WalletError(
-      WalletErrorCode.INVALID_AMOUNT,
-      'Invalid swap amount'
-    );
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Invalid swap amount');
   }
   return Math.floor(num * Math.pow(10, decimals)).toString();
 }
-

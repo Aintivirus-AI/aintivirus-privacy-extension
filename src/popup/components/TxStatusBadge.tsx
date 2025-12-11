@@ -1,26 +1,17 @@
-
-
 import React from 'react';
-import {
-  TxDisplayStatus,
-  getStatusBadgeConfig,
-  TxConfirmationProgress,
-} from '@wallet/txStatus';
-
+import { TxDisplayStatus, getStatusBadgeConfig, TxConfirmationProgress } from '@wallet/txStatus';
 
 export interface TxStatusBadgeProps {
-  
   status: TxDisplayStatus;
-  
+
   size?: 'sm' | 'md' | 'lg';
-  
+
   showLabel?: boolean;
-  
+
   progress?: TxConfirmationProgress;
-  
+
   className?: string;
 }
-
 
 const PendingIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -80,7 +71,6 @@ const StatusIcons: Record<string, React.FC> = {
   replace: ReplaceIcon,
 };
 
-
 export function TxStatusBadge({
   status,
   size = 'md',
@@ -97,18 +87,18 @@ export function TxStatusBadge({
     lg: 'tx-status-badge-lg',
   };
 
-  const tooltipText = progress 
-    ? `${config.label}: ${progress.label}` 
-    : config.label;
+  const tooltipText = progress ? `${config.label}: ${progress.label}` : config.label;
 
   return (
     <>
       <span
         className={`tx-status-badge ${sizeClasses[size]} ${config.animate ? 'animate' : ''} ${className}`}
-        style={{
-          '--badge-color': config.color,
-          '--badge-bg': config.bgColor,
-        } as React.CSSProperties}
+        style={
+          {
+            '--badge-color': config.color,
+            '--badge-bg': config.bgColor,
+          } as React.CSSProperties
+        }
         title={tooltipText}
         role="status"
         aria-label={tooltipText}
@@ -116,9 +106,7 @@ export function TxStatusBadge({
         <span className="tx-status-badge-icon">
           <IconComponent />
         </span>
-        {showLabel && (
-          <span className="tx-status-badge-label">{config.label}</span>
-        )}
+        {showLabel && <span className="tx-status-badge-label">{config.label}</span>}
       </span>
 
       <style>{`
@@ -217,32 +205,27 @@ export function TxStatusBadge({
   );
 }
 
-
 export interface TxStatusDotProps {
-  
   status: TxDisplayStatus;
-  
+
   size?: number;
-  
+
   className?: string;
 }
 
-
-export function TxStatusDot({
-  status,
-  size = 8,
-  className = '',
-}: TxStatusDotProps) {
+export function TxStatusDot({ status, size = 8, className = '' }: TxStatusDotProps) {
   const config = getStatusBadgeConfig(status);
 
   return (
     <>
       <span
         className={`tx-status-dot ${config.animate ? 'animate' : ''} ${className}`}
-        style={{
-          '--dot-color': config.color,
-          '--dot-size': `${size}px`,
-        } as React.CSSProperties}
+        style={
+          {
+            '--dot-color': config.color,
+            '--dot-size': `${size}px`,
+          } as React.CSSProperties
+        }
         title={config.label}
         role="status"
         aria-label={config.label}

@@ -42,13 +42,13 @@ function isSensitiveKey(key: string): boolean {
 
 function isSensitiveValue(value: unknown): boolean {
   if (typeof value !== 'string') return false;
-  
+
   for (const pattern of SENSITIVE_PATTERNS) {
     if (pattern.test(value)) {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -56,36 +56,36 @@ function redactValue(value: unknown): string {
   if (value === null || value === undefined) {
     return String(value);
   }
-  
+
   if (typeof value === 'string') {
     if (value.length === 0) return '(empty)';
     if (value.length <= 8) return '[REDACTED]';
     return `${value.slice(0, 4)}...[REDACTED]...${value.slice(-4)}`;
   }
-  
+
   return '[REDACTED]';
 }
 
 function redactObject(obj: unknown, depth = 0): unknown {
   if (depth > 10) return '[MAX_DEPTH]';
-  
+
   if (obj === null || obj === undefined) {
     return obj;
   }
-  
+
   if (Array.isArray(obj)) {
-    return obj.map(item => redactObject(item, depth + 1));
+    return obj.map((item) => redactObject(item, depth + 1));
   }
-  
+
   if (typeof obj !== 'object') {
     if (isSensitiveValue(obj)) {
       return redactValue(obj);
     }
     return obj;
   }
-  
+
   const redacted: Record<string, unknown> = {};
-  
+
   for (const [key, value] of Object.entries(obj)) {
     if (isSensitiveKey(key)) {
       redacted[key] = redactValue(value);
@@ -97,12 +97,12 @@ function redactObject(obj: unknown, depth = 0): unknown {
       redacted[key] = value;
     }
   }
-  
+
   return redacted;
 }
 
 function formatArgs(...args: unknown[]): unknown[] {
-  return args.map(arg => {
+  return args.map((arg) => {
     if (typeof arg === 'object' && arg !== null) {
       return redactObject(arg);
     }
@@ -142,8 +142,7 @@ class Logger {
     console.error(this.prefix, '[ERROR]', ...redacted);
   }
 
-  unsafe(...args: unknown[]): void {
-  }
+  unsafe(...args: unknown[]): void {}
 }
 
 export const logger = new Logger('[AINTIVIRUS]');

@@ -1,24 +1,19 @@
-
-
 import React, { useMemo } from 'react';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-
 export interface ChainPillProps {
-  
   chain: ChainType;
-  
+
   evmChainId?: EVMChainId;
-  
+
   testnet?: boolean;
-  
+
   size?: 'xs' | 'sm' | 'md';
-  
+
   variant?: 'full' | 'short' | 'icon-only';
-  
+
   className?: string;
 }
-
 
 interface ChainConfig {
   name: string;
@@ -28,9 +23,7 @@ interface ChainConfig {
   icon: React.ReactNode;
 }
 
-
 const EVM_CHAINS: Record<string, ChainConfig> = {
-  
   ethereum: {
     name: 'Ethereum',
     shortName: 'ETH',
@@ -66,7 +59,7 @@ const EVM_CHAINS: Record<string, ChainConfig> = {
     bgColor: 'rgba(0, 82, 255, 0.12)',
     icon: <BaseIcon />,
   },
-  
+
   '1': {
     name: 'Ethereum',
     shortName: 'ETH',
@@ -126,7 +119,6 @@ const DEFAULT_CONFIG: ChainConfig = {
   bgColor: 'rgba(152, 152, 168, 0.12)',
   icon: <UnknownIcon />,
 };
-
 
 function EthereumIcon() {
   return (
@@ -190,11 +182,12 @@ function UnknownIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="currentColor">
       <circle cx="8" cy="8" r="5" opacity="0.3" />
-      <text x="8" y="11" fontSize="8" textAnchor="middle" fill="currentColor">?</text>
+      <text x="8" y="11" fontSize="8" textAnchor="middle" fill="currentColor">
+        ?
+      </text>
     </svg>
   );
 }
-
 
 export const ChainPill: React.FC<ChainPillProps> = ({
   chain,
@@ -213,9 +206,9 @@ export const ChainPill: React.FC<ChainPillProps> = ({
     }
     return DEFAULT_CONFIG;
   }, [chain, evmChainId]);
-  
+
   const displayName = variant === 'full' ? config.name : config.shortName;
-  
+
   const sizeStyles = {
     xs: {
       height: '18px',
@@ -239,17 +232,19 @@ export const ChainPill: React.FC<ChainPillProps> = ({
       gap: '5px',
     },
   };
-  
+
   const s = sizeStyles[size];
-  
+
   return (
     <>
       <span
         className={`chain-pill chain-pill-${size} ${testnet ? 'testnet' : ''} ${className}`}
-        style={{
-          '--chain-color': config.color,
-          '--chain-bg': config.bgColor,
-        } as React.CSSProperties}
+        style={
+          {
+            '--chain-color': config.color,
+            '--chain-bg': config.bgColor,
+          } as React.CSSProperties
+        }
         role="img"
         aria-label={`${config.name}${testnet ? ' Testnet' : ''}`}
       >
@@ -263,7 +258,7 @@ export const ChainPill: React.FC<ChainPillProps> = ({
           </span>
         )}
       </span>
-      
+
       <style>{`
         .chain-pill {
           display: inline-flex;

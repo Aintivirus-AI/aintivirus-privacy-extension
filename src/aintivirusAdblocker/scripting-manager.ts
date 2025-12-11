@@ -1,5 +1,3 @@
-
-
 interface RulesetDetails {
   id: string;
   name: string;
@@ -41,14 +39,11 @@ interface FilteringModeDetails {
   complete: Set<string>;
 }
 
-
 let rulesetDetailsCache: Map<string, RulesetDetails> | null = null;
 let scriptletDetailsCache: Map<string, ScriptletDetails[string]> | null = null;
 let genericDetailsCache: Map<string, GenericDetails[string]> | null = null;
 
-
 let registrationBarrier = false;
-
 
 function matchFromHostname(hn: string): string {
   return hn === '*' || hn === 'all-urls' ? '<all_urls>' : `*://*.${hn}/*`;
@@ -124,18 +119,15 @@ function normalizeMatches(matches: string[]): void {
   }
 }
 
-
 async function fetchJSON<T>(path: string): Promise<T | null> {
   try {
     const url = chrome.runtime.getURL(path.startsWith('/') ? path : `/${path}`);
     const response = await fetch(url);
     if (!response.ok) {
-
       return null;
     }
     return await response.json();
   } catch (error) {
-
     return null;
   }
 }
@@ -145,9 +137,11 @@ async function getRulesetDetails(): Promise<Map<string, RulesetDetails>> {
     return rulesetDetailsCache;
   }
 
-  const entries = await fetchJSON<RulesetDetails[]>('/aintivirusAdblocker/rulesets/ruleset-details.json');
+  const entries = await fetchJSON<RulesetDetails[]>(
+    '/aintivirusAdblocker/rulesets/ruleset-details.json',
+  );
   if (entries) {
-    rulesetDetailsCache = new Map(entries.map(entry => [entry.id, entry]));
+    rulesetDetailsCache = new Map(entries.map((entry) => [entry.id, entry]));
   } else {
     rulesetDetailsCache = new Map();
   }
@@ -159,7 +153,9 @@ async function getScriptletDetails(): Promise<Map<string, ScriptletDetails[strin
     return scriptletDetailsCache;
   }
 
-  const entries = await fetchJSON<[string, ScriptletDetails[string]][]>('/aintivirusAdblocker/rulesets/scriptlet-details.json');
+  const entries = await fetchJSON<[string, ScriptletDetails[string]][]>(
+    '/aintivirusAdblocker/rulesets/scriptlet-details.json',
+  );
   if (entries) {
     scriptletDetailsCache = new Map(entries);
   } else {
@@ -173,7 +169,9 @@ async function getGenericDetails(): Promise<Map<string, GenericDetails[string]>>
     return genericDetailsCache;
   }
 
-  const entries = await fetchJSON<[string, GenericDetails[string]][]>('/aintivirusAdblocker/rulesets/generic-details.json');
+  const entries = await fetchJSON<[string, GenericDetails[string]][]>(
+    '/aintivirusAdblocker/rulesets/generic-details.json',
+  );
   if (entries) {
     genericDetailsCache = new Map(entries);
   } else {
@@ -194,10 +192,8 @@ async function getFilteringModeDetailsFromIndex(): Promise<FilteringModeDetails>
         complete: new Set(raw.complete || []),
       };
     }
-  } catch {
-  }
-  
-  
+  } catch {}
+
   return {
     none: new Set(),
     basic: new Set(),
@@ -222,9 +218,8 @@ async function getEnabledRulesetsDetails(): Promise<RulesetDetails[]> {
   return out;
 }
 
-
 function normalizeRegisteredContentScripts(
-  registered: chrome.scripting.RegisteredContentScript[]
+  registered: chrome.scripting.RegisteredContentScript[],
 ): chrome.scripting.RegisteredContentScript[] {
   for (const entry of registered) {
     const { css = [], js = [] } = entry;
@@ -244,7 +239,6 @@ function normalizeRegisteredContentScripts(
   return registered;
 }
 
-
 interface RegistrationContext {
   rulesetsDetails: RulesetDetails[];
   before: Map<string, chrome.scripting.RegisteredContentScript>;
@@ -252,18 +246,17 @@ interface RegistrationContext {
   toRemove: string[];
 }
 
-
 function registerGeneric(
   context: RegistrationContext,
   genericDetails: Map<string, GenericDetails[string]>,
-  filteringModeDetails: FilteringModeDetails
+  filteringModeDetails: FilteringModeDetails,
 ): void {
   const { rulesetsDetails, before, toAdd } = context;
 
   const excludedByFilter: string[] = [];
   const includedByFilter: string[] = [];
   const js: string[] = [];
-  
+
   for (const details of rulesetsDetails) {
     const hostnames = genericDetails.get(details.id);
     if (hostnames) {
@@ -281,7 +274,10 @@ function registerGeneric(
 
   if (js.length === 0) return;
 
-  js.unshift('/aintivirusAdblocker/js/scripting/css-api.js', '/aintivirusAdblocker/js/scripting/isolated-api.js');
+  js.unshift(
+    '/aintivirusAdblocker/js/scripting/css-api.js',
+    '/aintivirusAdblocker/js/scripting/isolated-api.js',
+  );
   js.push('/aintivirusAdblocker/js/scripting/css-generic.js');
 
   const { none, basic, optimal, complete } = filteringModeDetails;
@@ -289,17 +285,16 @@ function registerGeneric(
   const excludedByMode = [...Array.from(none), ...Array.from(basic), ...Array.from(optimal)];
 
   if (!complete.has('all-urls')) {
-    
     const matches = [
       ...matchesFromHostnames(subtractHostnameIters(includedByMode, excludedByFilter)),
       ...matchesFromHostnames(intersectHostnameIters(includedByMode, includedByFilter)),
     ];
     if (matches.length === 0) return;
-    
+
     const id = 'adblocker-css-generic-some';
     const registered = before.get(id);
     before.delete(id);
-    
+
     const directive: chrome.scripting.RegisteredContentScript = {
       id,
       js,
@@ -307,7 +302,7 @@ function registerGeneric(
       matches,
       runAt: 'document_idle',
     };
-    
+
     if (!registered) {
       toAdd.push(directive);
     } else if (!strArrayEq(registered.js, js, false) || !strArrayEq(registered.matches, matches)) {
@@ -317,16 +312,15 @@ function registerGeneric(
     return;
   }
 
-  
   const excludeMatches = [
     ...matchesFromHostnames(excludedByMode),
     ...matchesFromHostnames(excludedByFilter),
   ];
-  
+
   const idAll = 'adblocker-css-generic-all';
   const registeredAll = before.get(idAll);
   before.delete(idAll);
-  
+
   const directiveAll: chrome.scripting.RegisteredContentScript = {
     id: idAll,
     js,
@@ -337,22 +331,24 @@ function registerGeneric(
   if (excludeMatches.length !== 0) {
     directiveAll.excludeMatches = excludeMatches;
   }
-  
+
   if (!registeredAll) {
     toAdd.push(directiveAll);
-  } else if (!strArrayEq(registeredAll.js, js, false) || !strArrayEq(registeredAll.excludeMatches, excludeMatches)) {
+  } else if (
+    !strArrayEq(registeredAll.js, js, false) ||
+    !strArrayEq(registeredAll.excludeMatches, excludeMatches)
+  ) {
     context.toRemove.push(idAll);
     toAdd.push(directiveAll);
   }
 
-  
   const matchesSome = matchesFromHostnames(subtractHostnameIters(includedByFilter, excludedByMode));
   if (matchesSome.length === 0) return;
-  
+
   const idSome = 'adblocker-css-generic-some';
   const registeredSome = before.get(idSome);
   before.delete(idSome);
-  
+
   const directiveSome: chrome.scripting.RegisteredContentScript = {
     id: idSome,
     js,
@@ -360,27 +356,29 @@ function registerGeneric(
     matches: matchesSome,
     runAt: 'document_idle',
   };
-  
+
   if (!registeredSome) {
     toAdd.push(directiveSome);
-  } else if (!strArrayEq(registeredSome.js, js, false) || !strArrayEq(registeredSome.matches, matchesSome)) {
+  } else if (
+    !strArrayEq(registeredSome.js, js, false) ||
+    !strArrayEq(registeredSome.matches, matchesSome)
+  ) {
     context.toRemove.push(idSome);
     toAdd.push(directiveSome);
   }
 }
 
-
 function registerGenericHigh(
   context: RegistrationContext,
   genericDetails: Map<string, GenericDetails[string]>,
-  filteringModeDetails: FilteringModeDetails
+  filteringModeDetails: FilteringModeDetails,
 ): void {
   const { rulesetsDetails, before, toAdd } = context;
 
   const excludeHostnames: string[] = [];
   const includeHostnames: string[] = [];
   const css: string[] = [];
-  
+
   for (const details of rulesetsDetails) {
     const hostnames = genericDetails.get(details.id);
     if (hostnames) {
@@ -409,7 +407,9 @@ function registerGenericHigh(
     excludeMatches.push(...matchesFromHostnames(excludeHostnames));
     matches.push('<all_urls>');
   } else {
-    matches.push(...matchesFromHostnames(subtractHostnameIters(Array.from(complete), excludeHostnames)));
+    matches.push(
+      ...matchesFromHostnames(subtractHostnameIters(Array.from(complete), excludeHostnames)),
+    );
   }
 
   if (matches.length === 0) return;
@@ -431,16 +431,19 @@ function registerGenericHigh(
 
   if (!registered) {
     toAdd.push(directive);
-  } else if (!strArrayEq(registered.css, css, false) || !strArrayEq(registered.matches, matches) || !strArrayEq(registered.excludeMatches, excludeMatches)) {
+  } else if (
+    !strArrayEq(registered.css, css, false) ||
+    !strArrayEq(registered.matches, matches) ||
+    !strArrayEq(registered.excludeMatches, excludeMatches)
+  ) {
     context.toRemove.push(id);
     toAdd.push(directive);
   }
 }
 
-
 function registerSpecific(
   context: RegistrationContext,
-  filteringModeDetails: FilteringModeDetails
+  filteringModeDetails: FilteringModeDetails,
 ): void {
   const { rulesetsDetails, before, toAdd } = context;
   const js: string[] = [];
@@ -454,15 +457,15 @@ function registerSpecific(
   if (js.length === 0) return;
 
   const { none, basic, optimal, complete } = filteringModeDetails;
-  const matches = [
-    ...matchesFromHostnames(optimal),
-    ...matchesFromHostnames(complete),
-  ];
+  const matches = [...matchesFromHostnames(optimal), ...matchesFromHostnames(complete)];
   if (matches.length === 0) return;
 
   normalizeMatches(matches);
 
-  js.unshift('/aintivirusAdblocker/js/scripting/css-api.js', '/aintivirusAdblocker/js/scripting/isolated-api.js');
+  js.unshift(
+    '/aintivirusAdblocker/js/scripting/css-api.js',
+    '/aintivirusAdblocker/js/scripting/isolated-api.js',
+  );
   js.push('/aintivirusAdblocker/js/scripting/css-specific.js');
 
   const excludeMatches: string[] = [];
@@ -490,16 +493,19 @@ function registerSpecific(
 
   if (!registered) {
     toAdd.push(directive);
-  } else if (!strArrayEq(registered.js, js, false) || !strArrayEq(registered.matches, matches) || !strArrayEq(registered.excludeMatches, excludeMatches)) {
+  } else if (
+    !strArrayEq(registered.js, js, false) ||
+    !strArrayEq(registered.matches, matches) ||
+    !strArrayEq(registered.excludeMatches, excludeMatches)
+  ) {
     context.toRemove.push(id);
     toAdd.push(directive);
   }
 }
 
-
 function registerProcedural(
   context: RegistrationContext,
-  filteringModeDetails: FilteringModeDetails
+  filteringModeDetails: FilteringModeDetails,
 ): void {
   const { rulesetsDetails, before, toAdd } = context;
   const js: string[] = [];
@@ -512,23 +518,21 @@ function registerProcedural(
   if (js.length === 0) return;
 
   const { none, basic, optimal, complete } = filteringModeDetails;
-  const matches = [
-    ...matchesFromHostnames(optimal),
-    ...matchesFromHostnames(complete),
-  ];
+  const matches = [...matchesFromHostnames(optimal), ...matchesFromHostnames(complete)];
   if (matches.length === 0) return;
 
   normalizeMatches(matches);
 
-  js.unshift('/aintivirusAdblocker/js/scripting/css-api.js', '/aintivirusAdblocker/js/scripting/isolated-api.js', '/aintivirusAdblocker/js/scripting/css-procedural-api.js');
+  js.unshift(
+    '/aintivirusAdblocker/js/scripting/css-api.js',
+    '/aintivirusAdblocker/js/scripting/isolated-api.js',
+    '/aintivirusAdblocker/js/scripting/css-procedural-api.js',
+  );
   js.push('/aintivirusAdblocker/js/scripting/css-procedural.js');
 
   const excludeMatches: string[] = [];
   if (!none.has('all-urls') && !basic.has('all-urls')) {
-    const toExclude = [
-      ...matchesFromHostnames(none),
-      ...matchesFromHostnames(basic),
-    ];
+    const toExclude = [...matchesFromHostnames(none), ...matchesFromHostnames(basic)];
     excludeMatches.push(...toExclude);
   }
 
@@ -549,23 +553,25 @@ function registerProcedural(
 
   if (!registered) {
     toAdd.push(directive);
-  } else if (!strArrayEq(registered.js, js, false) || !strArrayEq(registered.matches, matches) || !strArrayEq(registered.excludeMatches, excludeMatches)) {
+  } else if (
+    !strArrayEq(registered.js, js, false) ||
+    !strArrayEq(registered.matches, matches) ||
+    !strArrayEq(registered.excludeMatches, excludeMatches)
+  ) {
     context.toRemove.push(id);
     toAdd.push(directive);
   }
 }
 
-
 function registerScriptlets(
   context: RegistrationContext,
   scriptletDetails: Map<string, ScriptletDetails[string]>,
-  filteringModeDetails: FilteringModeDetails
+  filteringModeDetails: FilteringModeDetails,
 ): void {
   const { rulesetsDetails, before, toAdd } = context;
 
   const hasBroadHostPermission =
-    filteringModeDetails.optimal.has('all-urls') ||
-    filteringModeDetails.complete.has('all-urls');
+    filteringModeDetails.optimal.has('all-urls') || filteringModeDetails.complete.has('all-urls');
 
   const permissionRevokedMatches = [
     ...matchesFromHostnames(filteringModeDetails.none),
@@ -576,10 +582,10 @@ function registerScriptlets(
     ...Array.from(filteringModeDetails.complete),
   ];
 
-  for (const rulesetId of rulesetsDetails.map(v => v.id)) {
+  for (const rulesetId of rulesetsDetails.map((v) => v.id)) {
     const worlds = scriptletDetails.get(rulesetId);
     if (!worlds) continue;
-    
+
     for (const world of Object.keys(worlds)) {
       const id = `adblocker-scriptlet-${rulesetId}-${world.toLowerCase()}`;
 
@@ -587,7 +593,7 @@ function registerScriptlets(
       const excludeMatches: string[] = [];
       const hostnames = worlds[world as keyof typeof worlds];
       let targetHostnames: string[] = [];
-      
+
       if (hasBroadHostPermission) {
         excludeMatches.push(...permissionRevokedMatches);
         targetHostnames = hostnames || [];
@@ -599,7 +605,7 @@ function registerScriptlets(
         }
       }
       if (targetHostnames.length === 0) continue;
-      
+
       matches.push(...matchesFromHostnames(targetHostnames));
       normalizeMatches(matches);
 
@@ -608,7 +614,9 @@ function registerScriptlets(
 
       const directive: chrome.scripting.RegisteredContentScript = {
         id,
-        js: [`/aintivirusAdblocker/rulesets/scripting/scriptlet/${world.toLowerCase()}/${rulesetId}.js`],
+        js: [
+          `/aintivirusAdblocker/rulesets/scripting/scriptlet/${world.toLowerCase()}/${rulesetId}.js`,
+        ],
         matches,
         allFrames: true,
         matchOriginAsFallback: true,
@@ -621,14 +629,16 @@ function registerScriptlets(
 
       if (!registered) {
         toAdd.push(directive);
-      } else if (!strArrayEq(registered.matches, matches) || !strArrayEq(registered.excludeMatches, excludeMatches)) {
+      } else if (
+        !strArrayEq(registered.matches, matches) ||
+        !strArrayEq(registered.excludeMatches, excludeMatches)
+      ) {
         context.toRemove.push(id);
         toAdd.push(directive);
       }
     }
   }
 }
-
 
 export async function registerInjectables(): Promise<boolean> {
   if (typeof chrome.scripting === 'undefined') {
@@ -641,24 +651,19 @@ export async function registerInjectables(): Promise<boolean> {
   registrationBarrier = true;
 
   try {
-    const [
-      filteringModeDetails,
-      rulesetsDetails,
-      scriptletDetails,
-      genericDetails,
-      registered,
-    ] = await Promise.all([
-      getFilteringModeDetailsFromIndex(),
-      getEnabledRulesetsDetails(),
-      getScriptletDetails(),
-      getGenericDetails(),
-      chrome.scripting.getRegisteredContentScripts(),
-    ]);
+    const [filteringModeDetails, rulesetsDetails, scriptletDetails, genericDetails, registered] =
+      await Promise.all([
+        getFilteringModeDetailsFromIndex(),
+        getEnabledRulesetsDetails(),
+        getScriptletDetails(),
+        getGenericDetails(),
+        chrome.scripting.getRegisteredContentScripts(),
+      ]);
 
     const before = new Map(
       normalizeRegisteredContentScripts(registered)
-        .filter(r => r.id.startsWith('adblocker-'))
-        .map(entry => [entry.id, entry])
+        .filter((r) => r.id.startsWith('adblocker-'))
+        .map((entry) => [entry.id, entry]),
     );
 
     if (rulesetsDetails.length === 0) {
@@ -678,28 +683,24 @@ export async function registerInjectables(): Promise<boolean> {
       toRemove: [],
     };
 
-    
     registerProcedural(context, filteringModeDetails);
     registerScriptlets(context, scriptletDetails, filteringModeDetails);
     registerSpecific(context, filteringModeDetails);
     registerGeneric(context, genericDetails, filteringModeDetails);
     registerGenericHigh(context, genericDetails, filteringModeDetails);
 
-    
     context.toRemove.push(...Array.from(before.keys()));
 
     if (context.toRemove.length > 0) {
       try {
         await chrome.scripting.unregisterContentScripts({ ids: context.toRemove });
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     if (context.toAdd.length > 0) {
       try {
         await chrome.scripting.registerContentScripts(context.toAdd);
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     registrationBarrier = false;
@@ -710,7 +711,6 @@ export async function registerInjectables(): Promise<boolean> {
   }
 }
 
-
 export async function unregisterAllInjectables(): Promise<void> {
   if (typeof chrome.scripting === 'undefined') {
     return;
@@ -718,19 +718,15 @@ export async function unregisterAllInjectables(): Promise<void> {
 
   try {
     const registered = await chrome.scripting.getRegisteredContentScripts();
-    const adblockerScripts = registered.filter(r => r.id.startsWith('adblocker-'));
+    const adblockerScripts = registered.filter((r) => r.id.startsWith('adblocker-'));
 
     if (adblockerScripts.length > 0) {
       await chrome.scripting.unregisterContentScripts({
-        ids: adblockerScripts.map(s => s.id),
+        ids: adblockerScripts.map((s) => s.id),
       });
-
     }
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
-
 
 export const registerCosmeticFiltering = registerInjectables;
 export const unregisterCosmeticFiltering = unregisterAllInjectables;

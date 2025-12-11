@@ -37,9 +37,7 @@ describe('AddressChip', () => {
 
   describe('Rendering', () => {
     it('should render with Solana address', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       // Should display truncated address
       expect(screen.getByText(/\.\.\./, { exact: false })).toBeInTheDocument();
@@ -47,7 +45,7 @@ describe('AddressChip', () => {
 
     it('should render with EVM address', () => {
       renderWithProvider(
-        <AddressChip address={TEST_EVM_ADDRESS} chain="evm" evmChainId="ethereum" />
+        <AddressChip address={TEST_EVM_ADDRESS} chain="evm" evmChainId="ethereum" />,
       );
 
       expect(screen.getByText(/\.\.\./, { exact: false })).toBeInTheDocument();
@@ -55,7 +53,7 @@ describe('AddressChip', () => {
 
     it('should render with label', () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" label="My Wallet" />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" label="My Wallet" />,
       );
 
       expect(screen.getByText('My Wallet')).toBeInTheDocument();
@@ -63,7 +61,7 @@ describe('AddressChip', () => {
 
     it('should display full address in title', () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showFullOnHover />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showFullOnHover />,
       );
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
@@ -72,7 +70,7 @@ describe('AddressChip', () => {
 
     it('should not display title when showFullOnHover is false', () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showFullOnHover={false} />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showFullOnHover={false} />,
       );
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
@@ -82,27 +80,21 @@ describe('AddressChip', () => {
 
   describe('Sizes', () => {
     it('should render small size', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" size="sm" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" size="sm" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       expect(chip).toHaveClass('address-chip-sm');
     });
 
     it('should render medium size by default', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       expect(chip).toHaveClass('address-chip-md');
     });
 
     it('should render large size', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" size="lg" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" size="lg" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       expect(chip).toHaveClass('address-chip-lg');
@@ -112,7 +104,7 @@ describe('AddressChip', () => {
   describe('Copy functionality', () => {
     it('should copy address when clicking (without copy button)', async () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showCopyButton={false} />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showCopyButton={false} />,
       );
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
@@ -125,7 +117,7 @@ describe('AddressChip', () => {
 
     it('should copy address when clicking copy button', async () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showCopyButton />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showCopyButton />,
       );
 
       const copyButton = screen.getByLabelText('Copy address');
@@ -139,7 +131,7 @@ describe('AddressChip', () => {
     it('should call onCopy callback', async () => {
       const onCopy = jest.fn();
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" onCopy={onCopy} />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" onCopy={onCopy} />,
       );
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
@@ -151,9 +143,7 @@ describe('AddressChip', () => {
     });
 
     it('should show copied state', async () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       fireEvent.click(chip);
@@ -166,25 +156,24 @@ describe('AddressChip', () => {
     it('should handle copy error', async () => {
       mockWriteText.mockRejectedValueOnce(new Error('Copy failed'));
 
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       fireEvent.click(chip);
 
       // Should show error toast (check toast appears)
-      await waitFor(() => {
-        expect(screen.getByText('Failed to copy')).toBeInTheDocument();
-      }, { timeout: 3000 });
+      await waitFor(
+        () => {
+          expect(screen.getByText('Failed to copy')).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
     });
   });
 
   describe('Explorer link', () => {
     it('should show explorer link by default', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       // ExplorerLinkIcon should be rendered
       expect(document.querySelector('.address-chip-explorer')).toBeInTheDocument();
@@ -192,7 +181,7 @@ describe('AddressChip', () => {
 
     it('should hide explorer link when showExplorer is false', () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showExplorer={false} />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" showExplorer={false} />,
       );
 
       expect(document.querySelector('.address-chip-explorer')).not.toBeInTheDocument();
@@ -201,9 +190,7 @@ describe('AddressChip', () => {
 
   describe('First time warning', () => {
     it('should show warning icon for first time addresses', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" isFirstTime />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" isFirstTime />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       expect(chip).toHaveClass('first-time');
@@ -211,9 +198,7 @@ describe('AddressChip', () => {
     });
 
     it('should not show warning icon by default', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       expect(chip).not.toHaveClass('first-time');
@@ -223,7 +208,7 @@ describe('AddressChip', () => {
   describe('Accessibility', () => {
     it('should have correct aria-label', () => {
       renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" label="Main Wallet" />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" label="Main Wallet" />,
       );
 
       const chip = screen.getByRole('button', { name: /Main Wallet:.*Click to copy/i });
@@ -233,18 +218,14 @@ describe('AddressChip', () => {
     });
 
     it('should be focusable', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       expect(chip).toHaveAttribute('tabIndex', '0');
     });
 
     it('should support keyboard interaction', async () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
       chip.focus();
@@ -258,9 +239,7 @@ describe('AddressChip', () => {
 
   describe('Identicon', () => {
     it('should render identicon', () => {
-      renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-      );
+      renderWithProvider(<AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />);
 
       const identicon = document.querySelector('.address-identicon');
       expect(identicon).toBeInTheDocument();
@@ -268,7 +247,7 @@ describe('AddressChip', () => {
 
     it('should have consistent identicon for same address', () => {
       const { rerender } = renderWithProvider(
-        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />,
       );
 
       const identicon1 = document.querySelector('.address-identicon svg')?.innerHTML;
@@ -276,7 +255,7 @@ describe('AddressChip', () => {
       rerender(
         <ToastProvider>
           <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" />
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       const identicon2 = document.querySelector('.address-identicon svg')?.innerHTML;
@@ -288,11 +267,7 @@ describe('AddressChip', () => {
   describe('Custom styling', () => {
     it('should apply custom className', () => {
       renderWithProvider(
-        <AddressChip
-          address={TEST_SOLANA_ADDRESS}
-          chain="solana"
-          className="custom-class"
-        />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" className="custom-class" />,
       );
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
@@ -301,11 +276,7 @@ describe('AddressChip', () => {
 
     it('should apply custom style', () => {
       renderWithProvider(
-        <AddressChip
-          address={TEST_SOLANA_ADDRESS}
-          chain="solana"
-          style={{ marginTop: '10px' }}
-        />
+        <AddressChip address={TEST_SOLANA_ADDRESS} chain="solana" style={{ marginTop: '10px' }} />,
       );
 
       const chip = screen.getByRole('button', { name: /.*Click to copy/i });
@@ -313,4 +284,3 @@ describe('AddressChip', () => {
     });
   });
 });
-

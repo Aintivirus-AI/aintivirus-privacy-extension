@@ -1,55 +1,48 @@
-
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronIcon, CopyIcon, CheckIcon } from '../Icons';
 import { useToast } from './ToastProvider';
 
-
 export interface DetailsAccordionProps {
-  
   title?: string;
-  
+
   defaultExpanded?: boolean;
-  
+
   expanded?: boolean;
-  
+
   onToggle?: (expanded: boolean) => void;
-  
+
   children: React.ReactNode;
-  
+
   itemCount?: number;
-  
+
   className?: string;
 }
 
 export interface DetailsRowProps {
-  
   label: string;
-  
+
   value: string | React.ReactNode;
-  
+
   mono?: boolean;
-  
+
   copyable?: boolean;
-  
+
   copyValue?: string;
-  
+
   highlight?: 'warning' | 'danger' | 'info';
-  
+
   className?: string;
 }
 
 export interface DetailsCodeBlockProps {
-  
   data: string;
-  
+
   label?: string;
-  
+
   maxHeight?: number;
-  
+
   className?: string;
 }
-
 
 export const DetailsRow: React.FC<DetailsRowProps> = ({
   label,
@@ -62,11 +55,11 @@ export const DetailsRow: React.FC<DetailsRowProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const { addToast } = useToast();
-  
+
   const handleCopy = useCallback(async () => {
     const textToCopy = copyValue || (typeof value === 'string' ? value : '');
     if (!textToCopy) return;
-    
+
     try {
       await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
@@ -76,15 +69,13 @@ export const DetailsRow: React.FC<DetailsRowProps> = ({
       addToast('Failed to copy', 'error');
     }
   }, [value, copyValue, addToast]);
-  
+
   return (
     <>
       <div className={`details-row ${highlight ? `highlight-${highlight}` : ''} ${className}`}>
         <span className="details-row-label">{label}</span>
         <div className="details-row-value-container">
-          <span className={`details-row-value ${mono ? 'mono' : ''}`}>
-            {value}
-          </span>
+          <span className={`details-row-value ${mono ? 'mono' : ''}`}>{value}</span>
           {copyable && typeof value === 'string' && (
             <button
               className={`details-row-copy ${copied ? 'copied' : ''}`}
@@ -97,7 +88,7 @@ export const DetailsRow: React.FC<DetailsRowProps> = ({
           )}
         </div>
       </div>
-      
+
       <style>{`
         .details-row {
           display: flex;
@@ -180,7 +171,6 @@ export const DetailsRow: React.FC<DetailsRowProps> = ({
   );
 };
 
-
 export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
   data,
   label,
@@ -189,7 +179,7 @@ export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const { addToast } = useToast();
-  
+
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(data);
@@ -200,11 +190,9 @@ export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
       addToast('Failed to copy', 'error');
     }
   }, [data, addToast]);
-  
-  const dataSize = data.startsWith('0x') 
-    ? Math.floor((data.length - 2) / 2)
-    : data.length;
-  
+
+  const dataSize = data.startsWith('0x') ? Math.floor((data.length - 2) / 2) : data.length;
+
   return (
     <>
       <div className={`details-code-block ${className}`}>
@@ -227,7 +215,7 @@ export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
           {data}
         </pre>
       </div>
-      
+
       <style>{`
         .details-code-block {
           margin-top: 8px;
@@ -297,7 +285,6 @@ export const DetailsCodeBlock: React.FC<DetailsCodeBlockProps> = ({
   );
 };
 
-
 export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
   title = 'Details',
   defaultExpanded = false,
@@ -310,17 +297,16 @@ export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
   const isControlled = controlledExpanded !== undefined;
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const expanded = isControlled ? controlledExpanded : internalExpanded;
-  
+
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
-  
-  
+
   useEffect(() => {
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);
     }
   }, [children, expanded]);
-  
+
   const handleToggle = () => {
     const newExpanded = !expanded;
     if (isControlled) {
@@ -329,7 +315,7 @@ export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
       setInternalExpanded(newExpanded);
     }
   };
-  
+
   return (
     <>
       <div className={`details-accordion ${expanded ? 'expanded' : ''} ${className}`}>
@@ -343,11 +329,9 @@ export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
             <ChevronIcon size={14} />
           </span>
           <span className="details-accordion-title">{title}</span>
-          {itemCount !== undefined && (
-            <span className="details-accordion-count">{itemCount}</span>
-          )}
+          {itemCount !== undefined && <span className="details-accordion-count">{itemCount}</span>}
         </button>
-        
+
         <div
           className="details-accordion-panel"
           style={{
@@ -360,7 +344,7 @@ export const DetailsAccordion: React.FC<DetailsAccordionProps> = ({
           </div>
         </div>
       </div>
-      
+
       <style>{`
         .details-accordion {
           background: var(--bg-tertiary);

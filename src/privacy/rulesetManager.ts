@@ -1,7 +1,4 @@
-
-
 import { storage } from '@shared/storage';
-
 
 export const ALL_ADBLOCKER_RULESETS = [
   'ublock-filters',
@@ -24,8 +21,7 @@ export const ALL_ADBLOCKER_RULESETS = [
   'stevenblack-hosts',
 ] as const;
 
-export type AdblockerRulesetId = typeof ALL_ADBLOCKER_RULESETS[number];
-
+export type AdblockerRulesetId = (typeof ALL_ADBLOCKER_RULESETS)[number];
 
 export const DEFAULT_ADBLOCKER_RULESETS: AdblockerRulesetId[] = [
   'ublock-filters',
@@ -36,9 +32,7 @@ export const DEFAULT_ADBLOCKER_RULESETS: AdblockerRulesetId[] = [
   'urlhaus-full',
 ];
 
-
 export type FilteringLevel = 'off' | 'minimal' | 'basic' | 'optimal' | 'complete';
-
 
 export const FILTERING_LEVEL_RULESETS: Record<FilteringLevel, AdblockerRulesetId[]> = {
   off: [],
@@ -47,7 +41,6 @@ export const FILTERING_LEVEL_RULESETS: Record<FilteringLevel, AdblockerRulesetId
   optimal: ['ublock-filters', 'easylist', 'easyprivacy', 'pgl', 'ublock-badware', 'urlhaus-full'],
   complete: [...ALL_ADBLOCKER_RULESETS],
 };
-
 
 export interface RulesetState {
   enabledRulesets: AdblockerRulesetId[];
@@ -61,56 +54,49 @@ export const DEFAULT_RULESET_STATE: RulesetState = {
   lastUpdated: Date.now(),
 };
 
-
 export async function getRulesetState(): Promise<RulesetState> {
   const state = await storage.get('rulesetState');
   return state || DEFAULT_RULESET_STATE;
 }
-
 
 export async function getEnabledRulesets(): Promise<AdblockerRulesetId[]> {
   const state = await getRulesetState();
   return state.enabledRulesets;
 }
 
-
 export async function enableRuleset(rulesetId: AdblockerRulesetId): Promise<void> {
   const state = await getRulesetState();
-  
+
   if (!state.enabledRulesets.includes(rulesetId)) {
     state.enabledRulesets.push(rulesetId);
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
-    
+
     await chrome.declarativeNetRequest.updateEnabledRulesets({
       enableRulesetIds: [rulesetId],
     });
-
   }
 }
 
-
 export async function disableRuleset(rulesetId: AdblockerRulesetId): Promise<void> {
   const state = await getRulesetState();
-  
+
   const index = state.enabledRulesets.indexOf(rulesetId);
   if (index >= 0) {
     state.enabledRulesets.splice(index, 1);
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
-    
+
     await chrome.declarativeNetRequest.updateEnabledRulesets({
       disableRulesetIds: [rulesetId],
     });
-
   }
 }
-
 
 export async function toggleRuleset(rulesetId: AdblockerRulesetId): Promise<boolean> {
   const state = await getRulesetState();
   const isEnabled = state.enabledRulesets.includes(rulesetId);
-  
+
   if (isEnabled) {
     await disableRuleset(rulesetId);
     return false;
@@ -120,63 +106,52 @@ export async function toggleRuleset(rulesetId: AdblockerRulesetId): Promise<bool
   }
 }
 
-
 export async function setFilteringLevel(level: FilteringLevel): Promise<void> {
-
   const targetRulesets = FILTERING_LEVEL_RULESETS[level];
   const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-  
-  
-  const toEnable = targetRulesets.filter(id => !currentlyEnabled.includes(id));
-  const toDisable = currentlyEnabled.filter(id => !(targetRulesets as string[]).includes(id));
-  
+
+  const toEnable = targetRulesets.filter((id) => !currentlyEnabled.includes(id));
+  const toDisable = currentlyEnabled.filter((id) => !(targetRulesets as string[]).includes(id));
+
   if (toEnable.length > 0 || toDisable.length > 0) {
     await chrome.declarativeNetRequest.updateEnabledRulesets({
       enableRulesetIds: toEnable,
       disableRulesetIds: toDisable,
     });
   }
-  
-  
+
   const state = await getRulesetState();
   state.enabledRulesets = [...targetRulesets];
   state.filteringLevel = level;
   state.lastUpdated = Date.now();
   await storage.set('rulesetState', state);
-
 }
-
 
 export async function getFilteringLevel(): Promise<FilteringLevel> {
   const state = await getRulesetState();
   return state.filteringLevel || 'optimal';
 }
 
-
 export async function initializeRulesetManager(): Promise<void> {
-
   try {
     const state = await getRulesetState();
     const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-    
-    
-    const toEnable = state.enabledRulesets.filter(id => !currentlyEnabled.includes(id));
-    const toDisable = currentlyEnabled.filter(id => 
-      ALL_ADBLOCKER_RULESETS.includes(id as AdblockerRulesetId) && !state.enabledRulesets.includes(id as AdblockerRulesetId)
+
+    const toEnable = state.enabledRulesets.filter((id) => !currentlyEnabled.includes(id));
+    const toDisable = currentlyEnabled.filter(
+      (id) =>
+        ALL_ADBLOCKER_RULESETS.includes(id as AdblockerRulesetId) &&
+        !state.enabledRulesets.includes(id as AdblockerRulesetId),
     );
-    
+
     if (toEnable.length > 0 || toDisable.length > 0) {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
         enableRulesetIds: toEnable,
         disableRulesetIds: toDisable,
       });
     }
-
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
-
 
 export async function getRulesetStats(): Promise<{
   enabledRulesets: string[];
@@ -189,7 +164,7 @@ export async function getRulesetStats(): Promise<{
   const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
   const availableSlots = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
   const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-  
+
   return {
     enabledRulesets: currentlyEnabled,
     availableRulesets: [...ALL_ADBLOCKER_RULESETS],
@@ -199,66 +174,48 @@ export async function getRulesetStats(): Promise<{
   };
 }
 
-
 export async function isRulesetEnabled(rulesetId: AdblockerRulesetId): Promise<boolean> {
   const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
   return currentlyEnabled.includes(rulesetId);
 }
 
-
 export async function resetRulesets(): Promise<void> {
   await setFilteringLevel('optimal');
-
 }
 
-
 export async function disableAllRulesets(): Promise<void> {
-
   try {
     const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
 
     if (currentlyEnabled.length > 0) {
-
       await chrome.declarativeNetRequest.updateEnabledRulesets({
         disableRulesetIds: currentlyEnabled,
       });
-
     } else {
-
     }
-    
-    
+
     const state = await getRulesetState();
     state.enabledRulesets = [];
     state.filteringLevel = 'off';
     state.lastUpdated = Date.now();
     await storage.set('rulesetState', state);
 
-    
     const afterDisable = await chrome.declarativeNetRequest.getEnabledRulesets();
 
     if (afterDisable.length === 0) {
-
     } else {
-
     }
-
   } catch (error) {
-
     throw error;
   }
 }
 
-
 export async function enableDefaultRulesets(): Promise<void> {
-
-
   try {
     await chrome.declarativeNetRequest.updateEnabledRulesets({
       enableRulesetIds: [...DEFAULT_ADBLOCKER_RULESETS],
     });
 
-    
     const state = await getRulesetState();
     state.enabledRulesets = [...DEFAULT_ADBLOCKER_RULESETS];
     state.filteringLevel = 'optimal';
@@ -266,14 +223,10 @@ export async function enableDefaultRulesets(): Promise<void> {
     await storage.set('rulesetState', state);
 
     const afterEnable = await chrome.declarativeNetRequest.getEnabledRulesets();
-
-
   } catch (error) {
-
     throw error;
   }
 }
-
 
 export const enableAllStaticRulesets = enableDefaultRulesets;
 export const disableAllStaticRulesets = disableAllRulesets;

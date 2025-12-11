@@ -1,7 +1,4 @@
-
-
 export type WarningLevel = 'info' | 'caution' | 'danger';
-
 
 export interface TxWarning {
   level: WarningLevel;
@@ -10,13 +7,11 @@ export interface TxWarning {
   description: string;
 }
 
-
 export interface FunctionSignature {
   name: string;
   params?: string[];
   category: 'token' | 'approval' | 'nft' | 'swap' | 'permit2' | 'router' | 'other';
 }
-
 
 export interface DecodedFunctionCall {
   selector: string;
@@ -24,7 +19,6 @@ export interface DecodedFunctionCall {
   category: string;
   params: DecodedParam[];
 }
-
 
 export interface DecodedParam {
   name: string;
@@ -35,7 +29,6 @@ export interface DecodedParam {
   isAmount?: boolean;
 }
 
-
 export type TxKind =
   | 'transfer'
   | 'approval'
@@ -45,7 +38,6 @@ export type TxKind =
   | 'contract_call'
   | 'permit2'
   | 'unknown';
-
 
 export interface TxDetails {
   to?: string;
@@ -61,7 +53,6 @@ export interface TxDetails {
   maxPriorityFee?: string;
 }
 
-
 export interface DecodedEvmTx {
   kind: TxKind;
   summary: string;
@@ -69,7 +60,6 @@ export interface DecodedEvmTx {
   details: TxDetails;
   decodedCall?: DecodedFunctionCall;
 }
-
 
 export interface TypedDataDomain {
   name?: string;
@@ -79,15 +69,12 @@ export interface TypedDataDomain {
   salt?: string;
 }
 
-
 export interface TypedDataTypeEntry {
   name: string;
   type: string;
 }
 
-
 export type TypedDataTypes = Record<string, TypedDataTypeEntry[]>;
-
 
 export interface TypedDataV4 {
   types: TypedDataTypes;
@@ -95,7 +82,6 @@ export interface TypedDataV4 {
   primaryType: string;
   message: Record<string, unknown>;
 }
-
 
 export interface HighlightedField {
   path: string;
@@ -105,7 +91,6 @@ export interface HighlightedField {
   type: string;
   highlight: 'spender' | 'amount' | 'deadline' | 'to' | 'from' | 'nonce' | 'operator' | 'normal';
 }
-
 
 export interface TypedDataDisplayModel {
   domain: TypedDataDomain;
@@ -117,7 +102,6 @@ export interface TypedDataDisplayModel {
   }>;
 }
 
-
 export type TypedDataPattern =
   | 'permit'
   | 'permit2'
@@ -126,7 +110,6 @@ export type TypedDataPattern =
   | 'vote'
   | 'delegation'
   | 'unknown';
-
 
 export interface TypedDataParseResult {
   isValid: boolean;
@@ -138,14 +121,12 @@ export interface TypedDataParseResult {
   highlightedFields: HighlightedField[];
 }
 
-
 export interface AccountRole {
   address: string;
   name?: string;
   role: 'signer' | 'writable' | 'readonly';
   isWallet?: boolean;
 }
-
 
 export interface SolanaInstructionSummary {
   programId: string;
@@ -156,7 +137,6 @@ export interface SolanaInstructionSummary {
   data?: string;
 }
 
-
 export interface DecodedSolanaTx {
   instructions: SolanaInstructionSummary[];
   totalSolTransfer: number;
@@ -164,13 +144,11 @@ export interface DecodedSolanaTx {
   riskLevel: 'low' | 'medium' | 'high';
 }
 
-
 export interface KnownProtocol {
   name: string;
   icon?: string;
   url?: string;
   verified: boolean;
 }
-
 
 export type KnownContracts = Record<string, KnownProtocol>;

@@ -1,5 +1,3 @@
-
-
 import {
   DAppMessage,
   DAppResponse,
@@ -12,7 +10,6 @@ import {
   generateRequestId,
 } from '../types';
 import { MESSAGE_SOURCE, PROVIDER_INFO, SOLANA_NETWORKS } from '../bridge/constants';
-
 
 type EventListener = (...args: unknown[]) => void;
 
@@ -58,12 +55,10 @@ class SimpleEventEmitter {
     if (!eventListeners || eventListeners.size === 0) {
       return false;
     }
-    eventListeners.forEach(listener => {
+    eventListeners.forEach((listener) => {
       try {
         listener(...args);
-      } catch (error) {
-
-      }
+      } catch (error) {}
     });
     return true;
   }
@@ -77,7 +72,6 @@ class SimpleEventEmitter {
   }
 }
 
-
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -86,7 +80,6 @@ interface PendingRequest {
 
 const pendingRequests = new Map<string, PendingRequest>();
 
-
 class PublicKey {
   private _key: string;
 
@@ -94,7 +87,6 @@ class PublicKey {
     if (typeof key === 'string') {
       this._key = key;
     } else {
-      
       this._key = this._toBase58(key);
     }
   }
@@ -119,18 +111,15 @@ class PublicKey {
     return this._key === other._key;
   }
 
-  
   private _toBase58(bytes: Uint8Array): string {
     const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     const BASE = 58;
 
-    
     let num = BigInt(0);
     for (const byte of bytes) {
       num = num * BigInt(256) + BigInt(byte);
     }
 
-    
     let result = '';
     while (num > 0) {
       const remainder = Number(num % BigInt(BASE));
@@ -138,7 +127,6 @@ class PublicKey {
       result = ALPHABET[remainder] + result;
     }
 
-    
     for (const byte of bytes) {
       if (byte === 0) {
         result = '1' + result;
@@ -150,7 +138,6 @@ class PublicKey {
     return result || '1';
   }
 
-  
   private _fromBase58(str: string): Uint8Array {
     const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     const BASE = 58;
@@ -162,14 +149,12 @@ class PublicKey {
       num = num * BigInt(BASE) + BigInt(index);
     }
 
-    
     const bytes: number[] = [];
     while (num > 0) {
       bytes.unshift(Number(num % BigInt(256)));
       num = num / BigInt(256);
     }
 
-    
     for (const char of str) {
       if (char === '1') {
         bytes.unshift(0);
@@ -182,14 +167,11 @@ class PublicKey {
   }
 }
 
-
 class AintivirusSolanaProvider extends SimpleEventEmitter {
-  
   readonly isPhantom = PROVIDER_INFO.SOLANA.IS_PHANTOM;
   readonly isAintivirus = PROVIDER_INFO.SOLANA.IS_AINTIVIRUS;
   readonly isSolana = true;
-  
-  
+
   private _publicKey: PublicKey | null = null;
   private _isConnected: boolean = false;
   private _network: string = SOLANA_NETWORKS.MAINNET;
@@ -200,7 +182,6 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     this._initializeState();
   }
 
-  
   get publicKey(): PublicKey | null {
     return this._publicKey;
   }
@@ -209,26 +190,23 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     return this._isConnected;
   }
 
-  
   async connect(options?: SolanaConnectOptions): Promise<{ publicKey: PublicKey }> {
-    
     if (options?.onlyIfTrusted && !this._isConnected) {
       throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'User not trusted');
     }
 
-    const result = await this._sendToBackground('connect', { options }) as { publicKey: string };
-    
+    const result = (await this._sendToBackground('connect', { options })) as { publicKey: string };
+
     if (result && result.publicKey) {
       this._publicKey = new PublicKey(result.publicKey);
       this._isConnected = true;
       this.emit('connect', { publicKey: this._publicKey });
       return { publicKey: this._publicKey };
     }
-    
+
     throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to connect');
   }
 
-  
   async disconnect(): Promise<void> {
     try {
       await this._sendToBackground('disconnect', undefined);
@@ -239,94 +217,95 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     }
   }
 
-  
   async signTransaction<T extends { serialize(): Uint8Array }>(transaction: T): Promise<T> {
     if (!this._isConnected || !this._publicKey) {
       throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'Wallet not connected');
     }
 
     const serialized = this._serializeTransaction(transaction);
-    const result = await this._sendToBackground('signTransaction', { transaction: serialized }) as { signedTransaction: string };
-    
+    const result = (await this._sendToBackground('signTransaction', {
+      transaction: serialized,
+    })) as { signedTransaction: string };
+
     if (result && result.signedTransaction) {
       return this._deserializeTransaction(result.signedTransaction, transaction);
     }
-    
+
     throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to sign transaction');
   }
 
-  
-  async signAllTransactions<T extends { serialize(): Uint8Array }>(transactions: T[]): Promise<T[]> {
+  async signAllTransactions<T extends { serialize(): Uint8Array }>(
+    transactions: T[],
+  ): Promise<T[]> {
     if (!this._isConnected || !this._publicKey) {
       throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'Wallet not connected');
     }
 
-    const serialized = transactions.map(tx => this._serializeTransaction(tx));
-    const result = await this._sendToBackground('signAllTransactions', { transactions: serialized }) as { signedTransactions: string[] };
-    
+    const serialized = transactions.map((tx) => this._serializeTransaction(tx));
+    const result = (await this._sendToBackground('signAllTransactions', {
+      transactions: serialized,
+    })) as { signedTransactions: string[] };
+
     if (result && result.signedTransactions) {
-      return result.signedTransactions.map((signedTx, i) => 
-        this._deserializeTransaction(signedTx, transactions[i])
+      return result.signedTransactions.map((signedTx, i) =>
+        this._deserializeTransaction(signedTx, transactions[i]),
       );
     }
-    
+
     throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to sign transactions');
   }
 
-  
-  async signMessage(message: Uint8Array, display?: 'utf8' | 'hex'): Promise<{ signature: Uint8Array }> {
+  async signMessage(
+    message: Uint8Array,
+    display?: 'utf8' | 'hex',
+  ): Promise<{ signature: Uint8Array }> {
     if (!this._isConnected || !this._publicKey) {
       throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'Wallet not connected');
     }
 
-    
     const messageBase64 = btoa(String.fromCharCode(...message));
-    
-    const result = await this._sendToBackground('signMessage', { 
+
+    const result = (await this._sendToBackground('signMessage', {
       message: messageBase64,
       display: display || 'utf8',
-    }) as { signature: string };
-    
+    })) as { signature: string };
+
     if (result && result.signature) {
-      
-      const signatureBytes = Uint8Array.from(atob(result.signature), c => c.charCodeAt(0));
+      const signatureBytes = Uint8Array.from(atob(result.signature), (c) => c.charCodeAt(0));
       return { signature: signatureBytes };
     }
-    
+
     throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to sign message');
   }
 
-  
   async signAndSendTransaction<T extends { serialize(): Uint8Array }>(
     transaction: T,
-    options?: SolanaSendOptions
+    options?: SolanaSendOptions,
   ): Promise<{ signature: string }> {
     if (!this._isConnected || !this._publicKey) {
       throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'Wallet not connected');
     }
 
     const serialized = this._serializeTransaction(transaction);
-    const result = await this._sendToBackground('signAndSendTransaction', { 
+    const result = (await this._sendToBackground('signAndSendTransaction', {
       transaction: serialized,
       options,
-    }) as { signature: string };
-    
+    })) as { signature: string };
+
     if (result && result.signature) {
       return { signature: result.signature };
     }
-    
+
     throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to send transaction');
   }
 
-  
   async sendTransaction<T extends { serialize(): Uint8Array }>(
     transaction: T,
-    options?: SolanaSendOptions
+    options?: SolanaSendOptions,
   ): Promise<{ signature: string }> {
     return this.signAndSendTransaction(transaction, options);
   }
 
-  
   private async _initializeState(): Promise<void> {
     try {
       const state = await this._sendToBackground('_getProviderState', undefined);
@@ -337,31 +316,25 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
         }
         this._isConnected = providerState.isConnected || false;
         this._network = providerState.network || SOLANA_NETWORKS.MAINNET;
-        
+
         if (this._isConnected && this._publicKey) {
           this.emit('connect', { publicKey: this._publicKey });
         }
       }
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
-  
   private _setupMessageListener(): void {
     window.addEventListener('message', (event) => {
-      
       if (event.source !== window) return;
-      
+
       const data = event.data;
       if (!data || data.source !== MESSAGE_SOURCE.CONTENT) return;
-      
-      
+
       if (data.type === 'DAPP_RESPONSE' || data.type === 'DAPP_ERROR') {
         this._handleResponse(data);
       }
-      
-      
+
       if (data.type === 'SOLANA_CONNECT') {
         this._handleConnect(data.payload);
       }
@@ -371,21 +344,17 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     });
   }
 
-  
   private _sendToBackground(method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const requestId = generateRequestId();
-      
-      
+
       const timeout = setTimeout(() => {
         pendingRequests.delete(requestId);
         reject(this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Request timeout'));
-      }, 60000); 
-      
-      
+      }, 60000);
+
       pendingRequests.set(requestId, { resolve, reject, timeout });
-      
-      
+
       const message: DAppMessage = {
         id: requestId,
         source: DAPP_MESSAGE_SOURCE.INPAGE,
@@ -395,14 +364,21 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
         origin: window.location.origin,
         timestamp: Date.now(),
       };
-      
-      
+
       window.postMessage(message, '*');
     });
   }
 
-  
-  private _getMessageType(method: string): 'SOLANA_CONNECT' | 'SOLANA_DISCONNECT' | 'SOLANA_SIGN_TRANSACTION' | 'SOLANA_SIGN_ALL_TRANSACTIONS' | 'SOLANA_SIGN_MESSAGE' | 'SOLANA_SIGN_AND_SEND' | 'DAPP_GET_STATE' {
+  private _getMessageType(
+    method: string,
+  ):
+    | 'SOLANA_CONNECT'
+    | 'SOLANA_DISCONNECT'
+    | 'SOLANA_SIGN_TRANSACTION'
+    | 'SOLANA_SIGN_ALL_TRANSACTIONS'
+    | 'SOLANA_SIGN_MESSAGE'
+    | 'SOLANA_SIGN_AND_SEND'
+    | 'DAPP_GET_STATE' {
     switch (method) {
       case 'connect':
         return 'SOLANA_CONNECT';
@@ -422,16 +398,15 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     }
   }
 
-  
   private _handleResponse(data: { payload: DAppResponse }): void {
     const response = data.payload;
     const pending = pendingRequests.get(response.id);
-    
+
     if (!pending) return;
-    
+
     clearTimeout(pending.timeout);
     pendingRequests.delete(response.id);
-    
+
     if (response.success) {
       pending.resolve(response.result);
     } else {
@@ -440,7 +415,6 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     }
   }
 
-  
   private _handleConnect(payload: { publicKey: string }): void {
     if (payload.publicKey) {
       this._publicKey = new PublicKey(payload.publicKey);
@@ -449,44 +423,37 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     }
   }
 
-  
   private _handleDisconnect(): void {
     this._publicKey = null;
     this._isConnected = false;
     this.emit('disconnect');
   }
 
-  
-  private _serializeTransaction<T extends { serialize(): Uint8Array }>(transaction: T): SerializedTransaction {
+  private _serializeTransaction<T extends { serialize(): Uint8Array }>(
+    transaction: T,
+  ): SerializedTransaction {
     const serialized = transaction.serialize();
     const base64 = btoa(String.fromCharCode(...serialized));
-    
-    
+
     const isVersioned = (transaction as unknown as { version?: number }).version !== undefined;
-    
+
     return {
       data: base64,
       isVersioned,
     };
   }
 
-  
   private _deserializeTransaction<T>(base64: string, originalTransaction: T): T {
-    
-    
-    const signedBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-    
-    
+    const signedBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+
     const signed = Object.create(Object.getPrototypeOf(originalTransaction));
     Object.assign(signed, originalTransaction);
-    
-    
+
     signed.serialize = () => signedBytes;
-    
+
     return signed as T;
   }
 
-  
   private _createError(code: number, message: string): Error & { code: number } {
     const error = new Error(message) as Error & { code: number };
     error.code = code;
@@ -494,9 +461,7 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
   }
 }
 
-
 export { AintivirusSolanaProvider, PublicKey };
-
 
 export function createSolanaProvider(): AintivirusSolanaProvider {
   return new AintivirusSolanaProvider();

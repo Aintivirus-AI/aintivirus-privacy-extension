@@ -1,7 +1,5 @@
-
-
+// Barrel file exposing the EVM adapter plus gas, transactions, allowances, and helpers.
 export { EVMAdapter, createEVMAdapter } from './adapter';
-
 
 export {
   getProvider,
@@ -24,7 +22,6 @@ export {
   getCode,
 } from './client';
 
-
 export {
   estimateTransactionGas,
   estimateNativeTransferGas,
@@ -36,7 +33,6 @@ export {
   type GasEstimate,
   type GasEstimateParams,
 } from './gas';
-
 
 export {
   createNativeTransfer,
@@ -56,7 +52,6 @@ export {
   type UnsignedEVMTransaction,
 } from './transactions';
 
-
 export {
   getTokenBalance,
   getTokenMetadata,
@@ -70,7 +65,6 @@ export {
   type TokenMetadata,
   type ERC20Balance,
 } from './tokens';
-
 
 export {
   loadPendingTxStore,
@@ -90,7 +84,6 @@ export {
   type TxStatusUpdate,
 } from './pendingTxStore';
 
-
 export {
   getOnChainNonce,
   getConfirmedNonce,
@@ -104,7 +97,6 @@ export {
   type NonceGapResult,
   type NonceStatus,
 } from './nonce';
-
 
 export {
   calculateSpeedUpFees,
@@ -126,7 +118,6 @@ export {
   type FeeValidation,
 } from './replacement';
 
-
 export {
   discoverAllowances,
   getTokenAllowance,
@@ -145,7 +136,6 @@ export {
   type UnsignedRevokeTransaction,
 } from './allowances';
 
-
 export {
   getKnownSpenders,
   getSpenderLabel,
@@ -153,4 +143,3 @@ export {
   KNOWN_SPENDERS,
   type SpenderInfo,
 } from './knownSpenders';
-

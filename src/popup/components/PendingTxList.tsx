@@ -1,15 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { sendToBackground } from '@shared/messaging';
 import type { EVMPendingTxInfo, EVMChainId } from '@shared/types';
 import { ExplorerLinkIcon } from './ExplorerLinkIcon';
 import { TxStatusBadge, TxStatusDot } from './TxStatusBadge';
-import { TxProgressIndicator } from './TxConfirmationProgress';
-import {
-  mapEVMStatus,
-  getEVMProgress,
-  type TxDisplayStatus,
-} from '@wallet/txStatus';
-
+import { mapEVMStatus, type TxDisplayStatus } from '@wallet/txStatus';
 
 export interface PendingTxListProps {
   chainId?: EVMChainId;
@@ -20,10 +14,9 @@ export interface PendingTxListProps {
   compact?: boolean;
 }
 
-
 function formatTimeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  
+
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -34,21 +27,17 @@ function truncateHash(hash: string, chars: number = 6): string {
   return `${hash.slice(0, chars + 2)}...${hash.slice(-chars)}`;
 }
 
-
 function getDisplayStatus(tx: EVMPendingTxInfo): TxDisplayStatus {
-  
-  const confirmations = tx.status === 'mined' 
-    ? Math.max(0, Math.floor((Date.now() - tx.submittedAt) / 12000))
-    : 0;
-  
+  const confirmations =
+    tx.status === 'mined' ? Math.max(0, Math.floor((Date.now() - tx.submittedAt) / 12000)) : 0;
+
   return mapEVMStatus(
     tx.status as 'pending' | 'mined' | 'failed' | 'dropped' | 'replaced',
     confirmations,
     tx.chainId,
-    tx.submittedAt
+    tx.submittedAt,
   );
 }
-
 
 export function PendingTxList({
   chainId,
@@ -81,14 +70,12 @@ export function PendingTxList({
     }
   }, [chainId, address]);
 
-  
   useEffect(() => {
     loadTransactions();
   }, [loadTransactions]);
 
-  
   useEffect(() => {
-    const hasPending = transactions.some(tx => tx.status === 'pending');
+    const hasPending = transactions.some((tx) => tx.status === 'pending');
     if (!hasPending) return;
 
     const interval = setInterval(loadTransactions, 15000);
@@ -121,39 +108,35 @@ export function PendingTxList({
     );
   }
 
-  const pendingTxs = transactions.filter(tx => tx.status === 'pending');
-  const recentTxs = transactions.filter(tx => tx.status !== 'pending').slice(0, 5);
+  const pendingTxs = transactions.filter((tx) => tx.status === 'pending');
+  const recentTxs = transactions.filter((tx) => tx.status !== 'pending').slice(0, 5);
 
   return (
     <div className={`pending-tx-list ${compact ? 'compact' : ''}`}>
-      {}
+      {/* Pending transactions first (these need user attention). */}
       {pendingTxs.length > 0 && (
         <div className="tx-section">
           <h4 className="section-title">
             <TxStatusDot status="pending" size={8} />
             Pending ({pendingTxs.length})
           </h4>
-          
+
           {pendingTxs.map((tx) => {
             const displayStatus = getDisplayStatus(tx);
             return (
-              <div
-                key={tx.hash}
-                className="tx-item pending"
-                onClick={() => onSelectTx?.(tx)}
-              >
+              <div key={tx.hash} className="tx-item pending" onClick={() => onSelectTx?.(tx)}>
                 <div className="tx-main">
                   <div className="tx-hash-row">
                     <span className="tx-hash">{truncateHash(tx.hash)}</span>
                     <span className="tx-nonce">#{tx.nonce}</span>
                     <TxStatusBadge status={displayStatus} size="sm" showLabel={false} />
                   </div>
-                  
+
                   <div className="tx-details">
                     <span className="tx-value">{tx.valueFormatted} ETH</span>
                     <span className="tx-to">→ {truncateHash(tx.to, 4)}</span>
                   </div>
-                  
+
                   <div className="tx-meta">
                     <span className="tx-time">{formatTimeAgo(tx.submittedAt)}</span>
                     <span className="tx-fee">{tx.maxFeeGwei.toFixed(1)} gwei</span>
@@ -201,11 +184,11 @@ export function PendingTxList({
         </div>
       )}
 
-      {}
+      {/* Recently completed transactions (short list, non-compact only). */}
       {recentTxs.length > 0 && !compact && (
         <div className="tx-section">
           <h4 className="section-title">Recent</h4>
-          
+
           {recentTxs.map((tx) => {
             const displayStatus = getDisplayStatus(tx);
             return (
@@ -219,7 +202,7 @@ export function PendingTxList({
                     <span className="tx-hash">{truncateHash(tx.hash)}</span>
                     <TxStatusBadge status={displayStatus} size="sm" />
                   </div>
-                  
+
                   <div className="tx-details">
                     <span className="tx-value">{tx.valueFormatted} ETH</span>
                     <span className="tx-time">{formatTimeAgo(tx.submittedAt)}</span>

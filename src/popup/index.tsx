@@ -12,7 +12,6 @@ if (container) {
       <ToastProvider>
         <App />
       </ToastProvider>
-    </React.StrictMode>
+    </React.StrictMode>,
   );
 }
-

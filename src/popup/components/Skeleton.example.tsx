@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import {
   Skeleton,
@@ -14,20 +12,17 @@ import {
   SkeletonAllowanceCard,
 } from './Skeleton';
 
-
 interface DataItem {
   id: string;
   name: string;
   value: number;
 }
 
-
 export const BasicLoadingExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DataItem[]>([]);
 
   useEffect(() => {
-    
     const timer = setTimeout(() => {
       setData([
         { id: '1', name: 'Item 1', value: 100 },
@@ -38,7 +33,6 @@ export const BasicLoadingExample: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  
   if (loading) {
     return (
       <div className="token-list">
@@ -49,7 +43,6 @@ export const BasicLoadingExample: React.FC = () => {
     );
   }
 
-  
   return (
     <div className="token-list">
       {data.map((item) => (
@@ -61,7 +54,6 @@ export const BasicLoadingExample: React.FC = () => {
     </div>
   );
 };
-
 
 export const SmoothTransitionExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -76,11 +68,7 @@ export const SmoothTransitionExample: React.FC = () => {
   }, []);
 
   return (
-    <SkeletonGroup
-      loading={loading}
-      fadeDuration={300}
-      skeleton={<SkeletonWalletBalance />}
-    >
+    <SkeletonGroup loading={loading} fadeDuration={300} skeleton={<SkeletonWalletBalance />}>
       <div className="balance-card">
         <span className="balance-value">{balance?.toFixed(2)}</span>
         <span className="balance-symbol">SOL</span>
@@ -88,7 +76,6 @@ export const SmoothTransitionExample: React.FC = () => {
     </SkeletonGroup>
   );
 };
-
 
 export const CustomSkeletonExample: React.FC = () => {
   return (
@@ -125,7 +112,6 @@ export const CustomSkeletonExample: React.FC = () => {
     </div>
   );
 };
-
 
 interface WalletData {
   balance: number;
@@ -174,7 +160,6 @@ export const WalletViewExample: React.FC = () => {
   );
 };
 
-
 interface Stats {
   blocked: number;
   cookies: number;
@@ -217,7 +202,6 @@ export const SecurityStatsExample: React.FC = () => {
   );
 };
 
-
 export const AllowancesListExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
@@ -239,14 +223,13 @@ export const AllowancesListExample: React.FC = () => {
   return <div>Allowances content loaded!</div>;
 };
 
-
 export const InlineSkeletonExample: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [price, setPrice] = useState<number | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setPrice(142.50);
+      setPrice(142.5);
       setLoading(false);
     }, 1500);
     return () => clearTimeout(timer);
@@ -263,7 +246,6 @@ export const InlineSkeletonExample: React.FC = () => {
     </div>
   );
 };
-
 
 export default {
   BasicLoadingExample,

@@ -1,12 +1,9 @@
-
-
 import React, { useMemo } from 'react';
 import { StatusChip, StatusType } from './StatusChip';
 import { ChainPill } from './ChainPill';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-
-export type ActivityAction = 
+export type ActivityAction =
   | 'sent'
   | 'received'
   | 'swapped'
@@ -20,42 +17,40 @@ export type ActivityAction =
   | 'unknown';
 
 export interface ActivityRowProps {
-  
   action: ActivityAction;
-  
+
   token: string;
-  
+
   tokenLogo?: string;
-  
+
   amount?: number | string;
-  
+
   fiatValue?: number;
-  
+
   nativeAmount?: number;
-  
+
   nativeSymbol?: string;
-  
+
   counterparty?: string;
-  
+
   counterpartyLabel?: string;
-  
+
   timestamp: number;
-  
+
   status: StatusType;
-  
+
   chain: ChainType;
-  
+
   evmChainId?: EVMChainId;
-  
+
   testnet?: boolean;
-  
+
   onClick?: () => void;
-  
+
   txHash?: string;
-  
+
   className?: string;
 }
-
 
 function truncateAddress(address: string, chars = 4): string {
   if (!address) return '';
@@ -66,19 +61,19 @@ function truncateAddress(address: string, chars = 4): string {
 function formatRelativeTime(timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;
-  
+
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
   const weeks = Math.floor(days / 7);
-  
+
   if (seconds < 60) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
   if (weeks < 4) return `${weeks}w ago`;
-  
+
   return new Date(timestamp).toLocaleDateString();
 }
 
@@ -86,12 +81,12 @@ function formatAmount(amount: number | string | undefined): string {
   if (amount === undefined || amount === null) return '';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (isNaN(num)) return '';
-  
+
   if (num === 0) return '0';
   if (Math.abs(num) < 0.0001) return num.toExponential(2);
   if (Math.abs(num) < 1) return num.toFixed(4);
   if (Math.abs(num) < 1000) return num.toFixed(2);
-  
+
   return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
@@ -99,7 +94,7 @@ function formatFiat(value: number | undefined): string {
   if (value === undefined || value === null) return '';
   if (value === 0) return '$0.00';
   if (value < 0.01) return '<$0.01';
-  
+
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -141,7 +136,6 @@ function getActionColor(action: ActivityAction): string {
   }
 }
 
-
 interface ActionIconProps {
   action: ActivityAction;
   tokenLogo?: string;
@@ -149,7 +143,7 @@ interface ActionIconProps {
 
 const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
   const color = getActionColor(action);
-  
+
   const icons: Record<ActivityAction, React.ReactNode> = {
     sent: (
       <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
@@ -163,17 +157,29 @@ const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
     ),
     swapped: (
       <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-        <path d="M16 3L20 7L16 11M4 7H20M8 21L4 17L8 13M20 17H4" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M16 3L20 7L16 11M4 7H20M8 21L4 17L8 13M20 17H4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
     approved: (
       <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-        <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
     revoked: (
       <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-        <path d="M9 15L15 9M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M9 15L15 9M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
     minted: (
@@ -195,7 +201,11 @@ const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
     ),
     unstaked: (
       <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-        <path d="M12 22V2M5 5L12 2L19 5M5 19L12 22L19 19" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M12 22V2M5 5L12 2L19 5M5 19L12 22L19 19"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
     contract: (
@@ -206,29 +216,31 @@ const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
     unknown: (
       <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
         <circle cx="12" cy="12" r="10" />
-        <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
   };
-  
+
   return (
     <>
       <div className="activity-icon">
         {tokenLogo ? (
-          <img 
-            src={tokenLogo} 
-            alt="" 
+          <img
+            src={tokenLogo}
+            alt=""
             className="activity-token-logo"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
             }}
           />
         ) : null}
-        <div className="activity-action-icon">
-          {icons[action]}
-        </div>
+        <div className="activity-action-icon">{icons[action]}</div>
       </div>
-      
+
       <style>{`
         .activity-icon {
           position: relative;
@@ -288,7 +300,6 @@ const ActionIcon: React.FC<ActionIconProps> = ({ action, tokenLogo }) => {
   );
 };
 
-
 export const ActivityRow: React.FC<ActivityRowProps> = ({
   action,
   token,
@@ -316,17 +327,18 @@ export const ActivityRow: React.FC<ActivityRowProps> = ({
     if (counterparty) return truncateAddress(counterparty);
     return null;
   }, [counterparty, counterpartyLabel]);
-  
+
   const amountPrefix = action === 'sent' ? '−' : action === 'received' ? '+' : '';
-  const amountColor = action === 'sent' 
-    ? 'var(--error)' 
-    : action === 'received' 
-      ? 'var(--success)' 
-      : 'var(--text-primary)';
-  
+  const amountColor =
+    action === 'sent'
+      ? 'var(--error)'
+      : action === 'received'
+        ? 'var(--success)'
+        : 'var(--text-primary)';
+
   return (
     <>
-      <div 
+      <div
         className={`activity-row ${onClick ? 'clickable' : ''} ${className}`}
         onClick={onClick}
         role={onClick ? 'button' : undefined}
@@ -334,7 +346,7 @@ export const ActivityRow: React.FC<ActivityRowProps> = ({
         onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
       >
         <ActionIcon action={action} tokenLogo={tokenLogo} />
-        
+
         <div className="activity-details">
           <div className="activity-line1">
             <span className="activity-action">
@@ -342,10 +354,16 @@ export const ActivityRow: React.FC<ActivityRowProps> = ({
             </span>
             <div className="activity-chips">
               <StatusChip status={status} size="xs" iconOnly />
-              <ChainPill chain={chain} evmChainId={evmChainId} testnet={testnet} size="xs" variant="icon-only" />
+              <ChainPill
+                chain={chain}
+                evmChainId={evmChainId}
+                testnet={testnet}
+                size="xs"
+                variant="icon-only"
+              />
             </div>
           </div>
-          
+
           <div className="activity-line2">
             {displayCounterparty && (
               <span className="activity-counterparty">
@@ -356,24 +374,23 @@ export const ActivityRow: React.FC<ActivityRowProps> = ({
             <span className="activity-time">{relativeTime}</span>
           </div>
         </div>
-        
+
         <div className="activity-amounts">
           {formattedFiat && (
-            <span 
-              className="activity-fiat"
-              style={{ color: amountColor }}
-            >
-              {amountPrefix}{formattedFiat}
+            <span className="activity-fiat" style={{ color: amountColor }}>
+              {amountPrefix}
+              {formattedFiat}
             </span>
           )}
           {formattedAmount && (
             <span className="activity-native">
-              {amountPrefix}{formattedAmount} {token}
+              {amountPrefix}
+              {formattedAmount} {token}
             </span>
           )}
         </div>
       </div>
-      
+
       <style>{`
         .activity-row {
           display: flex;

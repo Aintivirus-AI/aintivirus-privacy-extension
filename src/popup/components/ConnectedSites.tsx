@@ -1,8 +1,5 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { SitePermission } from '../../dapp/types';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -139,11 +136,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 interface Props {
   onBack?: () => void;
 }
-
 
 export function ConnectedSites({ onBack }: Props) {
   const [sites, setSites] = useState<SitePermission[]>([]);
@@ -164,7 +159,6 @@ export function ConnectedSites({ onBack }: Props) {
         setSites(response.data as SitePermission[]);
       }
     } catch (error) {
-
     } finally {
       setLoading(false);
     }
@@ -177,11 +171,8 @@ export function ConnectedSites({ onBack }: Props) {
         payload: { origin, chainType },
       });
 
-      
       loadConnectedSites();
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   async function handleRevokeAll() {
@@ -193,11 +184,8 @@ export function ConnectedSites({ onBack }: Props) {
         payload: undefined,
       });
 
-      
       loadConnectedSites();
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   const formatOrigin = (origin: string): string => {
@@ -212,16 +200,16 @@ export function ConnectedSites({ onBack }: Props) {
   const formatTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    
+
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
-    
+
     return new Date(timestamp).toLocaleDateString();
   };
 
@@ -254,7 +242,7 @@ export function ConnectedSites({ onBack }: Props) {
   return (
     <div style={styles.container}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      
+
       <div style={styles.header}>
         <span style={styles.title}>Connected Sites</span>
         {sites.length > 0 && (
@@ -276,11 +264,12 @@ export function ConnectedSites({ onBack }: Props) {
       {sites.length === 0 ? (
         <div style={styles.emptyState}>
           <svg style={styles.emptyIcon} viewBox="0 0 48 48" fill="none">
-            <circle cx="24" cy="24" r="20" stroke="#64748b" strokeWidth="2" strokeDasharray="4 4"/>
-            <path d="M24 16v8M24 28v2" stroke="#64748b" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="24" cy="24" r="20" stroke="#64748b" strokeWidth="2" strokeDasharray="4 4" />
+            <path d="M24 16v8M24 28v2" stroke="#64748b" strokeWidth="2" strokeLinecap="round" />
           </svg>
           <span style={styles.emptyText}>
-            No connected sites.<br/>
+            No connected sites.
+            <br />
             Connect to a dApp to see it here.
           </span>
         </div>
@@ -290,25 +279,24 @@ export function ConnectedSites({ onBack }: Props) {
             <div key={`${site.origin}:${site.chainType}`} style={styles.siteItem}>
               <div style={styles.favicon}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#64748b"/>
+                  <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+                    fill="#64748b"
+                  />
                 </svg>
               </div>
-              
+
               <div style={styles.siteInfo}>
                 <div style={styles.siteName}>{formatOrigin(site.origin)}</div>
                 <div style={styles.siteDetails}>
-                  <span style={getChainBadgeStyle(site.chainType)}>
-                    {site.chainType}
-                  </span>
+                  <span style={getChainBadgeStyle(site.chainType)}>{site.chainType}</span>
                   <span style={styles.accountCount}>
                     {site.accounts.length} account{site.accounts.length !== 1 ? 's' : ''}
                   </span>
-                  <span style={styles.connectedTime}>
-                    {formatTime(site.lastAccessed)}
-                  </span>
+                  <span style={styles.connectedTime}>{formatTime(site.lastAccessed)}</span>
                 </div>
               </div>
-              
+
               <button
                 style={styles.revokeButton}
                 onClick={() => handleRevoke(site.origin, site.chainType)}

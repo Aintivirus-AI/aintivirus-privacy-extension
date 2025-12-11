@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { sendToBackground } from '@shared/messaging';
 import type { EVMChainId, EVMGasPresets } from '@shared/types';
-
 
 export type GasPreset = 'slow' | 'market' | 'fast' | 'custom';
 
@@ -23,7 +22,6 @@ export interface GasSettingsPanelProps {
   disabled?: boolean;
 }
 
-
 const PRESET_LABELS: Record<GasPreset, { label: string; description: string }> = {
   slow: { label: 'Slow', description: '~5 minutes' },
   market: { label: 'Market', description: '~2 minutes' },
@@ -34,7 +32,6 @@ const PRESET_LABELS: Record<GasPreset, { label: string; description: string }> =
 const WARNING_GWEI_THRESHOLD = 500;
 const ERROR_GWEI_THRESHOLD = 2000;
 const MIN_REPLACEMENT_BUMP_PERCENT = 10;
-
 
 export function GasSettingsPanel({
   chainId,
@@ -55,7 +52,6 @@ export function GasSettingsPanel({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
-  
   useEffect(() => {
     async function loadPresets() {
       setLoading(true);
@@ -63,7 +59,6 @@ export function GasSettingsPanel({
 
       try {
         if (isReplacement && txHash) {
-          
           const response = await sendToBackground<EVMGasPresets>({
             type: 'EVM_GET_GAS_PRESETS',
             payload: { evmChainId: chainId, txHash },
@@ -71,15 +66,13 @@ export function GasSettingsPanel({
 
           if (response.success && response.data) {
             setPresets(response.data);
-            
+
             setCustomMaxFee(response.data.market.maxFeeGwei.toFixed(2));
             setCustomPriorityFee(response.data.market.maxPriorityFeeGwei.toFixed(2));
           } else {
             setError('Failed to load gas presets');
           }
         } else {
-          
-          
           const placeholderPresets: EVMGasPresets = {
             slow: { maxFeeGwei: 20, maxPriorityFeeGwei: 1, estimatedWaitTime: '~5 minutes' },
             market: { maxFeeGwei: 30, maxPriorityFeeGwei: 2, estimatedWaitTime: '~2 minutes' },
@@ -100,7 +93,6 @@ export function GasSettingsPanel({
     loadPresets();
   }, [chainId, isReplacement, txHash]);
 
-  
   const getCurrentFees = useCallback((): { maxFee: bigint; priorityFee: bigint } | null => {
     if (!presets) return null;
 
@@ -121,23 +113,23 @@ export function GasSettingsPanel({
     };
   }, [preset, presets, customMaxFee, customPriorityFee]);
 
-  
   useEffect(() => {
     const fees = getCurrentFees();
     if (!fees) return;
 
-    
     const maxFeeGwei = Number(fees.maxFee) / 1e9;
-    
+
     if (maxFeeGwei > ERROR_GWEI_THRESHOLD) {
-      setError(`Max fee ${maxFeeGwei.toFixed(2)} gwei exceeds safety limit of ${ERROR_GWEI_THRESHOLD} gwei`);
+      setError(
+        `Max fee ${maxFeeGwei.toFixed(2)} gwei exceeds safety limit of ${ERROR_GWEI_THRESHOLD} gwei`,
+      );
       return;
     }
 
     if (isReplacement && originalFees) {
       const originalMaxGwei = Number(originalFees.maxFeePerGas) / 1e9;
       const minRequiredGwei = originalMaxGwei * (1 + MIN_REPLACEMENT_BUMP_PERCENT / 100);
-      
+
       if (maxFeeGwei < minRequiredGwei) {
         setError(`Must be at least ${minRequiredGwei.toFixed(2)} gwei (10% bump)`);
         return;
@@ -152,7 +144,6 @@ export function GasSettingsPanel({
       setWarning(null);
     }
 
-    
     onFeesChange({
       preset,
       maxFeePerGas: fees.maxFee,
@@ -160,9 +151,19 @@ export function GasSettingsPanel({
       gasLimit,
       customNonce: customNonce ? parseInt(customNonce, 10) : undefined,
     });
-  }, [preset, presets, customMaxFee, customPriorityFee, customNonce, gasLimit, isReplacement, originalFees, getCurrentFees, onFeesChange]);
+  }, [
+    preset,
+    presets,
+    customMaxFee,
+    customPriorityFee,
+    customNonce,
+    gasLimit,
+    isReplacement,
+    originalFees,
+    getCurrentFees,
+    onFeesChange,
+  ]);
 
-  
   const estimatedCost = (() => {
     const fees = getCurrentFees();
     if (!fees) return null;
@@ -181,7 +182,7 @@ export function GasSettingsPanel({
 
   return (
     <div className={`gas-settings-panel ${disabled ? 'disabled' : ''}`}>
-      {}
+      {/* Quick presets for common fee strategies. */}
       <div className="gas-presets">
         {(['slow', 'market', 'fast'] as const).map((p) => (
           <button
@@ -192,15 +193,13 @@ export function GasSettingsPanel({
             disabled={disabled}
           >
             <span className="preset-label">{PRESET_LABELS[p].label}</span>
-            {presets && (
-              <span className="preset-fee">{presets[p].maxFeeGwei.toFixed(1)} gwei</span>
-            )}
+            {presets && <span className="preset-fee">{presets[p].maxFeeGwei.toFixed(1)} gwei</span>}
             <span className="preset-time">{PRESET_LABELS[p].description}</span>
           </button>
         ))}
       </div>
 
-      {}
+      {/* Replacement transactions must bump the original fee to be accepted by nodes. */}
       {isReplacement && presets?.original && (
         <div className="original-fee-info">
           <span className="label">Original:</span>
@@ -209,7 +208,7 @@ export function GasSettingsPanel({
         </div>
       )}
 
-      {}
+      {/* “Advanced” reveals custom max fee / priority fee + optional nonce. */}
       <button
         type="button"
         className="advanced-toggle"
@@ -219,7 +218,6 @@ export function GasSettingsPanel({
         <span>{showAdvanced ? '▼' : '▶'} Advanced</span>
       </button>
 
-      {}
       {showAdvanced && (
         <div className="advanced-options">
           <div className="input-group">
@@ -264,14 +262,12 @@ export function GasSettingsPanel({
               disabled={disabled || isReplacement}
               min="0"
             />
-            {isReplacement && (
-              <span className="note">Nonce locked for replacement</span>
-            )}
+            {isReplacement && <span className="note">Nonce locked for replacement</span>}
           </div>
         </div>
       )}
 
-      {}
+      {/* A rough upper-bound estimate in ETH for the chosen max fee and gas limit. */}
       {estimatedCost !== null && (
         <div className="estimated-cost">
           <span className="label">Max Cost:</span>
@@ -279,17 +275,9 @@ export function GasSettingsPanel({
         </div>
       )}
 
-      {}
-      {warning && !error && (
-        <div className="gas-warning">
-          ⚠️ {warning}
-        </div>
-      )}
-      {error && (
-        <div className="gas-error">
-          ❌ {error}
-        </div>
-      )}
+      {/* Soft warning vs hard error (hard error blocks submission). */}
+      {warning && !error && <div className="gas-warning">⚠️ {warning}</div>}
+      {error && <div className="gas-error">❌ {error}</div>}
 
       <style>{`
         .gas-settings-panel {

@@ -3,7 +3,7 @@
   "name": "Aintivirus Privacy and Wallet",
   "version": "0.2.0",
   "description": "Aintivirus security extension",
-  
+
   "__host_permissions_justification__": [
     "The <all_urls> host permission is REQUIRED for this extension because:",
     "1. dApp Provider Injection: Content script must inject window.ethereum/window.solana",
@@ -24,7 +24,7 @@
     "",
     "This field is for documentation only and is ignored by Chrome."
   ],
-  
+
   "permissions": [
     "storage",
     "activeTab",
@@ -39,9 +39,7 @@
     "sidePanel",
     "browsingData"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "host_permissions": ["<all_urls>"],
   "declarative_net_request": {
     "rule_resources": [
       {
@@ -190,4 +188,3 @@
     "128": "icons/ainti_l1.png"
   }
 }
-

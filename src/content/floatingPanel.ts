@@ -230,7 +230,6 @@ function createFloatingPanel(): HTMLElement {
     panelWrapper.classList.add('minimized');
     panelState.isVisible = false;
     panelState.isMinimized = true;
-
   });
 
   actions.appendChild(settingsBtn);
@@ -316,7 +315,7 @@ function showPanel(): void {
   }
 }
 
-function closePanel(): void{
+function closePanel(): void {
   if (panelElement) {
     panelElement.classList.remove('visible');
     panelElement.classList.add('minimized');
@@ -352,7 +351,6 @@ export function initializeFloatingPanel(): void {
     }
     return false;
   });
-
 }
 
 export { showPanel, closePanel, togglePanel };

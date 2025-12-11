@@ -1,6 +1,3 @@
-
-
-import React from 'react';
 import {
   TxDisplayStatus,
   SolanaConfirmationProgress,
@@ -12,22 +9,19 @@ import {
   isInProgress,
 } from '@wallet/txStatus';
 
-
 export interface TxConfirmationProgressProps {
-  
   chainType: 'solana' | 'evm';
-  
+
   status: TxDisplayStatus;
-  
+
   progress: SolanaConfirmationProgress | EVMConfirmationProgress;
-  
+
   chainId?: string;
-  
+
   detailed?: boolean;
-  
+
   className?: string;
 }
-
 
 interface SolanaProgressProps {
   progress: SolanaConfirmationProgress;
@@ -43,7 +37,7 @@ function SolanaProgress({ progress, status, detailed }: SolanaProgressProps) {
   ];
 
   const getCurrentStepIndex = () => {
-    const idx = steps.findIndex(s => s.level === progress.commitment);
+    const idx = steps.findIndex((s) => s.level === progress.commitment);
     return idx >= 0 ? idx : -1;
   };
 
@@ -233,7 +227,6 @@ function SolanaProgress({ progress, status, detailed }: SolanaProgressProps) {
   );
 }
 
-
 interface EVMProgressProps {
   progress: EVMConfirmationProgress;
   status: TxDisplayStatus;
@@ -384,7 +377,6 @@ function EVMProgress({ progress, status, chainId, detailed }: EVMProgressProps) 
   );
 }
 
-
 const CheckIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
@@ -396,7 +388,6 @@ const XIcon = () => (
     <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
   </svg>
 );
-
 
 export function TxConfirmationProgress({
   chainType,
@@ -474,22 +465,19 @@ const InfoIcon = () => (
   </svg>
 );
 
-
 export interface TxProgressIndicatorProps {
-  
   percentage: number;
-  
+
   complete?: boolean;
-  
+
   failed?: boolean;
-  
+
   size?: number;
-  
+
   strokeWidth?: number;
-  
+
   className?: string;
 }
-
 
 export function TxProgressIndicator({
   percentage,
@@ -504,12 +492,8 @@ export function TxProgressIndicator({
   const offset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div
-      className={`tx-progress-indicator ${className}`}
-      style={{ width: size, height: size }}
-    >
+    <div className={`tx-progress-indicator ${className}`} style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`}>
-        {}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -518,7 +502,6 @@ export function TxProgressIndicator({
           stroke="var(--border-default)"
           strokeWidth={strokeWidth}
         />
-        {}
         <circle
           cx={size / 2}
           cy={size / 2}

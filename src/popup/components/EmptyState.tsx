@@ -1,7 +1,4 @@
-
-
 import React from 'react';
-
 
 export interface EmptyStateAction {
   label: string;
@@ -11,22 +8,20 @@ export interface EmptyStateAction {
 }
 
 export interface EmptyStateProps {
-  
   icon?: React.ReactNode;
-  
+
   title: string;
-  
+
   description?: string;
-  
+
   primaryAction?: EmptyStateAction;
-  
+
   secondaryAction?: EmptyStateAction;
-  
+
   size?: 'sm' | 'md' | 'lg';
-  
+
   className?: string;
 }
-
 
 export type EmptyStatePreset = 'tokens' | 'activity' | 'sites' | 'allowances' | 'nfts';
 
@@ -37,12 +32,15 @@ export interface EmptyStatePresetProps {
   className?: string;
 }
 
-
 function TokensIcon() {
   return (
     <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="24" cy="24" r="16" />
-      <path d="M24 16v16M18 20l6-4 6 4M18 28l6 4 6-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M24 16v16M18 20l6-4 6 4M18 28l6 4 6-4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -86,14 +84,16 @@ function NftsIcon() {
   );
 }
 
-
-const PRESETS: Record<EmptyStatePreset, {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  primaryLabel: string;
-  secondaryLabel?: string;
-}> = {
+const PRESETS: Record<
+  EmptyStatePreset,
+  {
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+    primaryLabel: string;
+    secondaryLabel?: string;
+  }
+> = {
   tokens: {
     icon: <TokensIcon />,
     title: 'No tokens yet',
@@ -126,7 +126,6 @@ const PRESETS: Record<EmptyStatePreset, {
     primaryLabel: 'Browse',
   },
 };
-
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
@@ -163,9 +162,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       gap: '20px',
     },
   };
-  
+
   const s = sizeStyles[size];
-  
+
   return (
     <>
       <div className={`empty-state empty-state-${size} ${className}`}>
@@ -174,14 +173,12 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
             {icon}
           </div>
         )}
-        
+
         <div className="empty-state-content">
           <h3 className="empty-state-title">{title}</h3>
-          {description && (
-            <p className="empty-state-description">{description}</p>
-          )}
+          {description && <p className="empty-state-description">{description}</p>}
         </div>
-        
+
         {(primaryAction || secondaryAction) && (
           <div className="empty-state-actions">
             {primaryAction && (
@@ -207,7 +204,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           </div>
         )}
       </div>
-      
+
       <style>{`
         .empty-state {
           display: flex;
@@ -306,7 +303,6 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   );
 };
 
-
 export const EmptyStatePreset: React.FC<EmptyStatePresetProps> = ({
   preset,
   onPrimaryAction,
@@ -314,22 +310,30 @@ export const EmptyStatePreset: React.FC<EmptyStatePresetProps> = ({
   className,
 }) => {
   const config = PRESETS[preset];
-  
+
   if (!config) return null;
-  
+
   return (
     <EmptyState
       icon={config.icon}
       title={config.title}
       description={config.description}
-      primaryAction={onPrimaryAction ? {
-        label: config.primaryLabel,
-        onClick: onPrimaryAction,
-      } : undefined}
-      secondaryAction={onSecondaryAction && config.secondaryLabel ? {
-        label: config.secondaryLabel,
-        onClick: onSecondaryAction,
-      } : undefined}
+      primaryAction={
+        onPrimaryAction
+          ? {
+              label: config.primaryLabel,
+              onClick: onPrimaryAction,
+            }
+          : undefined
+      }
+      secondaryAction={
+        onSecondaryAction && config.secondaryLabel
+          ? {
+              label: config.secondaryLabel,
+              onClick: onSecondaryAction,
+            }
+          : undefined
+      }
       className={className}
     />
   );

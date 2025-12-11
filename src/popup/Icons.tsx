@@ -107,7 +107,6 @@ export const SettingsIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const SendIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -125,7 +124,6 @@ export const SendIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const ReceiveIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -142,7 +140,6 @@ export const ReceiveIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M17 17H7V7" />
   </svg>
 );
-
 
 export const HistoryIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -162,7 +159,6 @@ export const HistoryIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const CopyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -180,7 +176,6 @@ export const CopyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const CheckIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -196,7 +191,6 @@ export const CheckIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
-
 
 export const CloseIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -215,7 +209,6 @@ export const CloseIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const BellIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -233,7 +226,6 @@ export const BellIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const EyeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -250,7 +242,6 @@ export const EyeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
-
 
 export const EyeOffIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -270,7 +261,6 @@ export const EyeOffIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <line x1="2" x2="22" y1="2" y2="22" />
   </svg>
 );
-
 
 export const CookieIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -293,7 +283,6 @@ export const CookieIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const LinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -310,7 +299,6 @@ export const LinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
   </svg>
 );
-
 
 export const GlobeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -330,7 +318,6 @@ export const GlobeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const SearchIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -347,7 +334,6 @@ export const SearchIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="m21 21-4.3-4.3" />
   </svg>
 );
-
 
 export const TargetIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -366,7 +352,6 @@ export const TargetIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <circle cx="12" cy="12" r="2" />
   </svg>
 );
-
 
 export const PaletteIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -388,7 +373,6 @@ export const PaletteIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const MonitorIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -407,7 +391,6 @@ export const MonitorIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const VolumeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -425,7 +408,6 @@ export const VolumeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
   </svg>
 );
-
 
 export const RulerIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -447,7 +429,6 @@ export const RulerIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const ExternalLinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -465,7 +446,6 @@ export const ExternalLinkIcon: React.FC<IconProps> = ({ size = 24, className }) 
     <line x1="10" x2="21" y1="14" y2="3" />
   </svg>
 );
-
 
 export const RefreshIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -486,7 +466,6 @@ export const RefreshIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const PlusIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -503,7 +482,6 @@ export const PlusIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M12 5v14" />
   </svg>
 );
-
 
 export const TrashIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -523,7 +501,6 @@ export const TrashIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const InfoIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -541,7 +518,6 @@ export const InfoIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M12 8h.01" />
   </svg>
 );
-
 
 export const AlertIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -561,7 +537,6 @@ export const AlertIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const BookIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -577,7 +552,6 @@ export const BookIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
   </svg>
 );
-
 
 export const BugIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -605,7 +579,6 @@ export const BugIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const GitHubIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -623,7 +596,6 @@ export const GitHubIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const BoltIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -639,7 +611,6 @@ export const BoltIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
   </svg>
 );
-
 
 export const LockClosedIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -657,7 +628,6 @@ export const LockClosedIcon: React.FC<IconProps> = ({ size = 24, className }) =>
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </svg>
 );
-
 
 export const SwapIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -678,7 +648,6 @@ export const SwapIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const BlockIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -695,7 +664,6 @@ export const BlockIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="m4.9 4.9 14.2 14.2" />
   </svg>
 );
-
 
 export const CodeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -714,7 +682,6 @@ export const CodeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
 export const ActivityIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -730,7 +697,6 @@ export const ActivityIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
   </svg>
 );
-
 
 export const KeyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -750,37 +716,33 @@ export const KeyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-
-export const ChevronIcon: React.FC<IconProps & { direction?: 'up' | 'down' | 'left' | 'right' }> = ({ 
-  size = 24, 
-  className,
-  direction = 'down'
-}) => {
+export const ChevronIcon: React.FC<
+  IconProps & { direction?: 'up' | 'down' | 'left' | 'right' }
+> = ({ size = 24, className, direction = 'down' }) => {
   const rotation = {
     up: 180,
     down: 0,
     left: 90,
     right: -90,
   }[direction];
-  
-  return (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-      style={{ transform: `rotate(${rotation}deg)` }}
-  >
-    <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-};
 
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={{ transform: `rotate(${rotation}deg)` }}
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+};
 
 export const EditIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
@@ -798,4 +760,3 @@ export const EditIcon: React.FC<IconProps> = ({ size = 24, className }) => (
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 );
-

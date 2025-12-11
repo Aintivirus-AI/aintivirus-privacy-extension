@@ -1,5 +1,4 @@
-
-
+// Tracks dApp connection approvals/denials and keeps per-domain active session state.
 import {
   ConnectionRecord,
   ActiveConnection,
@@ -26,38 +25,35 @@ import {
 import { analyzeDomain } from './phishingDetector';
 import { getPublicAddress } from '../wallet/storage';
 
-
+// Records and evaluates a new connection attempt; returns phishing analysis for UI.
 export async function handleConnectionRequest(
   domain: string,
   url: string,
-  tabId?: number
+  tabId?: number,
 ): Promise<PhishingAnalysis> {
   const normalizedDomain = extractDomain(url);
-  
-  
+
   const analysis = await analyzeDomain(normalizedDomain);
 
   return analysis;
 }
 
-
+// Approves a domain connection and stores it as active with optional wallet key.
 export async function approveConnection(
   domain: string,
   url: string,
   publicKey?: string,
   riskLevel: RiskLevel = 'low',
   warnings: string[] = [],
-  tabId?: number
+  tabId?: number,
 ): Promise<ConnectionRecord> {
   const normalizedDomain = extractDomain(url);
-  
-  
+
   let connectedKey = publicKey;
   if (!connectedKey) {
-    connectedKey = await getPublicAddress() || 'unknown';
+    connectedKey = (await getPublicAddress()) || 'unknown';
   }
-  
-  
+
   const record: ConnectionRecord = {
     id: generateId(),
     domain: normalizedDomain,
@@ -69,36 +65,27 @@ export async function approveConnection(
     riskLevel,
     warnings,
   };
-  
-  
+
   await addConnectionRecord(record);
-  
-  
+
   await setActiveConnection(normalizedDomain, {
     domain: normalizedDomain,
     publicKey: connectedKey,
     connectedAt: Date.now(),
     tabId,
   });
-  
-  
+
   await incrementDomainConnectionCount(normalizedDomain);
 
   return record;
 }
 
-
-export async function denyConnection(
-  domain: string,
-  url: string,
-  reason?: string
-): Promise<void> {
+// Records a denied connection attempt for audit/history.
+export async function denyConnection(domain: string, url: string, reason?: string): Promise<void> {
   const normalizedDomain = extractDomain(url);
-  
-  
+
   const analysis = await analyzeDomain(normalizedDomain);
-  
-  
+
   const record: ConnectionRecord = {
     id: generateId(),
     domain: normalizedDomain,
@@ -108,22 +95,17 @@ export async function denyConnection(
     approved: false,
     revoked: false,
     riskLevel: analysis.riskLevel,
-    warnings: reason ? [reason] : analysis.signals.map(s => s.description),
+    warnings: reason ? [reason] : analysis.signals.map((s) => s.description),
   };
-  
-  
+
   await addConnectionRecord(record);
-
 }
-
 
 export async function revokeConnection(domain: string): Promise<void> {
   const normalizedDomain = extractDomain(domain);
-  
-  
+
   await removeActiveConnection(normalizedDomain);
-  
-  
+
   const history = await getConnectionHistory({ domain: normalizedDomain, approved: true }, 1);
   if (history.length > 0) {
     await updateConnectionRecord(history[0].id, {
@@ -131,30 +113,24 @@ export async function revokeConnection(domain: string): Promise<void> {
       revokedAt: Date.now(),
     });
   }
-
 }
-
 
 export async function revokeAllConnections(): Promise<void> {
   const activeConnections = await getActiveConnectionsList();
-  
+
   for (const connection of activeConnections) {
     await revokeConnection(connection.domain);
   }
-
 }
-
 
 export async function getAllActiveConnections(): Promise<ActiveConnection[]> {
   return getActiveConnectionsList();
 }
 
-
 export async function isConnectedToDomain(domain: string): Promise<boolean> {
   const connection = await getActiveConnection(extractDomain(domain));
   return connection !== null;
 }
-
 
 export async function getConnectionStatus(domain: string): Promise<{
   isConnected: boolean;
@@ -163,13 +139,13 @@ export async function getConnectionStatus(domain: string): Promise<{
   domainSettings: DomainSettings | null;
 }> {
   const normalizedDomain = extractDomain(domain);
-  
+
   const [connection, lastConnection, domainSettings] = await Promise.all([
     getActiveConnection(normalizedDomain),
-    getConnectionHistory({ domain: normalizedDomain }, 1).then(h => h[0] || null),
+    getConnectionHistory({ domain: normalizedDomain }, 1).then((h) => h[0] || null),
     getDomainSettings(normalizedDomain),
   ]);
-  
+
   return {
     isConnected: connection !== null,
     connection,
@@ -178,7 +154,6 @@ export async function getConnectionStatus(domain: string): Promise<{
   };
 }
 
-
 export async function getConnections(
   limit?: number,
   offset?: number,
@@ -186,11 +161,10 @@ export async function getConnections(
     domain?: string;
     approved?: boolean;
     revoked?: boolean;
-  }
+  },
 ): Promise<ConnectionRecord[]> {
   return getConnectionHistory(filter, limit, offset);
 }
-
 
 export async function getConnectionStats(): Promise<{
   totalConnections: number;
@@ -202,51 +176,41 @@ export async function getConnectionStats(): Promise<{
 }> {
   const allHistory = await getConnectionHistory();
   const activeList = await getActiveConnectionsList();
-  
-  const uniqueDomains = new Set(allHistory.map(c => c.domain));
-  
+
+  const uniqueDomains = new Set(allHistory.map((c) => c.domain));
+
   return {
     totalConnections: allHistory.length,
     activeConnections: activeList.length,
-    approvedConnections: allHistory.filter(c => c.approved).length,
-    deniedConnections: allHistory.filter(c => !c.approved).length,
-    revokedConnections: allHistory.filter(c => c.revoked).length,
+    approvedConnections: allHistory.filter((c) => c.approved).length,
+    deniedConnections: allHistory.filter((c) => !c.approved).length,
+    revokedConnections: allHistory.filter((c) => c.revoked).length,
     uniqueDomains: uniqueDomains.size,
   };
 }
 
-
 export async function trustDomain(domain: string): Promise<void> {
   const normalizedDomain = extractDomain(domain);
   await saveDomainSettings(normalizedDomain, { trustStatus: 'trusted' });
-
 }
-
 
 export async function blockDomain(domain: string): Promise<void> {
   const normalizedDomain = extractDomain(domain);
-  
-  
+
   await revokeConnection(normalizedDomain);
-  
-  
+
   await saveDomainSettings(normalizedDomain, { trustStatus: 'blocked' });
-
 }
-
 
 export async function resetDomainTrust(domain: string): Promise<void> {
   const normalizedDomain = extractDomain(domain);
   await saveDomainSettings(normalizedDomain, { trustStatus: 'neutral' });
-
 }
-
 
 export async function shouldAutoApprove(domain: string): Promise<boolean> {
   const normalizedDomain = extractDomain(domain);
   const settings = await getSecuritySettings();
-  
-  
+
   const domainSettings = await getDomainSettings(normalizedDomain);
   if (domainSettings?.trustStatus === 'trusted') {
     return true;
@@ -254,67 +218,57 @@ export async function shouldAutoApprove(domain: string): Promise<boolean> {
   if (domainSettings?.trustStatus === 'blocked') {
     return false;
   }
-  
-  
+
   return false;
 }
-
 
 export async function shouldAutoBlock(domain: string): Promise<boolean> {
   const normalizedDomain = extractDomain(domain);
   const settings = await getSecuritySettings();
-  
-  
+
   const domainSettings = await getDomainSettings(normalizedDomain);
   if (domainSettings?.trustStatus === 'blocked') {
     return true;
   }
-  
-  
+
   if (settings.autoBlockMalicious) {
     const analysis = await analyzeDomain(normalizedDomain);
-    if (analysis.signals.some(s => s.type === 'known_scam')) {
+    if (analysis.signals.some((s) => s.type === 'known_scam')) {
       return true;
     }
   }
-  
+
   return false;
 }
 
-
 export async function handleTabClosed(tabId: number): Promise<void> {
   const activeConnections = await getActiveConnections();
-  
+
   for (const [domain, connection] of Object.entries(activeConnections)) {
     if (connection.tabId === tabId) {
-      
-      
     }
   }
 }
 
-
 export async function cleanupStaleConnections(
-  maxAgeMs: number = 24 * 60 * 60 * 1000
+  maxAgeMs: number = 24 * 60 * 60 * 1000,
 ): Promise<number> {
   const activeConnections = await getActiveConnections();
   const now = Date.now();
   let cleaned = 0;
-  
+
   for (const [domain, connection] of Object.entries(activeConnections)) {
     if (now - connection.connectedAt > maxAgeMs) {
       await removeActiveConnection(domain);
       cleaned++;
     }
   }
-  
-  if (cleaned > 0) {
 
+  if (cleaned > 0) {
   }
-  
+
   return cleaned;
 }
-
 
 export async function exportConnectionData(): Promise<{
   activeConnections: ActiveConnection[];
@@ -326,11 +280,10 @@ export async function exportConnectionData(): Promise<{
     getConnectionHistory(),
     getConnectionStats(),
   ]);
-  
+
   return {
     activeConnections,
     history,
     stats,
   };
 }
-

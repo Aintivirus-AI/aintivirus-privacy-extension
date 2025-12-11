@@ -38,7 +38,7 @@ export function getExplorerUrl(
   id: string,
   chain: ChainType,
   evmChainId?: EVMChainId,
-  options?: ExplorerUrlOptions
+  options?: ExplorerUrlOptions,
 ): string {
   const isTestnet = options?.testnet ?? false;
 
@@ -50,15 +50,11 @@ export function getExplorerUrl(
   return getEVMExplorerUrl(type, id, chainId, isTestnet);
 }
 
-function getSolanaExplorerUrl(
-  type: ExplorerType,
-  id: string,
-  isTestnet: boolean
-): string {
+function getSolanaExplorerUrl(type: ExplorerType, id: string, isTestnet: boolean): string {
   if (type === 'token' && !isTestnet) {
     return `${DEXSCREENER_SOLANA}/${id}`;
   }
-  
+
   const clusterParam = isTestnet ? '?cluster=devnet' : '';
   return `${SOLANA_EXPLORER}/${type}/${id}${clusterParam}`;
 }
@@ -67,7 +63,7 @@ function getEVMExplorerUrl(
   type: ExplorerType,
   id: string,
   chainId: EVMChainId,
-  isTestnet: boolean
+  isTestnet: boolean,
 ): string {
   const explorer = EVM_EXPLORERS[chainId];
   if (!explorer) {
@@ -82,7 +78,7 @@ export function getTxExplorerUrl(
   hash: string,
   chain: ChainType,
   evmChainId?: EVMChainId,
-  options?: ExplorerUrlOptions
+  options?: ExplorerUrlOptions,
 ): string {
   return getExplorerUrl('tx', hash, chain, evmChainId, options);
 }
@@ -91,7 +87,7 @@ export function getAddressExplorerUrl(
   address: string,
   chain: ChainType,
   evmChainId?: EVMChainId,
-  options?: ExplorerUrlOptions
+  options?: ExplorerUrlOptions,
 ): string {
   return getExplorerUrl('address', address, chain, evmChainId, options);
 }
@@ -100,7 +96,7 @@ export function getTokenExplorerUrl(
   tokenAddress: string,
   chain: ChainType,
   evmChainId?: EVMChainId,
-  options?: ExplorerUrlOptions
+  options?: ExplorerUrlOptions,
 ): string {
   return getExplorerUrl('token', tokenAddress, chain, evmChainId, options);
 }
@@ -110,7 +106,7 @@ export function openExplorerUrl(
   id: string,
   chain: ChainType,
   evmChainId?: EVMChainId,
-  options?: ExplorerUrlOptions
+  options?: ExplorerUrlOptions,
 ): void {
   const url = getExplorerUrl(type, id, chain, evmChainId, options);
   window.open(url, '_blank', 'noopener,noreferrer');

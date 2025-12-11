@@ -1,53 +1,45 @@
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RecentRecipient, ChainType, EVMChainId, SolanaNetwork } from '@shared/types';
 import { useRecentRecipients } from '../hooks/useRecentRecipients';
 
-
 interface RecentRecipientsDropdownProps {
-  
   value: string;
-  
+
   onSelect: (address: string) => void;
-  
+
   onChange: (value: string) => void;
-  
+
   chainType: ChainType;
-  
+
   solanaNetwork?: SolanaNetwork;
-  
+
   evmChainId?: EVMChainId | null;
-  
+
   placeholder?: string;
-  
+
   className?: string;
-  
+
   hasError?: boolean;
-  
+
   disabled?: boolean;
 }
 
-
 function generateIdenticonColors(address: string): { bg: string; fg: string } {
-  
   let hash = 0;
   for (let i = 0; i < address.length; i++) {
-    hash = ((hash << 5) - hash) + address.charCodeAt(i);
+    hash = (hash << 5) - hash + address.charCodeAt(i);
     hash = hash & hash;
   }
-  
-  
+
   const hue = Math.abs(hash % 360);
-  const saturation = 65 + (Math.abs(hash >> 8) % 20); 
-  const lightness = 55 + (Math.abs(hash >> 16) % 15); 
-  
+  const saturation = 65 + (Math.abs(hash >> 8) % 20);
+  const lightness = 55 + (Math.abs(hash >> 16) % 15);
+
   return {
     bg: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
     fg: lightness > 60 ? '#1a1a2e' : '#ffffff',
   };
 }
-
 
 function getInitials(recipient: RecentRecipient): string {
   if (recipient.label) {
@@ -57,13 +49,10 @@ function getInitials(recipient: RecentRecipient): string {
     }
     return recipient.label.slice(0, 2).toUpperCase();
   }
-  
-  const addr = recipient.address.startsWith('0x') 
-    ? recipient.address.slice(2) 
-    : recipient.address;
+
+  const addr = recipient.address.startsWith('0x') ? recipient.address.slice(2) : recipient.address;
   return addr.slice(0, 2).toUpperCase();
 }
-
 
 interface IdenticonProps {
   recipient: RecentRecipient;
@@ -71,12 +60,9 @@ interface IdenticonProps {
 }
 
 const Identicon: React.FC<IdenticonProps> = ({ recipient, size = 32 }) => {
-  const colors = useMemo(
-    () => generateIdenticonColors(recipient.address),
-    [recipient.address]
-  );
+  const colors = useMemo(() => generateIdenticonColors(recipient.address), [recipient.address]);
   const initials = useMemo(() => getInitials(recipient), [recipient]);
-  
+
   return (
     <div
       className="recipient-identicon"
@@ -99,12 +85,10 @@ const Identicon: React.FC<IdenticonProps> = ({ recipient, size = 32 }) => {
   );
 };
 
-
 function truncateAddress(address: string, chars = 6): string {
   if (address.length <= chars * 2 + 3) return address;
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
-
 
 interface DropdownItemProps {
   recipient: RecentRecipient;
@@ -129,12 +113,8 @@ const DropdownItem: React.FC<DropdownItemProps> = ({
     >
       <Identicon recipient={recipient} size={28} />
       <div className="recipient-info">
-        {recipient.label && (
-          <span className="recipient-label">{recipient.label}</span>
-        )}
-        <span className="recipient-address">
-          {truncateAddress(recipient.address, 8)}
-        </span>
+        {recipient.label && <span className="recipient-label">{recipient.label}</span>}
+        <span className="recipient-address">{truncateAddress(recipient.address, 8)}</span>
       </div>
       {recipient.useCount > 1 && (
         <span className="recipient-count" title={`Used ${recipient.useCount} times`}>
@@ -144,7 +124,6 @@ const DropdownItem: React.FC<DropdownItemProps> = ({
     </div>
   );
 };
-
 
 const MAX_VISIBLE_RECIPIENTS = 5;
 
@@ -164,33 +143,24 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  
-  
-  const { recipients, loading } = useRecentRecipients(
-    chainType,
-    solanaNetwork,
-    evmChainId,
-    value 
-  );
-  
-  
+
+  const { recipients, loading } = useRecentRecipients(chainType, solanaNetwork, evmChainId, value);
+
   const visibleRecipients = useMemo(
     () => recipients.slice(0, MAX_VISIBLE_RECIPIENTS),
-    [recipients]
+    [recipients],
   );
-  
-  
+
   const shouldShowDropdown = useMemo(() => {
     if (disabled || loading) return false;
     if (!isOpen) return false;
     if (visibleRecipients.length === 0) return false;
-    
+
     if (value.length >= 2) return true;
-    
+
     return value.length < 2;
   }, [disabled, loading, isOpen, visibleRecipients.length, value.length]);
-  
-  
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -198,95 +168,91 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
         setSelectedIndex(-1);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  
-  
+
   useEffect(() => {
     setSelectedIndex(-1);
   }, [visibleRecipients]);
-  
-  
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!shouldShowDropdown) {
-      
-      if (event.key === 'ArrowDown' && visibleRecipients.length > 0) {
-        setIsOpen(true);
-        setSelectedIndex(0);
-        event.preventDefault();
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!shouldShowDropdown) {
+        if (event.key === 'ArrowDown' && visibleRecipients.length > 0) {
+          setIsOpen(true);
+          setSelectedIndex(0);
+          event.preventDefault();
+        }
+        return;
       }
-      return;
-    }
-    
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault();
-        setSelectedIndex(prev => 
-          prev < visibleRecipients.length - 1 ? prev + 1 : prev
-        );
-        break;
-        
-      case 'ArrowUp':
-        event.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : 0);
-        break;
-        
-      case 'Enter':
-        event.preventDefault();
-        if (selectedIndex >= 0 && selectedIndex < visibleRecipients.length) {
-          const selected = visibleRecipients[selectedIndex];
-          onSelect(selected.address);
+
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          setSelectedIndex((prev) => (prev < visibleRecipients.length - 1 ? prev + 1 : prev));
+          break;
+
+        case 'ArrowUp':
+          event.preventDefault();
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+          break;
+
+        case 'Enter':
+          event.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < visibleRecipients.length) {
+            const selected = visibleRecipients[selectedIndex];
+            onSelect(selected.address);
+            setIsOpen(false);
+            setSelectedIndex(-1);
+          }
+          break;
+
+        case 'Escape':
+          event.preventDefault();
           setIsOpen(false);
           setSelectedIndex(-1);
-        }
-        break;
-        
-      case 'Escape':
-        event.preventDefault();
-        setIsOpen(false);
-        setSelectedIndex(-1);
-        break;
-        
-      case 'Tab':
-        setIsOpen(false);
-        setSelectedIndex(-1);
-        break;
-    }
-  }, [shouldShowDropdown, visibleRecipients, selectedIndex, onSelect]);
-  
-  
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value);
-    setIsOpen(true);
-  }, [onChange]);
-  
-  
+          break;
+
+        case 'Tab':
+          setIsOpen(false);
+          setSelectedIndex(-1);
+          break;
+      }
+    },
+    [shouldShowDropdown, visibleRecipients, selectedIndex, onSelect],
+  );
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange(e.target.value);
+      setIsOpen(true);
+    },
+    [onChange],
+  );
+
   const handleFocus = useCallback(() => {
     if (visibleRecipients.length > 0) {
       setIsOpen(true);
     }
   }, [visibleRecipients.length]);
-  
-  
-  const handleItemClick = useCallback((recipient: RecentRecipient) => {
-    onSelect(recipient.address);
-    setIsOpen(false);
-    setSelectedIndex(-1);
-    
-  }, [onSelect]);
-  
-  
+
+  const handleItemClick = useCallback(
+    (recipient: RecentRecipient) => {
+      onSelect(recipient.address);
+      setIsOpen(false);
+      setSelectedIndex(-1);
+    },
+    [onSelect],
+  );
+
   const handleItemHover = useCallback((index: number) => {
     setSelectedIndex(index);
   }, []);
-  
+
   return (
-    <div 
-      className="recent-recipients-dropdown" 
-      ref={containerRef}
-    >
+    <div className="recent-recipients-dropdown" ref={containerRef}>
       <input
         ref={inputRef}
         type="text"
@@ -303,16 +269,10 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
         aria-haspopup="listbox"
         role="combobox"
       />
-      
+
       {shouldShowDropdown && (
-        <div 
-          className="recent-recipients-list"
-          role="listbox"
-          aria-label="Recent recipients"
-        >
-          <div className="recent-recipients-header">
-            Recent Recipients
-          </div>
+        <div className="recent-recipients-list" role="listbox" aria-label="Recent recipients">
+          <div className="recent-recipients-header">Recent Recipients</div>
           {visibleRecipients.map((recipient, index) => (
             <DropdownItem
               key={recipient.address}
@@ -327,7 +287,6 @@ export const RecentRecipientsDropdown: React.FC<RecentRecipientsDropdownProps> =
     </div>
   );
 };
-
 
 export const recentRecipientsStyles = `
 .recent-recipients-dropdown {

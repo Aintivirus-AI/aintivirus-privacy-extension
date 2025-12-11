@@ -16,11 +16,7 @@ const TestConsumer: React.FC<{
 }> = ({ message = 'Test message', variant = 'success', duration }) => {
   const { addToast } = useToast();
 
-  return (
-    <button onClick={() => addToast(message, variant, duration)}>
-      Show Toast
-    </button>
-  );
+  return <button onClick={() => addToast(message, variant, duration)}>Show Toast</button>;
 };
 
 // Helper to render with provider
@@ -159,7 +155,7 @@ describe('ToastProvider', () => {
   describe('Multiple toasts', () => {
     it('should display multiple toasts', async () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-      
+
       const MultiToastConsumer: React.FC = () => {
         const { addToast } = useToast();
         return (
@@ -181,17 +177,19 @@ describe('ToastProvider', () => {
 
     it('should limit to MAX_TOASTS', async () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-      
+
       const ManyToastsConsumer: React.FC = () => {
         const { addToast } = useToast();
         return (
-          <button onClick={() => {
-            addToast('Toast 1');
-            addToast('Toast 2');
-            addToast('Toast 3');
-            addToast('Toast 4');
-            addToast('Toast 5');
-          }}>
+          <button
+            onClick={() => {
+              addToast('Toast 1');
+              addToast('Toast 2');
+              addToast('Toast 3');
+              addToast('Toast 4');
+              addToast('Toast 5');
+            }}
+          >
             Show Many
           </button>
         );
@@ -218,7 +216,7 @@ describe('ToastProvider', () => {
       };
 
       expect(() => render(<BadComponent />)).toThrow(
-        'useToast must be used within a ToastProvider'
+        'useToast must be used within a ToastProvider',
       );
 
       consoleSpy.mockRestore();
@@ -249,4 +247,3 @@ describe('ToastProvider', () => {
     });
   });
 });
-

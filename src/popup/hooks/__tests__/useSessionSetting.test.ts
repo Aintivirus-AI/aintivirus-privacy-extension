@@ -10,15 +10,15 @@ const mockSessionStorage: Record<string, any> = {};
 
 beforeEach(() => {
   jest.clearAllMocks();
-  Object.keys(mockSessionStorage).forEach(key => delete mockSessionStorage[key]);
-  
+  Object.keys(mockSessionStorage).forEach((key) => delete mockSessionStorage[key]);
+
   (chrome.storage.session.get as jest.Mock).mockImplementation((keys) => {
     if (typeof keys === 'string') {
       return Promise.resolve({ [keys]: mockSessionStorage[keys] });
     }
     return Promise.resolve(mockSessionStorage);
   });
-  
+
   (chrome.storage.session.set as jest.Mock).mockImplementation((items) => {
     Object.assign(mockSessionStorage, items);
     return Promise.resolve();
@@ -39,7 +39,7 @@ describe('useSessionSetting', () => {
 
     // Wait for async load
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(result.current[0]).toBe('stored value');
@@ -98,7 +98,7 @@ describe('useSessionSetting', () => {
     const { result } = renderHook(() => useSessionSetting('testKey' as any, 'default'));
 
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(result.current[0]).toBe('default');
@@ -135,4 +135,3 @@ describe('useSessionSetting', () => {
     expect(result2.current[0]).toBe('value2');
   });
 });
-

@@ -24,7 +24,7 @@ export class PublicKey {
         throw new Error('Invalid public key input');
       }
       this._key = key;
-      
+
       // Check cache first
       if (keyCache.has(key)) {
         this._bytes = keyCache.get(key)!;
@@ -49,7 +49,7 @@ export class PublicKey {
         throw new Error('Invalid public key input');
       }
       this._bytes = new Uint8Array(bytesArray);
-      
+
       // Check cache first
       const bytesKey = this._bytes.toString();
       if (bytesCache.has(bytesKey)) {
@@ -114,11 +114,12 @@ export class Keypair {
       for (let i = 32; i < 64; i++) {
         this.secretKey[i] = (seed[(i - 32) % seed.length] ^ ((i - 32) * 7)) & 0xff;
       }
-      
+
       // Derive public key from first 32 bytes (the seed)
       const publicKeyBytes = new Uint8Array(32);
       for (let i = 0; i < 32; i++) {
-        publicKeyBytes[i] = (this.secretKey[i % 32] * 3 + this.secretKey[(i + 7) % 32] * 5 + i * 11) & 0xff;
+        publicKeyBytes[i] =
+          (this.secretKey[i % 32] * 3 + this.secretKey[(i + 7) % 32] * 5 + i * 11) & 0xff;
       }
       this.publicKey = new PublicKey(publicKeyBytes);
     } else {
@@ -271,14 +272,20 @@ export const SystemProgram = {
 
 export const ComputeBudgetProgram = {
   programId: new PublicKey('ComputeBudget111111111111111111111111111111'),
-  setComputeUnitLimit: jest.fn(() => new TransactionInstruction({
-    keys: [],
-    programId: new PublicKey('ComputeBudget111111111111111111111111111111'),
-  })),
-  setComputeUnitPrice: jest.fn(() => new TransactionInstruction({
-    keys: [],
-    programId: new PublicKey('ComputeBudget111111111111111111111111111111'),
-  })),
+  setComputeUnitLimit: jest.fn(
+    () =>
+      new TransactionInstruction({
+        keys: [],
+        programId: new PublicKey('ComputeBudget111111111111111111111111111111'),
+      }),
+  ),
+  setComputeUnitPrice: jest.fn(
+    () =>
+      new TransactionInstruction({
+        keys: [],
+        programId: new PublicKey('ComputeBudget111111111111111111111111111111'),
+      }),
+  ),
 };
 
 export class Connection {
@@ -367,4 +374,3 @@ export class AddressLookupTableAccount {
     this.state = args.state;
   }
 }
-

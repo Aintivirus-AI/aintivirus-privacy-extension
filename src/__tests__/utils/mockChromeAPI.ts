@@ -139,7 +139,10 @@ function createMockStorageArea(): StorageArea {
           // Object with defaults
           const result: Record<string, unknown> = {};
           Object.keys(keys).forEach((key) => {
-            result[key] = key in mockStorageData ? mockStorageData[key] : (keys as Record<string, unknown>)[key];
+            result[key] =
+              key in mockStorageData
+                ? mockStorageData[key]
+                : (keys as Record<string, unknown>)[key];
           });
           resolve(result);
         }
@@ -334,7 +337,9 @@ export function setupGlobalChromeMock(): void {
 /**
  * Create a mock MessageSender
  */
-export function createMockSender(overrides?: Partial<chrome.runtime.MessageSender>): chrome.runtime.MessageSender {
+export function createMockSender(
+  overrides?: Partial<chrome.runtime.MessageSender>,
+): chrome.runtime.MessageSender {
   return {
     id: 'mock-extension-id',
     url: 'https://example.com',
@@ -377,4 +382,3 @@ export function createMockTab(overrides?: Partial<chrome.tabs.Tab>): chrome.tabs
 export function mockSendResponse<T>(data: T): jest.Mock {
   return jest.fn().mockImplementation((response) => response);
 }
-

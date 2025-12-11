@@ -1,13 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { QueuedRequest } from '../../dapp/types';
-import {
-  decodeTypedData,
-  formatDomain,
-  getChainName,
-  TypedDataParseResult,
-  HighlightedField,
-  TxWarning,
-} from '../../decoding';
+import { decodeTypedData, getChainName, HighlightedField } from '../../decoding';
 import { formatOrigin as formatOriginUtil } from '../../shared/utils/formatOrigin';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -324,16 +317,10 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
         </div>
 
         <div style={styles.buttons}>
-          <button
-            style={{ ...styles.button, ...styles.rejectButton }}
-            onClick={() => onReject()}
-          >
+          <button style={{ ...styles.button, ...styles.rejectButton }} onClick={() => onReject()}>
             Cancel
           </button>
-          <button
-            style={{ ...styles.button, ...styles.approveButton }}
-            onClick={onApprove}
-          >
+          <button style={{ ...styles.button, ...styles.approveButton }} onClick={onApprove}>
             Sign Anyway
           </button>
         </div>
@@ -460,9 +447,7 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
               style={{
                 ...styles.fieldRow,
                 borderBottom:
-                  idx === struct.fields.length - 1
-                    ? 'none'
-                    : '1px solid rgba(255, 255, 255, 0.05)',
+                  idx === struct.fields.length - 1 ? 'none' : '1px solid rgba(255, 255, 255, 0.05)',
               }}
             >
               <span style={styles.fieldLabel}>{field.name}</span>
@@ -485,31 +470,18 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
             transition: 'transform 0.2s',
           }}
         >
-          <path
-            d="M6 4L10 8L6 12"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
+          <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
         <span>View Raw Data</span>
       </button>
 
-      {showRaw && (
-        <div style={styles.rawData}>{JSON.stringify(raw, null, 2)}</div>
-      )}
+      {showRaw && <div style={styles.rawData}>{JSON.stringify(raw, null, 2)}</div>}
 
       <div style={styles.buttons}>
-        <button
-          style={{ ...styles.button, ...styles.rejectButton }}
-          onClick={() => onReject()}
-        >
+        <button style={{ ...styles.button, ...styles.rejectButton }} onClick={() => onReject()}>
           Cancel
         </button>
-        <button
-          style={{ ...styles.button, ...styles.approveButton }}
-          onClick={onApprove}
-        >
+        <button style={{ ...styles.button, ...styles.approveButton }} onClick={onApprove}>
           Sign
         </button>
       </div>
@@ -520,18 +492,8 @@ export function SignTypedDataApproval({ request, onApprove, onReject }: Props) {
 function WarningIcon({ color }: { color: string }) {
   return (
     <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 2L2 22h20L12 2z"
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-      />
-      <path
-        d="M12 10v4M12 18h.01"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M12 2L2 22h20L12 2z" fill="none" stroke={color} strokeWidth="2" />
+      <path d="M12 10v4M12 18h.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

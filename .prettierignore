@@ -1,0 +1,15 @@
+# Build output / dependencies
+dist/
+node_modules/
+
+# Third-party vendored assets
+vendor/
+
+# Generated / large artifacts
+coverage/
+test-report*.html
+
+# Package manager noise
+package-lock.json
+
+

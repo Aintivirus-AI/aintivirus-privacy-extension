@@ -1,24 +1,17 @@
-
-
-import type {
-  ChainAdapter,
-  ChainType,
-  EVMChainId,
-  NetworkEnvironment,
-} from './types';
+import type { ChainAdapter, ChainType, EVMChainId, NetworkEnvironment } from './types';
 import { ChainError, ChainErrorCode } from './types';
 import { createSolanaAdapter, SolanaAdapter } from './solana';
 import { createEVMAdapter, EVMAdapter } from './evm';
 import { getSupportedEVMChains } from './config';
 
+// Chain selector layer that caches adapters and exposes Solana/EVM helpers.
 
 const adapterCache: Map<string, ChainAdapter> = new Map();
-
 
 function getAdapterCacheKey(
   chainType: ChainType,
   evmChainId?: EVMChainId,
-  network?: NetworkEnvironment
+  network?: NetworkEnvironment,
 ): string {
   if (chainType === 'solana') {
     return `solana-${network || 'mainnet'}`;
@@ -26,27 +19,23 @@ function getAdapterCacheKey(
   return `evm-${evmChainId}-${network || 'mainnet'}`;
 }
 
-
 export function getChainAdapter(
   chainType: ChainType,
   evmChainId?: EVMChainId,
-  network: NetworkEnvironment = 'mainnet'
+  network: NetworkEnvironment = 'mainnet',
 ): ChainAdapter {
   const cacheKey = getAdapterCacheKey(chainType, evmChainId, network);
-  
-  
+
   const cached = adapterCache.get(cacheKey);
   if (cached) {
-    
     if (cached.network !== network) {
       cached.setNetwork(network);
     }
     return cached;
   }
-  
-  
+
   let adapter: ChainAdapter;
-  
+
   if (chainType === 'solana') {
     adapter = createSolanaAdapter(network);
   } else if (chainType === 'evm') {
@@ -54,50 +43,42 @@ export function getChainAdapter(
       throw new ChainError(
         ChainErrorCode.INVALID_CHAIN,
         'EVM chain ID is required for EVM adapters',
-        'evm'
+        'evm',
       );
     }
-    
+
     if (!getSupportedEVMChains().includes(evmChainId)) {
       throw new ChainError(
         ChainErrorCode.UNSUPPORTED_CHAIN,
         `Unsupported EVM chain: ${evmChainId}`,
-        'evm'
+        'evm',
       );
     }
-    
+
     adapter = createEVMAdapter(evmChainId, network);
   } else {
-    throw new ChainError(
-      ChainErrorCode.UNSUPPORTED_CHAIN,
-      `Unsupported chain type: ${chainType}`
-    );
+    throw new ChainError(ChainErrorCode.UNSUPPORTED_CHAIN, `Unsupported chain type: ${chainType}`);
   }
-  
-  
+
   adapterCache.set(cacheKey, adapter);
-  
+
   return adapter;
 }
-
 
 export function getSolanaAdapter(network: NetworkEnvironment = 'mainnet'): SolanaAdapter {
   return getChainAdapter('solana', undefined, network) as SolanaAdapter;
 }
 
-
 export function getEVMAdapter(
   evmChainId: EVMChainId,
-  network: NetworkEnvironment = 'mainnet'
+  network: NetworkEnvironment = 'mainnet',
 ): EVMAdapter {
   return getChainAdapter('evm', evmChainId, network) as EVMAdapter;
 }
 
-
 export function clearAdapterCache(): void {
   adapterCache.clear();
 }
-
 
 export function getSupportedChains(): {
   solana: true;
@@ -109,9 +90,7 @@ export function getSupportedChains(): {
   };
 }
 
-
 export * from './types';
-
 
 export {
   EVM_CHAINS,
@@ -132,14 +111,11 @@ export {
   ERC20_GAS_LIMIT,
 } from './config';
 
-
 export { SolanaAdapter, createSolanaAdapter } from './solana';
-
 
 export {
   EVMAdapter,
   createEVMAdapter,
-  
   getProvider,
   getBestProvider,
   withFailover,
@@ -147,13 +123,11 @@ export {
   getTransactionCount,
   sendTransaction,
   waitForTransaction,
-  
   estimateTransactionGas,
   estimateNativeTransferGas,
   estimateTokenTransferGas,
   formatGasPrice,
   formatFee,
-  
   sendNativeToken,
   sendToken,
   parseAmount,
@@ -161,12 +135,10 @@ export {
   signTransaction,
   broadcastTransaction,
   confirmTransaction,
-  
   getTokenBalance,
   getTokenMetadata,
   getPopularTokenBalances,
   POPULAR_TOKENS,
-  
   discoverAllowances,
   getTokenAllowance,
   createRevokeTransaction,
@@ -178,7 +150,6 @@ export {
   formatAllowance,
   MAX_UINT256,
   INFINITE_THRESHOLD,
-  
   getKnownSpenders,
   getSpenderLabel,
   isVerifiedSpender,
@@ -189,6 +160,3 @@ export {
   type UnsignedRevokeTransaction,
   type SpenderInfo,
 } from './evm';
-
-
-

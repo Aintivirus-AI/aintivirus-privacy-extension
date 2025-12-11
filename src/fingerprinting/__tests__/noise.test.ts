@@ -363,6 +363,3 @@ describe('Fingerprinting Noise', () => {
     });
   });
 });
-
-
-

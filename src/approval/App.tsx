@@ -3,7 +3,7 @@ import { ConnectApproval } from './components/ConnectApproval';
 import { SignApproval } from './components/SignApproval';
 import { SignTypedDataApproval } from './components/SignTypedDataApproval';
 import { TransactionApproval } from './components/TransactionApproval';
-import { QueuedRequest, ApprovalType, AccountInfo } from '../dapp/types';
+import { QueuedRequest, AccountInfo } from '../dapp/types';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -154,7 +154,6 @@ export function App() {
           remember,
         },
       });
-
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve');
       setLoading(false);
@@ -174,7 +173,6 @@ export function App() {
           reason: reason || 'User rejected',
         },
       });
-
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject');
       setLoading(false);
@@ -269,7 +267,7 @@ function renderApprovalComponent(
   request: QueuedRequest,
   accounts: AccountInfo[],
   onApprove: (accounts: string[], remember: boolean) => void,
-  onReject: (reason?: string) => void
+  onReject: (reason?: string) => void,
 ) {
   const { approvalType } = request;
 

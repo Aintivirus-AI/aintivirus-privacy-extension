@@ -14,35 +14,35 @@ import { RiskLevel, TransactionSummary, ProgramRiskLevel } from '../types';
 jest.mock('../programRegistry', () => ({
   getProgramInfo: jest.fn(),
   getProgramRiskLevel: jest.fn(),
-  isSystemProgram: jest.fn((programId: string) => 
-    programId === '11111111111111111111111111111111'
+  isSystemProgram: jest.fn((programId: string) => programId === '11111111111111111111111111111111'),
+  isTokenProgram: jest.fn(
+    (programId: string) => programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
   ),
-  isTokenProgram: jest.fn((programId: string) => 
-    programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+  isAssociatedTokenProgram: jest.fn(
+    (programId: string) => programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
   ),
-  isAssociatedTokenProgram: jest.fn((programId: string) => 
-    programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'
-  ),
-  isComputeBudgetProgram: jest.fn((programId: string) => 
-    programId === 'ComputeBudget111111111111111111111111111111'
+  isComputeBudgetProgram: jest.fn(
+    (programId: string) => programId === 'ComputeBudget111111111111111111111111111111',
   ),
   getRiskLevelDescription: jest.fn(),
 }));
 
 jest.mock('../storage', () => ({
   generateId: jest.fn(() => 'test-id-' + Math.random().toString(36).substr(2, 9)),
-  getSecuritySettings: jest.fn(() => Promise.resolve({
-    connectionMonitoring: true,
-    transactionVerification: true,
-    phishingDetection: true,
-    warnOnUnknownPrograms: true,
-    warnOnLargeTransfers: true,
-    largeTransferThreshold: 100,
-    warnOnAuthorityChanges: true,
-    warnOnUnlimitedApprovals: true,
-    autoBlockMalicious: true,
-    maxConnectionHistory: 500,
-  })),
+  getSecuritySettings: jest.fn(() =>
+    Promise.resolve({
+      connectionMonitoring: true,
+      transactionVerification: true,
+      phishingDetection: true,
+      warnOnUnknownPrograms: true,
+      warnOnLargeTransfers: true,
+      largeTransferThreshold: 100,
+      warnOnAuthorityChanges: true,
+      warnOnUnlimitedApprovals: true,
+      autoBlockMalicious: true,
+      maxConnectionHistory: 500,
+    }),
+  ),
   addPendingVerification: jest.fn(),
   removePendingVerification: jest.fn(),
 }));
@@ -58,14 +58,16 @@ describe('TransactionAnalyzer', () => {
 
   describe('deserializeTransaction', () => {
     it('should throw error for invalid encoding', () => {
-      expect(() => deserializeTransaction('not-valid-encoding!!!')).toThrow('Invalid transaction encoding');
+      expect(() => deserializeTransaction('not-valid-encoding!!!')).toThrow(
+        'Invalid transaction encoding',
+      );
     });
 
     it('should handle base64 encoded transactions', () => {
       // A minimal valid base64 that will fail deserialization but pass decoding
       // This tests the encoding detection
       const invalidButValidBase64 = btoa('test');
-      
+
       // Should not throw "Invalid transaction encoding" - it should fail at deserialization
       expect(() => deserializeTransaction(invalidButValidBase64)).toThrow();
     });
@@ -314,7 +316,9 @@ describe('TransactionAnalyzer', () => {
   });
 
   describe('Risk Level Scenarios', () => {
-    const createBaseSummary = (overrides: Partial<TransactionSummary> = {}): TransactionSummary => ({
+    const createBaseSummary = (
+      overrides: Partial<TransactionSummary> = {},
+    ): TransactionSummary => ({
       id: 'test',
       analyzedAt: Date.now(),
       domain: 'test.com',
@@ -332,14 +336,16 @@ describe('TransactionAnalyzer', () => {
 
     it('should identify high risk for malicious programs', () => {
       const summary = createBaseSummary({
-        instructions: [{
-          programId: 'malicious-program',
-          programName: 'Malicious',
-          programRisk: ProgramRiskLevel.MALICIOUS,
-          description: 'Malicious program',
-          accounts: [],
-          warnings: ['WARNING: This program has been flagged as malicious'],
-        }],
+        instructions: [
+          {
+            programId: 'malicious-program',
+            programName: 'Malicious',
+            programRisk: ProgramRiskLevel.MALICIOUS,
+            description: 'Malicious program',
+            accounts: [],
+            warnings: ['WARNING: This program has been flagged as malicious'],
+          },
+        ],
         riskLevel: 'high',
         warnings: ['WARNING: This program has been flagged as malicious'],
         requiresConfirmation: true,
@@ -351,15 +357,17 @@ describe('TransactionAnalyzer', () => {
 
     it('should identify high risk for unlimited approvals', () => {
       const summary = createBaseSummary({
-        tokenTransfers: [{
-          mint: 'token',
-          amount: 0,
-          rawAmount: 'unlimited',
-          source: 'src',
-          destination: 'dst',
-          isApproval: true,
-          approvalAmount: null, // unlimited
-        }],
+        tokenTransfers: [
+          {
+            mint: 'token',
+            amount: 0,
+            rawAmount: 'unlimited',
+            source: 'src',
+            destination: 'dst',
+            isApproval: true,
+            approvalAmount: null, // unlimited
+          },
+        ],
         riskLevel: 'high',
         warnings: ['Unlimited token approval detected'],
         requiresConfirmation: true,
@@ -393,14 +401,16 @@ describe('TransactionAnalyzer', () => {
     it('should identify low risk for simple transfers', () => {
       const summary = createBaseSummary({
         totalSolTransfer: 1.0,
-        instructions: [{
-          programId: '11111111111111111111111111111111',
-          programName: 'System Program',
-          programRisk: ProgramRiskLevel.VERIFIED,
-          description: 'Transfer 1 SOL',
-          accounts: [],
-          warnings: [],
-        }],
+        instructions: [
+          {
+            programId: '11111111111111111111111111111111',
+            programName: 'System Program',
+            programRisk: ProgramRiskLevel.VERIFIED,
+            description: 'Transfer 1 SOL',
+            accounts: [],
+            warnings: [],
+          },
+        ],
         riskLevel: 'low',
       });
 
@@ -440,6 +450,3 @@ describe('Instruction Type Detection', () => {
     });
   });
 });
-
-
-

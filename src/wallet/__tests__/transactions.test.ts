@@ -12,10 +12,7 @@ import {
   wouldLeaveDust,
   calculateMaxSendable,
 } from '../transactions';
-import {
-  TEST_RECIPIENT_SOLANA,
-  INVALID_SOLANA_ADDRESS,
-} from '../../__tests__/utils/fixtures';
+import { TEST_RECIPIENT_SOLANA, INVALID_SOLANA_ADDRESS } from '../../__tests__/utils/fixtures';
 
 // Mock dependencies
 jest.mock('../rpc', () => ({
@@ -61,42 +58,42 @@ describe('Transactions', () => {
 
     it('should return valid for sufficient balance', () => {
       const result = validateAmount(0.5, ONE_SOL, FEE);
-      
+
       expect(result.valid).toBe(true);
       expect(result.error).toBeUndefined();
     });
 
     it('should return invalid for zero amount', () => {
       const result = validateAmount(0, ONE_SOL, FEE);
-      
+
       expect(result.valid).toBe(false);
       expect(result.error).toContain('greater than 0');
     });
 
     it('should return invalid for negative amount', () => {
       const result = validateAmount(-1, ONE_SOL, FEE);
-      
+
       expect(result.valid).toBe(false);
       expect(result.error).toContain('greater than 0');
     });
 
     it('should return invalid for NaN', () => {
       const result = validateAmount(NaN, ONE_SOL, FEE);
-      
+
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Invalid amount');
     });
 
     it('should return invalid for Infinity', () => {
       const result = validateAmount(Infinity, ONE_SOL, FEE);
-      
+
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Invalid amount');
     });
 
     it('should return invalid for insufficient balance', () => {
       const result = validateAmount(2, ONE_SOL, FEE); // Trying to send 2 SOL with 1 SOL balance
-      
+
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Insufficient balance');
     });
@@ -105,14 +102,14 @@ describe('Transactions', () => {
       // Balance exactly equals amount + fee
       const exactBalance = 500_000_000 + FEE;
       const result = validateAmount(0.5, exactBalance, FEE);
-      
+
       expect(result.valid).toBe(true);
     });
 
     it('should fail when balance is less than amount + fee', () => {
       const notEnough = 500_000_000 + FEE - 1;
       const result = validateAmount(0.5, notEnough, FEE);
-      
+
       expect(result.valid).toBe(false);
     });
   });
@@ -166,8 +163,8 @@ describe('Transactions', () => {
     });
 
     it('should remove trailing zeros', () => {
-      expect(formatSolAmount(1.500000)).toBe('1.5');
-      expect(formatSolAmount(1.230000)).toBe('1.23');
+      expect(formatSolAmount(1.5)).toBe('1.5');
+      expect(formatSolAmount(1.23)).toBe('1.23');
     });
 
     it('should respect custom decimal places', () => {
@@ -227,7 +224,7 @@ describe('Transactions', () => {
       const currentBalance = 1_000_000_000; // 1 SOL
       const sendAmount = 999_105_000; // Leave only 890,000 lamports after fee
       const fee = 5000;
-      
+
       // Remaining would be 1_000_000_000 - 999_105_000 - 5000 = 890,000
       // Which is between 0 and MIN_RENT (890,880), so it IS dust
       expect(wouldLeaveDust(currentBalance, sendAmount, fee)).toBe(true);
@@ -237,7 +234,7 @@ describe('Transactions', () => {
       const currentBalance = 1_000_000;
       const sendAmount = 1_000_000 - 5000;
       const fee = 5000;
-      
+
       // Remaining = 0
       expect(wouldLeaveDust(currentBalance, sendAmount, fee)).toBe(false);
     });
@@ -246,7 +243,7 @@ describe('Transactions', () => {
       const currentBalance = 2_000_000_000; // 2 SOL
       const sendAmount = 1_000_000_000; // 1 SOL
       const fee = 5000;
-      
+
       // Remaining = ~1 SOL, well above rent-exempt
       expect(wouldLeaveDust(currentBalance, sendAmount, fee)).toBe(false);
     });
@@ -255,7 +252,7 @@ describe('Transactions', () => {
       const currentBalance = 1_000_000;
       const sendAmount = 100_000;
       const fee = 5000;
-      
+
       // Remaining = 895000, which is just above rent-exempt
       const remaining = currentBalance - sendAmount - fee;
       if (remaining > 0 && remaining < MIN_RENT) {
@@ -270,33 +267,32 @@ describe('Transactions', () => {
     it('should return balance minus fee as SOL', () => {
       const balance = 1_000_000_000; // 1 SOL in lamports
       const fee = 5000;
-      
+
       const maxSendable = calculateMaxSendable(balance, fee);
-      
+
       expect(maxSendable).toBeCloseTo(0.999995, 6);
     });
 
     it('should return 0 when balance is less than fee', () => {
       const balance = 1000;
       const fee = 5000;
-      
+
       expect(calculateMaxSendable(balance, fee)).toBe(0);
     });
 
     it('should return 0 when balance equals fee', () => {
       const fee = 5000;
-      
+
       expect(calculateMaxSendable(fee, fee)).toBe(0);
     });
 
     it('should handle large balances', () => {
       const balance = 100_000_000_000; // 100 SOL
       const fee = 5000;
-      
+
       const maxSendable = calculateMaxSendable(balance, fee);
-      
+
       expect(maxSendable).toBeCloseTo(99.999995, 5);
     });
   });
 });
-

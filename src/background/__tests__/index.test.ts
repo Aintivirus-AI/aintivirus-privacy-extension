@@ -66,10 +66,10 @@ const mockChrome = {
 function simulateMessage(
   message: any,
   sender: any = { id: 'test' },
-  sendResponse: jest.Mock = jest.fn()
+  sendResponse: jest.Mock = jest.fn(),
 ): void {
   const listeners = mockListeners.get('message') || [];
-  listeners.forEach(listener => {
+  listeners.forEach((listener) => {
     listener(message, sender, sendResponse);
   });
 }
@@ -84,14 +84,14 @@ describe('Background Script', () => {
     it('should register message listener on load', () => {
       // Simulate background script initialization
       mockChrome.runtime.onMessage.addListener(() => {});
-      
+
       expect(mockChrome.runtime.onMessage.addListener).toHaveBeenCalled();
     });
 
     it('should handle PING message', () => {
       const sendResponse = jest.fn();
       const message = { type: 'PING', payload: undefined };
-      
+
       // Register handler
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'PING') {
@@ -107,7 +107,7 @@ describe('Background Script', () => {
     it('should handle GET_FEATURE_FLAGS message', async () => {
       const sendResponse = jest.fn();
       const message = { type: 'GET_FEATURE_FLAGS', payload: undefined };
-      
+
       mockChrome.storage.local.get.mockResolvedValue({
         featureFlags: { privacy: true, wallet: true },
       });
@@ -123,7 +123,7 @@ describe('Background Script', () => {
       simulateMessage(message, {}, sendResponse);
 
       // Wait for async operation
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(mockChrome.storage.local.get).toHaveBeenCalled();
     });
@@ -133,7 +133,7 @@ describe('Background Script', () => {
     it('should route WALLET_EXISTS message', () => {
       const sendResponse = jest.fn();
       const message = { type: 'WALLET_EXISTS', payload: undefined };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'WALLET_EXISTS') {
           respond({ success: true, data: true });
@@ -148,7 +148,7 @@ describe('Background Script', () => {
     it('should route WALLET_GET_STATE message', () => {
       const sendResponse = jest.fn();
       const message = { type: 'WALLET_GET_STATE', payload: undefined };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'WALLET_GET_STATE') {
           respond({
@@ -171,7 +171,7 @@ describe('Background Script', () => {
     it('should route GET_PRIVACY_SETTINGS message', () => {
       const sendResponse = jest.fn();
       const message = { type: 'GET_PRIVACY_SETTINGS', payload: undefined };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'GET_PRIVACY_SETTINGS') {
           respond({
@@ -192,7 +192,7 @@ describe('Background Script', () => {
     it('should route GET_BLOCKED_COUNT message', () => {
       const sendResponse = jest.fn();
       const message = { type: 'GET_BLOCKED_COUNT', payload: { tabId: 1 } };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'GET_BLOCKED_COUNT') {
           respond({ success: true, data: 42 });
@@ -212,7 +212,7 @@ describe('Background Script', () => {
         type: 'SECURITY_CHECK_DOMAIN',
         payload: { domain: 'example.com' },
       };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'SECURITY_CHECK_DOMAIN') {
           respond({
@@ -245,7 +245,7 @@ describe('Background Script', () => {
           tabId: 1,
         },
       };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'DAPP_REQUEST') {
           // Would normally open approval popup
@@ -264,7 +264,7 @@ describe('Background Script', () => {
         type: 'DAPP_APPROVE',
         payload: { requestId: 'req-123' },
       };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'DAPP_APPROVE') {
           respond({ success: true });
@@ -282,7 +282,7 @@ describe('Background Script', () => {
         type: 'DAPP_REJECT',
         payload: { requestId: 'req-123', reason: 'User rejected' },
       };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'DAPP_REJECT') {
           respond({ success: true });
@@ -299,7 +299,7 @@ describe('Background Script', () => {
     it('should return error for unknown message type', () => {
       const sendResponse = jest.fn();
       const message = { type: 'UNKNOWN_TYPE', payload: undefined };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         respond({ success: false, error: 'Unknown message type' });
       });
@@ -315,7 +315,7 @@ describe('Background Script', () => {
     it('should handle errors gracefully', () => {
       const sendResponse = jest.fn();
       const message = { type: 'WALLET_CREATE', payload: { password: 'weak' } };
-      
+
       mockChrome.runtime.onMessage.addListener((msg: any, _sender: any, respond: any) => {
         if (msg.type === 'WALLET_CREATE') {
           respond({ success: false, error: 'Password too weak' });
@@ -334,7 +334,7 @@ describe('Background Script', () => {
   describe('Installation', () => {
     it('should register onInstalled listener', () => {
       mockChrome.runtime.onInstalled.addListener(() => {});
-      
+
       expect(mockChrome.runtime.onInstalled.addListener).toHaveBeenCalled();
     });
   });
@@ -342,20 +342,17 @@ describe('Background Script', () => {
   describe('Alarms', () => {
     it('should create periodic alarms', () => {
       mockChrome.alarms.create('threatIntelRefresh', { periodInMinutes: 360 });
-      
+
       expect(mockChrome.alarms.create).toHaveBeenCalledWith(
         'threatIntelRefresh',
-        expect.objectContaining({ periodInMinutes: 360 })
+        expect.objectContaining({ periodInMinutes: 360 }),
       );
     });
 
     it('should register alarm listener', () => {
       mockChrome.alarms.onAlarm.addListener(() => {});
-      
+
       expect(mockChrome.alarms.onAlarm.addListener).toHaveBeenCalled();
     });
   });
 });
-
-
-

@@ -113,20 +113,22 @@ module.exports = (env, argv) => {
     devtool: isProduction ? false : 'cheap-module-source-map',
     optimization: {
       minimize: isProduction,
-      minimizer: isProduction ? [
-        new TerserPlugin({
-          terserOptions: {
-            compress: {
-              drop_console: false,
-            },
-            mangle: true,
-            format: {
-              comments: false,
-            },
-          },
-          extractComments: false,
-        }),
-      ] : [],
+      minimizer: isProduction
+        ? [
+            new TerserPlugin({
+              terserOptions: {
+                compress: {
+                  drop_console: false,
+                },
+                mangle: true,
+                format: {
+                  comments: false,
+                },
+              },
+              extractComments: false,
+            }),
+          ]
+        : [],
     },
   };
 };

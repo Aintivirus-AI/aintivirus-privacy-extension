@@ -1,9 +1,12 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { sendToBackground } from '@shared/messaging';
-import type { EVMChainId, EVMAllowanceEntry, EVMTransactionResult, EVMRevokeFeeEstimate, EVMAllowanceDiscoveryResult } from '@shared/types';
-
+import type {
+  EVMChainId,
+  EVMAllowanceEntry,
+  EVMTransactionResult,
+  EVMRevokeFeeEstimate,
+  EVMAllowanceDiscoveryResult,
+} from '@shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -279,7 +282,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px',
     borderTop: '1px solid rgba(255, 255, 255, 0.08)',
   },
-  
+
   dialogOverlay: {
     position: 'fixed',
     top: 0,
@@ -367,53 +370,104 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 const ArrowLeftIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-    <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path
+      d="M10 12L6 8L10 4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const RefreshIcon = ({ spinning }: { spinning?: boolean }) => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={spinning ? { animation: 'spin 1s linear infinite' } : {}}>
-    <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-    <path d="M8 2V5L11 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    style={spinning ? { animation: 'spin 1s linear infinite' } : {}}
+  >
+    <path d="M14 8A6 6 0 1 1 8 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path
+      d="M8 2V5L11 4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const ShieldIcon = () => (
   <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-    <path d="M24 4L40 10V22C40 32 32 40 24 44C16 40 8 32 8 22V10L24 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M18 24L22 28L30 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path
+      d="M24 4L40 10V22C40 32 32 40 24 44C16 40 8 32 8 22V10L24 4Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M18 24L22 28L30 20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const WarningIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-    <path d="M7 5V7.5M7 9.5H7.005M12.25 7C12.25 9.8995 9.8995 12.25 7 12.25C4.10051 12.25 1.75 9.8995 1.75 7C1.75 4.10051 4.10051 1.75 7 1.75C9.8995 1.75 12.25 4.10051 12.25 7Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path
+      d="M7 5V7.5M7 9.5H7.005M12.25 7C12.25 9.8995 9.8995 12.25 7 12.25C4.10051 12.25 1.75 9.8995 1.75 7C1.75 4.10051 4.10051 1.75 7 1.75C9.8995 1.75 12.25 4.10051 12.25 7Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const CheckCircleIcon = () => (
   <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-    <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2"/>
-    <path d="M16 24L22 30L32 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="M16 24L22 30L32 18"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const ExternalLinkIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-    <path d="M9 6.5V9.5C9 10.0523 8.55228 10.5 8 10.5H2.5C1.94772 10.5 1.5 10.0523 1.5 9.5V4C1.5 3.44772 1.94772 3 2.5 3H5.5M7.5 1.5H10.5V4.5M5.5 6.5L10.5 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+    <path
+      d="M9 6.5V9.5C9 10.0523 8.55228 10.5 8 10.5H2.5C1.94772 10.5 1.5 10.0523 1.5 9.5V4C1.5 3.44772 1.94772 3 2.5 3H5.5M7.5 1.5H10.5V4.5M5.5 6.5L10.5 1.5"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
 const VerifiedIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-    <circle cx="6" cy="6" r="5" fill="currentColor"/>
-    <path d="M4 6L5.5 7.5L8 4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="6" cy="6" r="5" fill="currentColor" />
+    <path
+      d="M4 6L5.5 7.5L8 4.5"
+      stroke="white"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
-
 
 interface AllowancesViewProps {
   chainId: EVMChainId;
@@ -421,31 +475,25 @@ interface AllowancesViewProps {
   onClose: () => void;
 }
 
-export const AllowancesView: React.FC<AllowancesViewProps> = ({
-  chainId,
-  evmAddress,
-  onClose,
-}) => {
+export const AllowancesView: React.FC<AllowancesViewProps> = ({ chainId, evmAddress, onClose }) => {
   const [allowances, setAllowances] = useState<EVMAllowanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<number>(0);
   const [fromCache, setFromCache] = useState(false);
-  
-  
+
   const [showInfiniteOnly, setShowInfiniteOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'amount' | 'token' | 'spender'>('amount');
-  
-  
+
   const [revokeDialog, setRevokeDialog] = useState<{
     allowance: EVMAllowanceEntry;
     feeEstimate: EVMRevokeFeeEstimate | null;
     loading: boolean;
     error: string | null;
   } | null>(null);
-  
+
   const [successDialog, setSuccessDialog] = useState<{
     hash: string;
     explorerUrl: string;
@@ -453,42 +501,44 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
     spenderLabel: string;
   } | null>(null);
 
-  const fetchAllowances = useCallback(async (force: boolean = false) => {
-    try {
-      if (force) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
+  const fetchAllowances = useCallback(
+    async (force: boolean = false) => {
+      try {
+        if (force) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+        setError(null);
 
-      const response = await sendToBackground({
-        type: 'WALLET_GET_ALLOWANCES',
-        payload: { evmChainId: chainId, forceRefresh: force },
-      });
+        const response = await sendToBackground({
+          type: 'WALLET_GET_ALLOWANCES',
+          payload: { evmChainId: chainId, forceRefresh: force },
+        });
 
-      if (response.success && response.data) {
-        const result = response.data as EVMAllowanceDiscoveryResult;
-        setAllowances(result.allowances);
-        setFetchedAt(result.fetchedAt);
-        setFromCache(result.fromCache);
-      } else {
-        setError(response.error || 'Failed to load allowances');
+        if (response.success && response.data) {
+          const result = response.data as EVMAllowanceDiscoveryResult;
+          setAllowances(result.allowances);
+          setFetchedAt(result.fetchedAt);
+          setFromCache(result.fromCache);
+        } else {
+          setError(response.error || 'Failed to load allowances');
+        }
+      } catch (err) {
+        setError('Failed to load allowances');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (err) {
-      setError('Failed to load allowances');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [chainId]);
+    },
+    [chainId],
+  );
 
   useEffect(() => {
     fetchAllowances();
   }, [fetchAllowances]);
 
   const handleRevoke = async (allowance: EVMAllowanceEntry) => {
-    
     setRevokeDialog({
       allowance,
       feeEstimate: null,
@@ -507,24 +557,36 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
       });
 
       if (response.success && response.data) {
-        setRevokeDialog(prev => prev ? {
-          ...prev,
-          feeEstimate: response.data as EVMRevokeFeeEstimate,
-          loading: false,
-        } : null);
+        setRevokeDialog((prev) =>
+          prev
+            ? {
+                ...prev,
+                feeEstimate: response.data as EVMRevokeFeeEstimate,
+                loading: false,
+              }
+            : null,
+        );
       } else {
-        setRevokeDialog(prev => prev ? {
-          ...prev,
-          error: response.error || 'Failed to estimate fee',
-          loading: false,
-        } : null);
+        setRevokeDialog((prev) =>
+          prev
+            ? {
+                ...prev,
+                error: response.error || 'Failed to estimate fee',
+                loading: false,
+              }
+            : null,
+        );
       }
     } catch {
-      setRevokeDialog(prev => prev ? {
-        ...prev,
-        error: 'Failed to estimate fee',
-        loading: false,
-      } : null);
+      setRevokeDialog((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: 'Failed to estimate fee',
+              loading: false,
+            }
+          : null,
+      );
     }
   };
 
@@ -532,7 +594,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
     if (!revokeDialog) return;
 
     const { allowance } = revokeDialog;
-    setRevokeDialog(prev => prev ? { ...prev, loading: true, error: null } : null);
+    setRevokeDialog((prev) => (prev ? { ...prev, loading: true, error: null } : null));
 
     try {
       const response = await sendToBackground({
@@ -553,21 +615,29 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
           tokenSymbol: allowance.tokenSymbol,
           spenderLabel: allowance.spenderLabel || truncateAddress(allowance.spenderAddress),
         });
-        
+
         fetchAllowances(true);
       } else {
-        setRevokeDialog(prev => prev ? {
-          ...prev,
-          error: response.error || 'Revoke failed',
-          loading: false,
-        } : null);
+        setRevokeDialog((prev) =>
+          prev
+            ? {
+                ...prev,
+                error: response.error || 'Revoke failed',
+                loading: false,
+              }
+            : null,
+        );
       }
     } catch {
-      setRevokeDialog(prev => prev ? {
-        ...prev,
-        error: 'Failed to revoke allowance',
-        loading: false,
-      } : null);
+      setRevokeDialog((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: 'Failed to revoke allowance',
+              loading: false,
+            }
+          : null,
+      );
     }
   };
 
@@ -578,17 +648,16 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
   const formatTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`;
-    
+
     return new Date(timestamp).toLocaleDateString();
   };
 
-  
   const filteredAllowances = allowances
-    .filter(a => {
+    .filter((a) => {
       if (showInfiniteOnly && !a.isInfinite) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -604,14 +673,15 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
     .sort((a, b) => {
       switch (sortBy) {
         case 'amount':
-          
           if (a.isInfinite && !b.isInfinite) return -1;
           if (!a.isInfinite && b.isInfinite) return 1;
           return b.allowanceFormatted - a.allowanceFormatted;
         case 'token':
           return a.tokenSymbol.localeCompare(b.tokenSymbol);
         case 'spender':
-          return (a.spenderLabel || a.spenderAddress).localeCompare(b.spenderLabel || b.spenderAddress);
+          return (a.spenderLabel || a.spenderAddress).localeCompare(
+            b.spenderLabel || b.spenderAddress,
+          );
         default:
           return 0;
       }
@@ -620,15 +690,11 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
   return (
     <div style={styles.container}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      
+
       {}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
-          <button 
-            style={styles.backButton} 
-            onClick={onClose}
-            title="Back"
-          >
+          <button style={styles.backButton} onClick={onClose} title="Back">
             <ArrowLeftIcon />
           </button>
           <span style={styles.title}>Token Allowances</span>
@@ -705,9 +771,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
               <ShieldIcon />
             </div>
             <span style={styles.emptyText}>No active allowances found</span>
-            <span style={styles.emptySubtext}>
-              Your tokens are not approved to any contracts.
-            </span>
+            <span style={styles.emptySubtext}>Your tokens are not approved to any contracts.</span>
           </div>
         ) : (
           <>
@@ -717,22 +781,29 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
                 <WarningIcon />
               </span>
               <span style={styles.warningText}>
-                Revoking allowances costs gas. Verify the spender before revoking — 
-                some protocols require active allowances to function.
+                Revoking allowances costs gas. Verify the spender before revoking — some protocols
+                require active allowances to function.
               </span>
             </div>
 
             {}
             <div style={styles.allowanceList}>
               {filteredAllowances.map((allowance, index) => (
-                <div key={`${allowance.tokenAddress}-${allowance.spenderAddress}`} style={styles.allowanceCard}>
+                <div
+                  key={`${allowance.tokenAddress}-${allowance.spenderAddress}`}
+                  style={styles.allowanceCard}
+                >
                   <div style={styles.allowanceHeader}>
                     <img
-                      src={allowance.tokenLogoUri || `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#1a1a25" stroke="#627eea" stroke-width="2"/><text x="50" y="60" text-anchor="middle" fill="#e8e8ef" font-size="24">${allowance.tokenSymbol.slice(0, 2)}</text></svg>`)}`}
+                      src={
+                        allowance.tokenLogoUri ||
+                        `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#1a1a25" stroke="#627eea" stroke-width="2"/><text x="50" y="60" text-anchor="middle" fill="#e8e8ef" font-size="24">${allowance.tokenSymbol.slice(0, 2)}</text></svg>`)}`
+                      }
                       alt={allowance.tokenSymbol}
                       style={styles.tokenLogo}
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#1a1a25" stroke="#627eea" stroke-width="2"/><text x="50" y="60" text-anchor="middle" fill="#e8e8ef" font-size="24">${allowance.tokenSymbol.slice(0, 2)}</text></svg>`)}`;
+                        (e.target as HTMLImageElement).src =
+                          `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#1a1a25" stroke="#627eea" stroke-width="2"/><text x="50" y="60" text-anchor="middle" fill="#e8e8ef" font-size="24">${allowance.tokenSymbol.slice(0, 2)}</text></svg>`)}`;
                       }}
                     />
                     <div style={styles.tokenInfo}>
@@ -756,13 +827,19 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
                       </div>
                     </div>
                     <div style={styles.allowanceAmount}>
-                      <div 
+                      <div
                         style={{
                           ...styles.allowanceValue,
-                          ...(allowance.isInfinite ? styles.infiniteAllowance : styles.normalAllowance),
+                          ...(allowance.isInfinite
+                            ? styles.infiniteAllowance
+                            : styles.normalAllowance),
                         }}
                       >
-                        {allowance.isInfinite ? 'Unlimited' : allowance.allowanceFormatted.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                        {allowance.isInfinite
+                          ? 'Unlimited'
+                          : allowance.allowanceFormatted.toLocaleString(undefined, {
+                              maximumFractionDigits: 4,
+                            })}
                       </div>
                       <div style={styles.allowanceLabel}>
                         {allowance.isInfinite ? '⚠️ High Risk' : 'Allowed'}
@@ -770,10 +847,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
                     </div>
                   </div>
 
-                  <button
-                    style={styles.revokeButton}
-                    onClick={() => handleRevoke(allowance)}
-                  >
+                  <button style={styles.revokeButton} onClick={() => handleRevoke(allowance)}>
                     Revoke Allowance
                   </button>
                 </div>
@@ -783,9 +857,7 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
             {filteredAllowances.length === 0 && (
               <div style={styles.emptyState}>
                 <span style={styles.emptyText}>No matching allowances</span>
-                <span style={styles.emptySubtext}>
-                  Try adjusting your filters
-                </span>
+                <span style={styles.emptySubtext}>Try adjusting your filters</span>
               </div>
             )}
           </>
@@ -801,7 +873,10 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
 
       {}
       {revokeDialog && (
-        <div style={styles.dialogOverlay} onClick={() => !revokeDialog.loading && setRevokeDialog(null)}>
+        <div
+          style={styles.dialogOverlay}
+          onClick={() => !revokeDialog.loading && setRevokeDialog(null)}
+        >
           <div style={styles.dialog} onClick={(e) => e.stopPropagation()}>
             <div style={styles.dialogTitle}>Revoke Allowance?</div>
             <div style={styles.dialogText}>
@@ -812,7 +887,9 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
                 <div style={{ fontSize: '13px', fontWeight: 500, color: '#fff' }}>
                   {revokeDialog.allowance.spenderLabel || 'Unknown Protocol'}
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                <div
+                  style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'monospace' }}
+                >
                   {truncateAddress(revokeDialog.allowance.spenderAddress)}
                 </div>
               </div>
@@ -848,7 +925,9 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
                 style={{
                   ...styles.dialogButton,
                   ...styles.dialogConfirmButton,
-                  ...(revokeDialog.loading || !revokeDialog.feeEstimate ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+                  ...(revokeDialog.loading || !revokeDialog.feeEstimate
+                    ? { opacity: 0.5, cursor: 'not-allowed' }
+                    : {}),
                 }}
                 onClick={confirmRevoke}
                 disabled={revokeDialog.loading || !revokeDialog.feeEstimate}
@@ -863,13 +942,17 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
       {}
       {successDialog && (
         <div style={styles.dialogOverlay} onClick={() => setSuccessDialog(null)}>
-          <div style={{ ...styles.dialog, ...styles.successDialog }} onClick={(e) => e.stopPropagation()}>
+          <div
+            style={{ ...styles.dialog, ...styles.successDialog }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={{ ...styles.successIcon, color: '#22c55e' }}>
               <CheckCircleIcon />
             </div>
             <div style={styles.dialogTitle}>Allowance Revoked!</div>
             <div style={styles.dialogText}>
-              {successDialog.tokenSymbol} approval for {successDialog.spenderLabel} has been revoked.
+              {successDialog.tokenSymbol} approval for {successDialog.spenderLabel} has been
+              revoked.
             </div>
             <a
               href={successDialog.explorerUrl}
@@ -881,7 +964,12 @@ export const AllowancesView: React.FC<AllowancesViewProps> = ({
             </a>
             <div style={{ ...styles.dialogActions, marginTop: '16px' }}>
               <button
-                style={{ ...styles.dialogButton, ...styles.dialogCancelButton, flex: 'none', width: '100%' }}
+                style={{
+                  ...styles.dialogButton,
+                  ...styles.dialogCancelButton,
+                  flex: 'none',
+                  width: '100%',
+                }}
                 onClick={() => setSuccessDialog(null)}
               >
                 Done

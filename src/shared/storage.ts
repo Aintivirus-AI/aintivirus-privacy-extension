@@ -1,6 +1,5 @@
 import { StorageSchema, DEFAULT_STORAGE } from './types';
 
-
 export const storage = {
   async get<K extends keyof StorageSchema>(key: K): Promise<StorageSchema[K]> {
     const result = await chrome.storage.local.get(key);
@@ -31,11 +30,14 @@ export const storage = {
     await chrome.storage.local.clear();
   },
 
-  
-  onChange(callback: (changes: { [K in keyof StorageSchema]?: { oldValue?: StorageSchema[K]; newValue?: StorageSchema[K] } }) => void): () => void {
+  onChange(
+    callback: (changes: {
+      [K in keyof StorageSchema]?: { oldValue?: StorageSchema[K]; newValue?: StorageSchema[K] };
+    }) => void,
+  ): () => void {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
+      areaName: string,
     ) => {
       if (areaName === 'local') {
         callback(changes as Parameters<typeof callback>[0]);
@@ -49,10 +51,9 @@ export const storage = {
   },
 };
 
-
 export async function initializeStorage(): Promise<void> {
   const current = await storage.get('initialized');
-  
+
   if (!current) {
     await storage.setMultiple({
       ...DEFAULT_STORAGE,
@@ -60,4 +61,3 @@ export async function initializeStorage(): Promise<void> {
     });
   }
 }
-

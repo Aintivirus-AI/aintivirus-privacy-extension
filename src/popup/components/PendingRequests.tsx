@@ -1,8 +1,5 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { QueuedRequest, ApprovalType } from '../../dapp/types';
-
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -150,11 +147,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-
 interface Props {
   onViewRequest?: (requestId: string) => void;
 }
-
 
 export function PendingRequests({ onViewRequest }: Props) {
   const [requests, setRequests] = useState<QueuedRequest[]>([]);
@@ -162,8 +157,7 @@ export function PendingRequests({ onViewRequest }: Props) {
 
   useEffect(() => {
     loadPendingRequests();
-    
-    
+
     const interval = setInterval(loadPendingRequests, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -179,7 +173,6 @@ export function PendingRequests({ onViewRequest }: Props) {
         setRequests(response.data as QueuedRequest[]);
       }
     } catch (error) {
-
     } finally {
       setLoading(false);
     }
@@ -192,15 +185,11 @@ export function PendingRequests({ onViewRequest }: Props) {
         payload: { requestId },
       });
 
-      
       loadPendingRequests();
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   function handleView(requestId: string) {
-    
     chrome.windows.create({
       url: chrome.runtime.getURL(`approval.html?requestId=${requestId}`),
       type: 'popup',
@@ -222,19 +211,19 @@ export function PendingRequests({ onViewRequest }: Props) {
   const formatTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(diff / 60000);
-    
+
     if (seconds < 60) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
-    
+
     return new Date(timestamp).toLocaleTimeString();
   };
 
   const getTypeBadgeStyle = (approvalType: ApprovalType): React.CSSProperties => {
     const baseStyle = { ...styles.typeBadge };
-    
+
     switch (approvalType) {
       case 'connect':
         return { ...baseStyle, background: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' };
@@ -253,13 +242,20 @@ export function PendingRequests({ onViewRequest }: Props) {
 
   const getApprovalTypeLabel = (approvalType: ApprovalType): string => {
     switch (approvalType) {
-      case 'connect': return 'Connect';
-      case 'sign': return 'Sign';
-      case 'signMessage': return 'Sign Message';
-      case 'transaction': return 'Transaction';
-      case 'switchChain': return 'Switch Network';
-      case 'addChain': return 'Add Network';
-      default: return 'Request';
+      case 'connect':
+        return 'Connect';
+      case 'sign':
+        return 'Sign';
+      case 'signMessage':
+        return 'Sign Message';
+      case 'transaction':
+        return 'Transaction';
+      case 'switchChain':
+        return 'Switch Network';
+      case 'addChain':
+        return 'Add Network';
+      default:
+        return 'Request';
     }
   };
 
@@ -274,28 +270,27 @@ export function PendingRequests({ onViewRequest }: Props) {
     );
   }
 
-  const pendingOnly = requests.filter(r => r.status === 'pending');
+  const pendingOnly = requests.filter((r) => r.status === 'pending');
 
   return (
     <div style={styles.container}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      
+
       <div style={styles.header}>
         <span style={styles.title}>Pending Requests</span>
-        {pendingOnly.length > 0 && (
-          <span style={styles.badge}>{pendingOnly.length}</span>
-        )}
+        {pendingOnly.length > 0 && <span style={styles.badge}>{pendingOnly.length}</span>}
       </div>
 
       {pendingOnly.length === 0 ? (
         <div style={styles.emptyState}>
           <svg style={styles.emptyIcon} viewBox="0 0 48 48" fill="none">
-            <rect x="8" y="12" width="32" height="24" rx="4" stroke="#64748b" strokeWidth="2"/>
-            <path d="M8 20h32" stroke="#64748b" strokeWidth="2"/>
-            <circle cx="24" cy="28" r="4" stroke="#64748b" strokeWidth="2"/>
+            <rect x="8" y="12" width="32" height="24" rx="4" stroke="#64748b" strokeWidth="2" />
+            <path d="M8 20h32" stroke="#64748b" strokeWidth="2" />
+            <circle cx="24" cy="28" r="4" stroke="#64748b" strokeWidth="2" />
           </svg>
           <span style={styles.emptyText}>
-            No pending requests.<br/>
+            No pending requests.
+            <br />
             New requests will appear here.
           </span>
         </div>
@@ -306,9 +301,9 @@ export function PendingRequests({ onViewRequest }: Props) {
               <div style={styles.requestHeader}>
                 <div style={styles.favicon}>
                   {request.favicon ? (
-                    <img 
-                      src={request.favicon} 
-                      alt="" 
+                    <img
+                      src={request.favicon}
+                      alt=""
                       style={styles.faviconImage}
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
@@ -316,26 +311,25 @@ export function PendingRequests({ onViewRequest }: Props) {
                     />
                   ) : (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#64748b"/>
+                      <path
+                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+                        fill="#64748b"
+                      />
                     </svg>
                   )}
                 </div>
-                
+
                 <div style={styles.requestInfo}>
-                  <div style={styles.siteName}>
-                    {request.title || formatOrigin(request.origin)}
-                  </div>
+                  <div style={styles.siteName}>{request.title || formatOrigin(request.origin)}</div>
                   <div style={styles.requestDetails}>
                     <span style={getTypeBadgeStyle(request.approvalType)}>
                       {getApprovalTypeLabel(request.approvalType)}
                     </span>
-                    <span style={styles.timeAgo}>
-                      {formatTime(request.createdAt)}
-                    </span>
+                    <span style={styles.timeAgo}>{formatTime(request.createdAt)}</span>
                   </div>
                 </div>
               </div>
-              
+
               <div style={styles.requestActions}>
                 <button
                   style={{ ...styles.actionButton, ...styles.cancelButton }}

@@ -1,34 +1,29 @@
-
-
 import React from 'react';
 import { ExternalLinkIcon } from '../Icons';
 import { getExplorerUrl, type ExplorerType } from '@shared/explorer';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-
 export interface ExplorerLinkIconProps {
-  
   type: ExplorerType;
-  
+
   id: string;
-  
+
   chain: ChainType;
-  
+
   evmChainId?: EVMChainId;
-  
+
   testnet?: boolean;
-  
+
   size?: number;
-  
+
   className?: string;
-  
+
   variant?: 'icon' | 'button' | 'link';
-  
+
   label?: string;
-  
+
   title?: string;
 }
-
 
 export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
   type,
@@ -45,7 +40,7 @@ export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const url = getExplorerUrl(type, id, chain, evmChainId, { testnet });
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -95,7 +90,6 @@ export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
     );
   }
 
-  
   return (
     <button
       onClick={handleClick}
@@ -109,7 +103,6 @@ export const ExplorerLinkIcon: React.FC<ExplorerLinkIconProps> = ({
     </button>
   );
 };
-
 
 const explorerIconStyles = `
   .explorer-icon-btn {
@@ -172,6 +165,3 @@ const explorerButtonStyles = `
 `;
 
 export default ExplorerLinkIcon;
-
-
-

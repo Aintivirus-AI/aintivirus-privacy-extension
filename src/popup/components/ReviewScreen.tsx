@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { AddressChip } from './AddressChip';
 import { ChainPill } from './ChainPill';
@@ -10,45 +8,43 @@ import { ExplorerLinkIcon } from './ExplorerLinkIcon';
 import { GasSettingsPanel, type GasSettings } from './GasSettingsPanel';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-
 export type ReviewState = 'review' | 'pending' | 'success' | 'error';
 
 export interface ReviewScreenProps {
-  
   title?: string;
-  
+
   fromAddress: string;
-  
+
   fromLabel?: string;
-  
+
   toAddress: string;
-  
+
   toLabel?: string;
-  
+
   isFirstTime?: boolean;
-  
+
   chain: ChainType;
-  
+
   evmChainId?: EVMChainId;
-  
+
   testnet?: boolean;
-  
+
   token: string;
-  
+
   tokenLogo?: string;
-  
+
   amount: number | string;
-  
+
   fiatAmount?: number;
-  
+
   fee?: number | string;
-  
+
   feeFiat?: number;
-  
+
   nativeSymbol?: string;
-  
+
   totalFiat?: number;
-  
+
   details?: {
     nonce?: number;
     gasLimit?: string;
@@ -58,32 +54,31 @@ export interface ReviewScreenProps {
     data?: string;
     value?: string;
   };
-  
+
   state?: ReviewState;
-  
+
   txHash?: string;
-  
+
   error?: string;
-  
+
   onConfirm: () => void;
-  
+
   onCancel: () => void;
-  
+
   onDone?: () => void;
-  
+
   confirmLabel?: string;
-  
+
   loadingText?: string;
-  
+
   className?: string;
-  
+
   enableGasCustomization?: boolean;
-  
+
   gasLimit?: bigint;
-  
+
   onGasSettingsChange?: (settings: GasSettings) => void;
 }
-
 
 function formatAmount(amount: number | string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -105,7 +100,6 @@ function formatFiat(value: number | undefined): string {
     maximumFractionDigits: 2,
   }).format(value);
 }
-
 
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   title = 'Review Transaction',
@@ -141,14 +135,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [showAdvancedGas, setShowAdvancedGas] = useState(false);
-  
+
   const formattedAmount = useMemo(() => formatAmount(amount), [amount]);
-  const formattedFee = useMemo(() => fee ? formatAmount(fee) : undefined, [fee]);
+  const formattedFee = useMemo(() => (fee ? formatAmount(fee) : undefined), [fee]);
   const formattedFiatAmount = useMemo(() => formatFiat(fiatAmount), [fiatAmount]);
   const formattedFeeFiat = useMemo(() => formatFiat(feeFiat), [feeFiat]);
   const formattedTotal = useMemo(() => formatFiat(totalFiat), [totalFiat]);
-  
-  
+
   if (state === 'success' || state === 'pending') {
     return (
       <>
@@ -163,20 +156,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 </svg>
               )}
             </div>
-            
+
             <h2 className="review-result-title">
               {state === 'pending' ? 'Transaction Pending' : 'Transaction Sent'}
             </h2>
-            
+
             <div className="review-result-amount">
               {formattedAmount} {token}
             </div>
-            
-            <StatusChip 
-              status={state === 'pending' ? 'pending' : 'confirmed'} 
-              size="md" 
-            />
-            
+
+            <StatusChip status={state === 'pending' ? 'pending' : 'confirmed'} size="md" />
+
             {txHash && (
               <div className="review-result-actions">
                 <ExplorerLinkIcon
@@ -192,18 +182,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               </div>
             )}
           </div>
-          
+
           <div className="review-result-footer">
-            <button
-              className="review-done-btn"
-              onClick={onDone || onCancel}
-              type="button"
-            >
+            <button className="review-done-btn" onClick={onDone || onCancel} type="button">
               Done
             </button>
           </div>
         </div>
-        
+
         <style>{`
           .review-screen {
             display: flex;
@@ -329,8 +315,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       </>
     );
   }
-  
-  
+
   if (state === 'error') {
     return (
       <>
@@ -341,32 +326,22 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
               </svg>
             </div>
-            
+
             <h2 className="review-result-title">Transaction Failed</h2>
-            
-            {error && (
-              <p className="review-error-message">{error}</p>
-            )}
+
+            {error && <p className="review-error-message">{error}</p>}
           </div>
-          
+
           <div className="review-result-footer">
-            <button
-              className="review-retry-btn"
-              onClick={onConfirm}
-              type="button"
-            >
+            <button className="review-retry-btn" onClick={onConfirm} type="button">
               Try Again
             </button>
-            <button
-              className="review-cancel-btn"
-              onClick={onCancel}
-              type="button"
-            >
+            <button className="review-cancel-btn" onClick={onCancel} type="button">
               Cancel
             </button>
           </div>
         </div>
-        
+
         <style>{`
           .review-error .review-result-icon {
             background: var(--error-muted);
@@ -420,8 +395,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       </>
     );
   }
-  
-  
+
   return (
     <>
       <StickyBottomCTA
@@ -435,12 +409,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       >
         <div className="review-content">
           <h2 className="review-title">{title}</h2>
-          
+
           {}
           <div className="review-chain">
             <ChainPill chain={chain} evmChainId={evmChainId} testnet={testnet} variant="full" />
           </div>
-          
+
           {}
           <div className="review-field">
             <span className="review-field-label">From</span>
@@ -453,7 +427,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               size="md"
             />
           </div>
-          
+
           {}
           <div className="review-field">
             <span className="review-field-label">To</span>
@@ -468,14 +442,21 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             />
             {isFirstTime && (
               <div className="review-warning">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M12 9v4M12 17h.01M21.73 18l-8-14a2 2 0 00-3.46 0l-8 14A2 2 0 004 21h16a2 2 0 001.73-3z" />
                 </svg>
                 <span>First time sending to this address</span>
               </div>
             )}
           </div>
-          
+
           {}
           <div className="review-amount-card">
             <div className="review-amount-row">
@@ -489,7 +470,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 )}
               </div>
             </div>
-            
+
             {formattedFee && (
               <div className="review-amount-row">
                 <span className="review-amount-label">Network Fee</span>
@@ -503,7 +484,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 </div>
               </div>
             )}
-            
+
             {formattedTotal && (
               <>
                 <div className="review-amount-divider" />
@@ -514,7 +495,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               </>
             )}
           </div>
-          
+
           {}
           {enableGasCustomization && chain === 'evm' && evmChainId && onGasSettingsChange && (
             <div className="review-advanced-section">
@@ -526,7 +507,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 <span className="toggle-icon">{showAdvancedGas ? '▼' : '▶'}</span>
                 <span>Advanced</span>
               </button>
-              
+
               {showAdvancedGas && (
                 <div className="review-advanced-content">
                   <GasSettingsPanel
@@ -538,7 +519,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               )}
             </div>
           )}
-          
+
           {}
           {details && Object.keys(details).length > 0 && (
             <DetailsAccordion
@@ -549,18 +530,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               {details.nonce !== undefined && (
                 <DetailsRow label="Nonce" value={String(details.nonce)} />
               )}
-              {details.gasLimit && (
-                <DetailsRow label="Gas Limit" value={details.gasLimit} mono />
-              )}
+              {details.gasLimit && <DetailsRow label="Gas Limit" value={details.gasLimit} mono />}
               {details.maxFeePerGas && (
                 <DetailsRow label="Max Fee" value={details.maxFeePerGas} mono />
               )}
               {details.maxPriorityFeePerGas && (
                 <DetailsRow label="Priority Fee" value={details.maxPriorityFeePerGas} mono />
               )}
-              {details.value && (
-                <DetailsRow label="Value (Wei)" value={details.value} mono />
-              )}
+              {details.value && <DetailsRow label="Value (Wei)" value={details.value} mono />}
               {details.data && details.data !== '0x' && (
                 <DetailsCodeBlock data={details.data} label="Data" />
               )}
@@ -568,7 +545,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           )}
         </div>
       </StickyBottomCTA>
-      
+
       <style>{`
         .review-content {
           padding: var(--space-4, 16px);

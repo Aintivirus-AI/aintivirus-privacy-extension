@@ -8,7 +8,6 @@ export interface FeatureFlagMeta {
   icon: string;
 }
 
-
 export const FEATURE_FLAG_META: FeatureFlagMeta[] = [
   {
     id: 'privacy',
@@ -59,13 +58,10 @@ export async function resetFeatureFlags(): Promise<void> {
   await storage.set('featureFlags', DEFAULT_FEATURE_FLAGS);
 }
 
-export function onFeatureFlagsChange(
-  callback: (flags: FeatureFlags) => void
-): () => void {
+export function onFeatureFlagsChange(callback: (flags: FeatureFlags) => void): () => void {
   return storage.onChange((changes) => {
     if (changes.featureFlags?.newValue) {
       callback(changes.featureFlags.newValue);
     }
   });
 }
-

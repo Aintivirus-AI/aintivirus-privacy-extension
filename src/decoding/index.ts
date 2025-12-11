@@ -1,17 +1,12 @@
-
-
 export type {
-  
   WarningLevel,
   TxWarning,
-  
   FunctionSignature,
   DecodedFunctionCall,
   DecodedParam,
   TxKind,
   TxDetails,
   DecodedEvmTx,
-  
   TypedDataDomain,
   TypedDataTypes,
   TypedDataTypeEntry,
@@ -20,15 +15,12 @@ export type {
   TypedDataParseResult,
   TypedDataDisplayModel,
   HighlightedField,
-  
   AccountRole,
   SolanaInstructionSummary,
   DecodedSolanaTx,
-  
   KnownProtocol,
   KnownContracts,
 } from './types';
-
 
 export {
   decodeEvmTx,
@@ -41,13 +33,7 @@ export {
 
 export type { EvmTxInput } from './evmDecoder';
 
-
-export {
-  decodeTypedData,
-  getChainName,
-  formatDomain,
-} from './typedDataParser';
-
+export { decodeTypedData, getChainName, formatDomain } from './typedDataParser';
 
 export {
   decodeSolanaInstruction,
@@ -58,7 +44,6 @@ export {
   TOKEN_INSTRUCTION_NAMES,
   SYSTEM_INSTRUCTION_NAMES,
 } from './solanaDecoder';
-
 
 export {
   KNOWN_SELECTORS,
@@ -71,14 +56,11 @@ export {
   clearSelectorCaches,
 } from './selectors';
 
-
 export {
-  
   MAX_UINT256,
   HALF_MAX_UINT256,
   WARNING_THRESHOLDS,
   WARNING_CODES,
-  
   createWarning,
   isInfiniteApproval,
   isSuspiciousDeadline,
@@ -93,7 +75,6 @@ export {
   warnPermitSignature,
   warnPermit2,
   warnNftApprovalForAll,
-  
   analyzeApprovalAmount,
   analyzeEthValue,
   formatAmount,

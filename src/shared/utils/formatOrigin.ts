@@ -19,12 +19,44 @@ const SCRIPT_RANGES = {
 };
 
 const CONFUSABLES: Record<string, string> = {
-  'а': 'a', 'с': 'c', 'е': 'e', 'о': 'o', 'р': 'p', 'х': 'x', 'у': 'y',
-  'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'Н': 'H', 'К': 'K', 'М': 'M',
-  'О': 'O', 'Р': 'P', 'Т': 'T', 'Х': 'X',
-  'ο': 'o', 'α': 'a', 'ε': 'e', 'ι': 'i', 'ν': 'v', 'τ': 't',
-  'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Η': 'H', 'Ι': 'I', 'Κ': 'K', 'Μ': 'M',
-  'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Υ': 'Y', 'Χ': 'X', 'Ζ': 'Z',
+  а: 'a',
+  с: 'c',
+  е: 'e',
+  о: 'o',
+  р: 'p',
+  х: 'x',
+  у: 'y',
+  А: 'A',
+  В: 'B',
+  С: 'C',
+  Е: 'E',
+  Н: 'H',
+  К: 'K',
+  М: 'M',
+  О: 'O',
+  Р: 'P',
+  Т: 'T',
+  Х: 'X',
+  ο: 'o',
+  α: 'a',
+  ε: 'e',
+  ι: 'i',
+  ν: 'v',
+  τ: 't',
+  Α: 'A',
+  Β: 'B',
+  Ε: 'E',
+  Η: 'H',
+  Ι: 'I',
+  Κ: 'K',
+  Μ: 'M',
+  Ν: 'N',
+  Ο: 'O',
+  Ρ: 'P',
+  Τ: 'T',
+  Υ: 'Y',
+  Χ: 'X',
+  Ζ: 'Z',
 };
 
 function containsNonAscii(str: string): boolean {
@@ -37,23 +69,22 @@ function isPunycode(hostname: string): boolean {
 
 function detectScripts(str: string): string[] {
   const detected: string[] = [];
-  
+
   for (const [script, pattern] of Object.entries(SCRIPT_RANGES)) {
     if (pattern.test(str)) {
       detected.push(script);
     }
   }
-  
+
   return detected;
 }
 
 function hasMixedScripts(hostname: string): boolean {
   const scripts = detectScripts(hostname);
-  
-  const hasSuspiciousMix = 
-    scripts.includes('latin') && 
-    (scripts.includes('cyrillic') || scripts.includes('greek'));
-  
+
+  const hasSuspiciousMix =
+    scripts.includes('latin') && (scripts.includes('cyrillic') || scripts.includes('greek'));
+
   return hasSuspiciousMix;
 }
 
@@ -68,21 +99,30 @@ function containsConfusables(hostname: string): boolean {
 
 function extractEtldPlusOne(hostname: string): string {
   const parts = hostname.split('.');
-  
+
   if (parts.length <= 2) {
     return hostname;
   }
-  
+
   const twoPartTlds = [
-    'co.uk', 'com.au', 'co.nz', 'co.jp', 'or.jp', 'com.br', 
-    'org.uk', 'gov.uk', 'ac.uk', 'net.au', 'org.au'
+    'co.uk',
+    'com.au',
+    'co.nz',
+    'co.jp',
+    'or.jp',
+    'com.br',
+    'org.uk',
+    'gov.uk',
+    'ac.uk',
+    'net.au',
+    'org.au',
   ];
-  
+
   const lastTwo = parts.slice(-2).join('.');
   if (twoPartTlds.includes(lastTwo.toLowerCase())) {
     return parts.slice(-3).join('.');
   }
-  
+
   return parts.slice(-2).join('.');
 }
 
@@ -115,20 +155,20 @@ export function formatOrigin(origin: string): FormattedOrigin {
     protocol: '',
     port: '',
   };
-  
+
   try {
     const url = new URL(origin);
     const hostname = url.hostname;
     const protocol = url.protocol.replace(':', '');
     const port = url.port;
-    
+
     const hasNonAscii = containsNonAscii(hostname);
     const hasPunycode = isPunycode(hostname);
     const isIDN = hasNonAscii || hasPunycode;
-    
+
     let displayHost: string;
     let asciiHost: string;
-    
+
     if (hasPunycode) {
       displayHost = tryDecodePunycode(hostname);
       asciiHost = hostname;
@@ -139,13 +179,13 @@ export function formatOrigin(origin: string): FormattedOrigin {
       displayHost = hostname;
       asciiHost = hostname;
     }
-    
+
     const mixedScripts = hasMixedScripts(displayHost);
     const hasConfusables = containsConfusables(displayHost);
     const isSuspicious = isIDN && (mixedScripts || hasConfusables);
-    
+
     const etldPlusOne = extractEtldPlusOne(asciiHost);
-    
+
     return {
       displayHost,
       asciiHost,

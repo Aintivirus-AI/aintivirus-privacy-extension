@@ -1,41 +1,36 @@
-
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { ExplorerLinkIcon } from './ExplorerLinkIcon';
 import { CopyIcon, CheckIcon } from '../Icons';
 import { useToast } from './ToastProvider';
 import type { ChainType, EVMChainId } from '@shared/types';
 
-
 export interface AddressChipProps {
-  
   address: string;
-  
+
   chain: ChainType;
-  
+
   evmChainId?: EVMChainId;
-  
+
   label?: string;
-  
+
   testnet?: boolean;
-  
+
   size?: 'sm' | 'md' | 'lg';
-  
+
   showExplorer?: boolean;
-  
+
   showCopyButton?: boolean;
-  
+
   onCopy?: () => void;
-  
+
   showFullOnHover?: boolean;
-  
+
   isFirstTime?: boolean;
-  
+
   className?: string;
-  
+
   style?: React.CSSProperties;
 }
-
 
 function truncateAddress(address: string, startChars = 6, endChars = 4): string {
   if (!address) return '';
@@ -43,30 +38,26 @@ function truncateAddress(address: string, startChars = 6, endChars = 4): string 
   return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
 }
 
-
 function getAddressColor(address: string): string {
   if (!address) return '#5b5fc7';
-  
-  
+
   let hash = 0;
   for (let i = 0; i < address.length; i++) {
     const char = address.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
-  
-  
+
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 65%, 55%)`;
 }
 
-
 function generateIdenticonPattern(address: string): boolean[][] {
   if (!address) return Array(5).fill(Array(5).fill(false));
-  
+
   const pattern: boolean[][] = [];
   const normalized = address.toLowerCase().replace('0x', '');
-  
+
   for (let y = 0; y < 5; y++) {
     const row: boolean[] = [];
     for (let x = 0; x < 3; x++) {
@@ -74,15 +65,14 @@ function generateIdenticonPattern(address: string): boolean[][] {
       const charCode = normalized.charCodeAt(idx);
       row.push(charCode % 2 === 0);
     }
-    
+
     row.push(row[1]);
     row.push(row[0]);
     pattern.push(row);
   }
-  
+
   return pattern;
 }
-
 
 interface IdenticonProps {
   address: string;
@@ -94,7 +84,7 @@ const Identicon: React.FC<IdenticonProps> = ({ address, size, className = '' }) 
   const pattern = useMemo(() => generateIdenticonPattern(address), [address]);
   const color = useMemo(() => getAddressColor(address), [address]);
   const cellSize = size / 5;
-  
+
   return (
     <svg
       width={size}
@@ -116,13 +106,12 @@ const Identicon: React.FC<IdenticonProps> = ({ address, size, className = '' }) 
               height={cellSize}
               fill={color}
             />
-          ) : null
-        )
+          ) : null,
+        ),
       )}
     </svg>
   );
 };
-
 
 export const AddressChip: React.FC<AddressChipProps> = ({
   address,
@@ -141,24 +130,25 @@ export const AddressChip: React.FC<AddressChipProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const { addToast } = useToast();
-  
-  const handleCopy = useCallback(async (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      addToast('Address copied', 'success');
-      onCopy?.();
-      
-      
-      setTimeout(() => setCopied(false), 800);
-    } catch (err) {
-      addToast('Failed to copy', 'error');
-    }
-  }, [address, addToast, onCopy]);
-  
-  
+
+  const handleCopy = useCallback(
+    async (e?: React.MouseEvent) => {
+      e?.stopPropagation();
+
+      try {
+        await navigator.clipboard.writeText(address);
+        setCopied(true);
+        addToast('Address copied', 'success');
+        onCopy?.();
+
+        setTimeout(() => setCopied(false), 800);
+      } catch (err) {
+        addToast('Failed to copy', 'error');
+      }
+    },
+    [address, addToast, onCopy],
+  );
+
   const sizeConfig = {
     sm: {
       height: 28,
@@ -188,10 +178,10 @@ export const AddressChip: React.FC<AddressChipProps> = ({
       truncateEnd: 6,
     },
   };
-  
+
   const config = sizeConfig[size];
   const truncated = truncateAddress(address, config.truncateStart, config.truncateEnd);
-  
+
   return (
     <>
       <div
@@ -206,15 +196,13 @@ export const AddressChip: React.FC<AddressChipProps> = ({
       >
         {}
         <Identicon address={address} size={config.iconSize} />
-        
+
         {}
         <div className="address-chip-text">
-          {label && (
-            <span className="address-chip-label">{label}</span>
-          )}
+          {label && <span className="address-chip-label">{label}</span>}
           <span className="address-chip-address">{truncated}</span>
         </div>
-        
+
         {}
         {showCopyButton && (
           <button
@@ -226,7 +214,7 @@ export const AddressChip: React.FC<AddressChipProps> = ({
             {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           </button>
         )}
-        
+
         {}
         {showExplorer && (
           <ExplorerLinkIcon
@@ -239,7 +227,7 @@ export const AddressChip: React.FC<AddressChipProps> = ({
             className="address-chip-explorer"
           />
         )}
-        
+
         {}
         {isFirstTime && (
           <span className="address-chip-warning" aria-label="First time sending to this address">
@@ -247,7 +235,7 @@ export const AddressChip: React.FC<AddressChipProps> = ({
           </span>
         )}
       </div>
-      
+
       <style>{`
         .address-chip {
           display: inline-flex;

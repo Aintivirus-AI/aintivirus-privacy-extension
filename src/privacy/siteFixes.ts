@@ -1,23 +1,18 @@
-
-
 export interface SiteFix {
   domain: string;
-  
+
   hideSelectors: string[];
-  
+
   styleRules?: { selector: string; styles: string }[];
-  
+
   enableMutationObserver?: boolean;
 }
-
 
 export const SITE_FIXES: SiteFix[] = [
   {
     domain: 'adblock-tester.com',
     enableMutationObserver: true,
     hideSelectors: [
-      
-      
       '.ad-container',
       '.ad-placeholder',
       '.advertisement',
@@ -32,8 +27,7 @@ export const SITE_FIXES: SiteFix[] = [
       '.ad-content',
       '.ads-container',
       '.adsbox',
-      
-      
+
       '[class*="flash"]',
       '[id*="flash"]',
       'object[type="application/x-shockwave-flash"]',
@@ -42,8 +36,7 @@ export const SITE_FIXES: SiteFix[] = [
       '.flash-ad',
       '#flash-test',
       '#flash-banner',
-      
-      
+
       'img[src*="ad.gif"]',
       'img[src*="ad_"]',
       'img[src*="_ad."]',
@@ -55,8 +48,7 @@ export const SITE_FIXES: SiteFix[] = [
       '.gif-banner',
       '#gif-test',
       '#gif-ad',
-      
-      
+
       'img[src*="advertisement"]',
       'img[src*="sponsor"]',
       'img[src*="promo"]',
@@ -67,28 +59,24 @@ export const SITE_FIXES: SiteFix[] = [
       '.image-ad',
       '#static-test',
       '#image-ad',
-      
-      
+
       '.sentry-test',
       '#sentry-test',
       '[data-testid="sentry"]',
       '.sentry-error-embed',
       '#sentry-feedback',
-      
-      
+
       '.bugsnag-test',
       '#bugsnag-test',
       '[data-testid="bugsnag"]',
-      
-      
+
       '.test-visible',
       '.test-loaded',
       '.test-result.fail',
       '[data-status="visible"]',
       '[data-status="loaded"]',
       '[data-blocked="false"]',
-      
-      
+
       '.adsbygoogle',
       '[id^="google_ads_"]',
       '[id^="div-gpt-ad"]',
@@ -97,25 +85,23 @@ export const SITE_FIXES: SiteFix[] = [
       'ins.adsbygoogle',
       '.taboola',
       '.outbrain',
-      
-      
+
       '.analytics-test',
       '.tracking-test',
       '#analytics-test',
       '#tracking-test',
     ],
     styleRules: [
-      
       {
         selector: '[class*="ad-"] img, [id*="ad-"] img, [class*="banner"] img',
         styles: 'display: none !important; visibility: hidden !important;',
       },
-      
+
       {
         selector: 'iframe[src*="ad"], iframe[id*="ad"], iframe[class*="ad"]',
         styles: 'display: none !important; visibility: hidden !important; height: 0 !important;',
       },
-      
+
       {
         selector: '.ad-container:empty, .ad-placeholder:empty, .ad-wrapper:empty',
         styles: 'display: none !important; height: 0 !important; min-height: 0 !important;',
@@ -124,35 +110,28 @@ export const SITE_FIXES: SiteFix[] = [
   },
 ];
 
-
 export function getSiteFixForDomain(hostname: string): SiteFix | null {
-  
-  const exactMatch = SITE_FIXES.find(fix => fix.domain === hostname);
+  const exactMatch = SITE_FIXES.find((fix) => fix.domain === hostname);
   if (exactMatch) return exactMatch;
-  
-  
+
   const domainParts = hostname.split('.');
   for (let i = 1; i < domainParts.length - 1; i++) {
     const parentDomain = domainParts.slice(i).join('.');
-    const parentMatch = SITE_FIXES.find(fix => fix.domain === parentDomain);
+    const parentMatch = SITE_FIXES.find((fix) => fix.domain === parentDomain);
     if (parentMatch) return parentMatch;
   }
-  
+
   return null;
 }
-
 
 export function hasSiteFix(hostname: string): boolean {
   return getSiteFixForDomain(hostname) !== null;
 }
 
-
 export function generateSiteFixCSS(siteFix: SiteFix): string {
   const parts: string[] = [];
-  
-  
+
   if (siteFix.hideSelectors.length > 0) {
-    
     const CHUNK_SIZE = 50;
     for (let i = 0; i < siteFix.hideSelectors.length; i += CHUNK_SIZE) {
       const chunk = siteFix.hideSelectors.slice(i, i + CHUNK_SIZE);
@@ -168,17 +147,15 @@ export function generateSiteFixCSS(siteFix: SiteFix): string {
 }`);
     }
   }
-  
-  
+
   if (siteFix.styleRules) {
     for (const rule of siteFix.styleRules) {
       parts.push(`${rule.selector} { ${rule.styles} }`);
     }
   }
-  
+
   return parts.join('\n\n');
 }
-
 
 export function injectAnalyticsBlockers(): void {
   const scriptContent = `
@@ -253,32 +230,20 @@ export function injectAnalyticsBlockers(): void {
     const script = document.createElement('script');
     script.textContent = scriptContent;
     script.id = 'aintivirus-analytics-blockers';
-    
+
     const target = document.head || document.documentElement;
     if (target) {
       target.insertBefore(script, target.firstChild);
       script.remove();
     }
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
-
 
 export function hideAdElements(root: Element | Document = document): number {
   let hiddenCount = 0;
-  
-  
-  const adPatterns = [
-    
-    /\bad[s-]?\b/i,
-    /\badvert/i,
-    /\bsponsor/i,
-    /\bbanner\b/i,
-    /\bpromo\b/i,
-  ];
-  
-  
+
+  const adPatterns = [/\bad[s-]?\b/i, /\badvert/i, /\bsponsor/i, /\bbanner\b/i, /\bpromo\b/i];
+
   const adIdPatterns = [
     /^ad[-_]/i,
     /[-_]ad$/i,
@@ -288,25 +253,22 @@ export function hideAdElements(root: Element | Document = document): number {
     /^flash/i,
     /^gif[-_]ad/i,
   ];
-  
-  
+
   const allElements = root.querySelectorAll('*');
   for (const el of allElements) {
     const element = el as HTMLElement;
     const className = element.className?.toString?.() || '';
     const id = element.id || '';
-    
+
     let shouldHide = false;
-    
-    
+
     for (const pattern of adPatterns) {
       if (pattern.test(className)) {
         shouldHide = true;
         break;
       }
     }
-    
-    
+
     if (!shouldHide) {
       for (const pattern of adIdPatterns) {
         if (pattern.test(id)) {
@@ -315,30 +277,32 @@ export function hideAdElements(root: Element | Document = document): number {
         }
       }
     }
-    
-    
+
     if (!shouldHide) {
-      if (element.hasAttribute('data-ad-slot') ||
-          element.hasAttribute('data-ad-client') ||
-          element.hasAttribute('data-ad')) {
+      if (
+        element.hasAttribute('data-ad-slot') ||
+        element.hasAttribute('data-ad-client') ||
+        element.hasAttribute('data-ad')
+      ) {
         shouldHide = true;
       }
     }
-    
-    
+
     if (!shouldHide && element.tagName === 'IMG') {
       const src = (element as HTMLImageElement).src?.toLowerCase() || '';
-      if (src.includes('/ads/') || 
-          src.includes('/adv/') ||
-          src.includes('banner') ||
-          src.includes('_ad.') ||
-          src.includes('-ad.') ||
-          src.includes('ad_') ||
-          src.includes('advertisement')) {
+      if (
+        src.includes('/ads/') ||
+        src.includes('/adv/') ||
+        src.includes('banner') ||
+        src.includes('_ad.') ||
+        src.includes('-ad.') ||
+        src.includes('ad_') ||
+        src.includes('advertisement')
+      ) {
         shouldHide = true;
       }
     }
-    
+
     if (shouldHide) {
       element.style.setProperty('display', 'none', 'important');
       element.style.setProperty('visibility', 'hidden', 'important');
@@ -346,14 +310,13 @@ export function hideAdElements(root: Element | Document = document): number {
       hiddenCount++;
     }
   }
-  
+
   return hiddenCount;
 }
 
-
 export function removeEmptyContainers(): number {
   let removedCount = 0;
-  
+
   const containerSelectors = [
     '.ad-container',
     '.ad-wrapper',
@@ -362,14 +325,13 @@ export function removeEmptyContainers(): number {
     '[class*="ad-"]',
     '[id*="ad-"]',
   ];
-  
+
   for (const selector of containerSelectors) {
     try {
       const containers = document.querySelectorAll(selector);
       for (const container of containers) {
         const rect = container.getBoundingClientRect();
-        
-        
+
         if (rect.height <= 5 || rect.width <= 5) {
           const element = container as HTMLElement;
           element.style.setProperty('display', 'none', 'important');
@@ -378,10 +340,8 @@ export function removeEmptyContainers(): number {
           removedCount++;
         }
       }
-    } catch {
-      
-    }
+    } catch {}
   }
-  
+
   return removedCount;
 }

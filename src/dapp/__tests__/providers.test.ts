@@ -45,9 +45,9 @@ describe('Dapp Providers', () => {
           error: 'User rejected the request',
         });
 
-        await expect(
-          simulateProviderRequest('eth_requestAccounts', [])
-        ).rejects.toThrow('User rejected');
+        await expect(simulateProviderRequest('eth_requestAccounts', [])).rejects.toThrow(
+          'User rejected',
+        );
       });
     });
 
@@ -114,10 +114,12 @@ describe('Dapp Providers', () => {
           data: { hash: txHash },
         });
 
-        const result = await simulateProviderRequest('eth_sendTransaction', [{
-          to: '0x1234567890123456789012345678901234567890',
-          value: '0xde0b6b3a7640000',
-        }]);
+        const result = await simulateProviderRequest('eth_sendTransaction', [
+          {
+            to: '0x1234567890123456789012345678901234567890',
+            value: '0xde0b6b3a7640000',
+          },
+        ]);
 
         expect(result).toBe(txHash);
       });
@@ -167,9 +169,7 @@ describe('Dapp Providers', () => {
       it('should disconnect successfully', async () => {
         mockSendMessage.mockResolvedValue({ success: true });
 
-        await expect(
-          simulateSolanaRequest('disconnect', {})
-        ).resolves.not.toThrow();
+        await expect(simulateSolanaRequest('disconnect', {})).resolves.not.toThrow();
       });
     });
 
@@ -225,7 +225,7 @@ describe('Dapp Providers', () => {
   describe('Provider Events', () => {
     it('should emit accountsChanged event', () => {
       const callback = jest.fn();
-      
+
       // Simulate event emission
       const newAccounts = ['0x1234567890123456789012345678901234567890'];
       callback(newAccounts);
@@ -235,7 +235,7 @@ describe('Dapp Providers', () => {
 
     it('should emit chainChanged event', () => {
       const callback = jest.fn();
-      
+
       // Simulate event emission
       const newChainId = '0x89'; // Polygon
       callback(newChainId);
@@ -245,7 +245,7 @@ describe('Dapp Providers', () => {
 
     it('should emit disconnect event', () => {
       const callback = jest.fn();
-      
+
       // Simulate event emission
       callback({ code: 4900, message: 'Disconnected' });
 
@@ -257,17 +257,13 @@ describe('Dapp Providers', () => {
     it('should handle network errors', async () => {
       mockSendMessage.mockRejectedValue(new Error('Network error'));
 
-      await expect(
-        simulateProviderRequest('eth_accounts', [])
-      ).rejects.toThrow('Network error');
+      await expect(simulateProviderRequest('eth_accounts', [])).rejects.toThrow('Network error');
     });
 
     it('should handle timeout errors', async () => {
       mockSendMessage.mockRejectedValue(new Error('Request timeout'));
 
-      await expect(
-        simulateProviderRequest('eth_requestAccounts', [])
-      ).rejects.toThrow('timeout');
+      await expect(simulateProviderRequest('eth_requestAccounts', [])).rejects.toThrow('timeout');
     });
 
     it('should handle user rejection', async () => {
@@ -276,9 +272,9 @@ describe('Dapp Providers', () => {
         error: 'User rejected the request',
       });
 
-      await expect(
-        simulateProviderRequest('eth_sendTransaction', [{}])
-      ).rejects.toThrow('User rejected');
+      await expect(simulateProviderRequest('eth_sendTransaction', [{}])).rejects.toThrow(
+        'User rejected',
+      );
     });
   });
 });
@@ -315,7 +311,10 @@ async function simulateProviderRequest(method: string, params: unknown[]): Promi
   }
 }
 
-async function simulateSolanaRequest(method: string, params: Record<string, unknown>): Promise<any> {
+async function simulateSolanaRequest(
+  method: string,
+  params: Record<string, unknown>,
+): Promise<any> {
   const response = await mockSendMessage({
     type: 'DAPP_REQUEST',
     payload: {
@@ -331,4 +330,3 @@ async function simulateSolanaRequest(method: string, params: Record<string, unkn
 
   return response.data;
 }
-

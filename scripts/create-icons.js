@@ -20,10 +20,7 @@ async function createIcons() {
 
   for (const size of sizes) {
     const outputPath = path.join(dir, `icon${size}.png`);
-    await sharp(sourceImage)
-      .resize(size, size, { fit: 'cover' })
-      .png()
-      .toFile(outputPath);
+    await sharp(sourceImage).resize(size, size, { fit: 'cover' }).png().toFile(outputPath);
   }
 }
 

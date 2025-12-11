@@ -48,7 +48,7 @@ describe('Keychain', () => {
     it('should generate a valid 24-word mnemonic', () => {
       const mnemonic = generateMnemonic();
       const words = mnemonic.split(' ');
-      
+
       expect(words).toHaveLength(24);
       expect(validateMnemonic(mnemonic)).toBe(true);
     });
@@ -56,7 +56,7 @@ describe('Keychain', () => {
     it('should generate unique mnemonics on each call', () => {
       const mnemonic1 = generateMnemonic();
       const mnemonic2 = generateMnemonic();
-      
+
       expect(mnemonic1).not.toBe(mnemonic2);
     });
   });
@@ -83,7 +83,8 @@ describe('Keychain', () => {
     });
 
     it('should handle extra whitespace', () => {
-      const mnemonicWithSpaces = '  abandon   abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about  ';
+      const mnemonicWithSpaces =
+        '  abandon   abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about  ';
       expect(validateMnemonic(mnemonicWithSpaces)).toBe(true);
     });
 
@@ -113,7 +114,7 @@ describe('Keychain', () => {
   describe('deriveKeypair', () => {
     it('should derive a keypair from a valid mnemonic', () => {
       const keypair = deriveKeypair(TEST_MNEMONIC_24);
-      
+
       expect(keypair).toBeDefined();
       expect(keypair.publicKey).toBeDefined();
       expect(keypair.secretKey).toBeDefined();
@@ -123,7 +124,7 @@ describe('Keychain', () => {
     it('should derive consistent keypairs from the same mnemonic', () => {
       const keypair1 = deriveKeypair(TEST_MNEMONIC_24);
       const keypair2 = deriveKeypair(TEST_MNEMONIC_24);
-      
+
       expect(keypair1.publicKey.toBase58()).toBe(keypair2.publicKey.toBase58());
     });
 
@@ -145,7 +146,7 @@ describe('Keychain', () => {
   describe('getPublicKeyFromMnemonic', () => {
     it('should return a valid base58 public key', () => {
       const publicKey = getPublicKeyFromMnemonic(TEST_MNEMONIC_24);
-      
+
       expect(publicKey).toBeDefined();
       expect(typeof publicKey).toBe('string');
       expect(publicKey.length).toBeGreaterThan(30);
@@ -155,7 +156,7 @@ describe('Keychain', () => {
     it('should return consistent public keys', () => {
       const key1 = getPublicKeyFromMnemonic(TEST_MNEMONIC_24);
       const key2 = getPublicKeyFromMnemonic(TEST_MNEMONIC_24);
-      
+
       expect(key1).toBe(key2);
     });
   });
@@ -164,21 +165,21 @@ describe('Keychain', () => {
     it('should derive keypair at different indices', () => {
       const keypair0 = deriveSolanaKeypair(TEST_MNEMONIC_24, 0);
       const keypair1 = deriveSolanaKeypair(TEST_MNEMONIC_24, 1);
-      
+
       expect(keypair0.publicKey.toBase58()).not.toBe(keypair1.publicKey.toBase58());
     });
 
     it('should derive consistent keypair for same index', () => {
       const keypair1 = deriveSolanaKeypair(TEST_MNEMONIC_24, 0);
       const keypair2 = deriveSolanaKeypair(TEST_MNEMONIC_24, 0);
-      
+
       expect(keypair1.publicKey.toBase58()).toBe(keypair2.publicKey.toBase58());
     });
 
     it('should support legacy path type', () => {
       const standardKeypair = deriveSolanaKeypair(TEST_MNEMONIC_24, 0, 'standard');
       const legacyKeypair = deriveSolanaKeypair(TEST_MNEMONIC_24, 0, 'legacy');
-      
+
       // Legacy and standard at index 0 should be the same
       expect(legacyKeypair).toBeDefined();
     });
@@ -196,7 +197,7 @@ describe('Keychain', () => {
     it('should return valid address for each index', () => {
       const address0 = getSolanaAddressFromMnemonic(TEST_MNEMONIC_24, 0);
       const address1 = getSolanaAddressFromMnemonic(TEST_MNEMONIC_24, 1);
-      
+
       expect(isValidSolanaAddress(address0)).toBe(true);
       expect(isValidSolanaAddress(address1)).toBe(true);
       expect(address0).not.toBe(address1);
@@ -206,7 +207,7 @@ describe('Keychain', () => {
   describe('deriveEVMKeypair', () => {
     it('should derive EVM keypair from mnemonic', () => {
       const keypair = deriveEVMKeypair(TEST_MNEMONIC_24);
-      
+
       expect(keypair).toBeDefined();
       expect(keypair.address).toBeDefined();
       expect(keypair.privateKey).toBeDefined();
@@ -215,14 +216,14 @@ describe('Keychain', () => {
 
     it('should derive address starting with 0x', () => {
       const keypair = deriveEVMKeypair(TEST_MNEMONIC_24);
-      
+
       expect(keypair.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
     });
 
     it('should derive consistent keypairs', () => {
       const keypair1 = deriveEVMKeypair(TEST_MNEMONIC_24);
       const keypair2 = deriveEVMKeypair(TEST_MNEMONIC_24);
-      
+
       expect(keypair1.address).toBe(keypair2.address);
       expect(keypair1.privateKey).toBe(keypair2.privateKey);
     });
@@ -230,7 +231,7 @@ describe('Keychain', () => {
     it('should derive different addresses at different indices', () => {
       const keypair0 = deriveEVMKeypair(TEST_MNEMONIC_24, 0);
       const keypair1 = deriveEVMKeypair(TEST_MNEMONIC_24, 1);
-      
+
       expect(keypair0.address).not.toBe(keypair1.address);
     });
 
@@ -243,14 +244,14 @@ describe('Keychain', () => {
     it('should use standard path by default', () => {
       const standardKeypair = deriveEVMKeypairWithPath(TEST_MNEMONIC_24, 0, 'standard');
       const defaultKeypair = deriveEVMKeypair(TEST_MNEMONIC_24, 0);
-      
+
       expect(standardKeypair.address).toBe(defaultKeypair.address);
     });
 
     it('should support ledger-live path', () => {
       const standardKeypair = deriveEVMKeypairWithPath(TEST_MNEMONIC_24, 1, 'standard');
       const ledgerKeypair = deriveEVMKeypairWithPath(TEST_MNEMONIC_24, 1, 'ledger-live');
-      
+
       // Different path types should produce different addresses
       // standard: m/44'/60'/0'/0/1 vs ledger-live: m/44'/60'/1'/0/0
       expect(standardKeypair.address).not.toBe(ledgerKeypair.address);
@@ -260,7 +261,7 @@ describe('Keychain', () => {
   describe('getEVMAddressFromMnemonic', () => {
     it('should return valid checksummed address', () => {
       const address = getEVMAddressFromMnemonic(TEST_MNEMONIC_24);
-      
+
       expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);
       expect(isValidEVMAddress(address)).toBe(true);
     });
@@ -370,14 +371,16 @@ describe('Keychain', () => {
 
     it('should return false for other counts', () => {
       expect(hasValidMnemonicWordCount('word1 word2 word3')).toBe(false);
-      expect(hasValidMnemonicWordCount('word1 word2 word3 word4 word5 word6 word7 word8')).toBe(false);
+      expect(hasValidMnemonicWordCount('word1 word2 word3 word4 word5 word6 word7 word8')).toBe(
+        false,
+      );
     });
   });
 
   describe('getAllAddressesFromMnemonic', () => {
     it('should return both Solana and EVM addresses', () => {
       const addresses = getAllAddressesFromMnemonic(TEST_MNEMONIC_24);
-      
+
       expect(addresses.solanaAddress).toBeDefined();
       expect(addresses.evmAddress).toBeDefined();
       expect(isValidSolanaAddress(addresses.solanaAddress)).toBe(true);
@@ -387,7 +390,7 @@ describe('Keychain', () => {
     it('should use specified EVM index', () => {
       const addresses0 = getAllAddressesFromMnemonic(TEST_MNEMONIC_24, 0);
       const addresses1 = getAllAddressesFromMnemonic(TEST_MNEMONIC_24, 1);
-      
+
       expect(addresses0.evmAddress).not.toBe(addresses1.evmAddress);
     });
   });
@@ -395,7 +398,7 @@ describe('Keychain', () => {
   describe('deriveAddressesForIndex', () => {
     it('should derive addresses for specified index', () => {
       const addresses = deriveAddressesForIndex(TEST_MNEMONIC_24, 0);
-      
+
       expect(isValidSolanaAddress(addresses.solanaAddress)).toBe(true);
       expect(isValidEVMAddress(addresses.evmAddress)).toBe(true);
     });
@@ -403,7 +406,7 @@ describe('Keychain', () => {
     it('should derive different addresses for different indices', () => {
       const addresses0 = deriveAddressesForIndex(TEST_MNEMONIC_24, 0);
       const addresses1 = deriveAddressesForIndex(TEST_MNEMONIC_24, 1);
-      
+
       expect(addresses0.solanaAddress).not.toBe(addresses1.solanaAddress);
       expect(addresses0.evmAddress).not.toBe(addresses1.evmAddress);
     });
@@ -412,7 +415,7 @@ describe('Keychain', () => {
   describe('deriveKeypairsForIndex', () => {
     it('should derive both keypairs', () => {
       const keypairs = deriveKeypairsForIndex(TEST_MNEMONIC_24, 0);
-      
+
       expect(keypairs.solanaKeypair).toBeDefined();
       expect(keypairs.evmKeypair).toBeDefined();
       expect(keypairs.solanaKeypair.publicKey).toBeDefined();
@@ -423,7 +426,7 @@ describe('Keychain', () => {
   describe('keypairFromPrivateKey', () => {
     it('should create keypair from base58 private key', () => {
       const keypair = keypairFromPrivateKey(TEST_SOLANA_PRIVATE_KEY_BASE58);
-      
+
       expect(keypair).toBeDefined();
       expect(keypair.publicKey).toBeDefined();
     });
@@ -432,23 +435,25 @@ describe('Keychain', () => {
       // Generate a test hex key (64 chars = 32 bytes)
       const hexKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
       const keypair = keypairFromPrivateKey(hexKey);
-      
+
       expect(keypair).toBeDefined();
     });
 
     it('should create keypair from 0x-prefixed hex', () => {
       const hexKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
       const keypair = keypairFromPrivateKey(hexKey);
-      
+
       expect(keypair).toBeDefined();
     });
 
     it('should create keypair from JSON array format', () => {
       // Create a valid 64-byte array
-      const arr = Array(64).fill(0).map((_, i) => i % 256);
+      const arr = Array(64)
+        .fill(0)
+        .map((_, i) => i % 256);
       const jsonKey = JSON.stringify(arr);
       const keypair = keypairFromPrivateKey(jsonKey);
-      
+
       expect(keypair).toBeDefined();
     });
 
@@ -464,7 +469,7 @@ describe('Keychain', () => {
   describe('evmKeypairFromPrivateKey', () => {
     it('should create EVM keypair from hex private key', () => {
       const keypair = evmKeypairFromPrivateKey(TEST_EVM_PRIVATE_KEY);
-      
+
       expect(keypair).toBeDefined();
       expect(keypair.address).toBeDefined();
       expect(isValidEVMAddress(keypair.address)).toBe(true);
@@ -473,7 +478,7 @@ describe('Keychain', () => {
     it('should handle key without 0x prefix', () => {
       const keyWithoutPrefix = TEST_EVM_PRIVATE_KEY.slice(2);
       const keypair = evmKeypairFromPrivateKey(keyWithoutPrefix);
-      
+
       expect(keypair).toBeDefined();
       expect(isValidEVMAddress(keypair.address)).toBe(true);
     });
@@ -483,28 +488,32 @@ describe('Keychain', () => {
     });
 
     it('should throw error for invalid characters', () => {
-      expect(() => evmKeypairFromPrivateKey('0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG')).toThrow(WalletError);
+      expect(() =>
+        evmKeypairFromPrivateKey(
+          '0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG',
+        ),
+      ).toThrow(WalletError);
     });
   });
 
   describe('validatePrivateKey', () => {
     it('should validate EVM private keys', () => {
       const result = validatePrivateKey(TEST_EVM_PRIVATE_KEY);
-      
+
       expect(result.valid).toBe(true);
       expect(result.chainType).toBe('evm');
     });
 
     it('should validate Solana private keys', () => {
       const result = validatePrivateKey(TEST_SOLANA_PRIVATE_KEY_BASE58);
-      
+
       expect(result.valid).toBe(true);
       expect(result.chainType).toBe('solana');
     });
 
     it('should return invalid for bad keys', () => {
       const result = validatePrivateKey('invalid-key');
-      
+
       expect(result.valid).toBe(false);
       expect(result.error).toBeDefined();
     });
@@ -514,10 +523,10 @@ describe('Keychain', () => {
     it('should export private key as base58', () => {
       const keypair = deriveKeypair(TEST_MNEMONIC_24);
       const exportedKey = getSolanaPrivateKeyBase58(keypair);
-      
+
       expect(typeof exportedKey).toBe('string');
       expect(exportedKey.length).toBeGreaterThan(0);
-      
+
       // Should be able to recreate keypair from exported key
       const recreatedKeypair = keypairFromPrivateKey(exportedKey);
       expect(recreatedKeypair.publicKey.toBase58()).toBe(keypair.publicKey.toBase58());
@@ -528,10 +537,9 @@ describe('Keychain', () => {
     it('should return private key in hex format', () => {
       const keypair = deriveEVMKeypair(TEST_MNEMONIC_24);
       const exportedKey = getEVMPrivateKeyHex(keypair);
-      
+
       expect(exportedKey).toMatch(/^0x[0-9a-fA-F]{64}$/);
       expect(exportedKey).toBe(keypair.privateKey);
     });
   });
 });
-

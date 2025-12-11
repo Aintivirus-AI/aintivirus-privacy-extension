@@ -2,12 +2,7 @@
  * Tests for EVM gas estimation functions
  */
 
-import {
-  formatGasPrice,
-  formatFee,
-  calculateMaxSendable,
-  GasEstimate,
-} from '../gas';
+import { formatGasPrice, formatFee, calculateMaxSendable, GasEstimate } from '../gas';
 import { parseUnits, formatUnits } from 'ethers';
 
 // Mock dependencies
@@ -22,9 +17,7 @@ jest.mock('../../config', () => ({
     explorer: 'https://etherscan.io',
     isL2: false,
   })),
-  getNumericChainId: jest.fn((chainId: string, testnet: boolean) => 
-    testnet ? 11155111 : 1
-  ),
+  getNumericChainId: jest.fn((chainId: string, testnet: boolean) => (testnet ? 11155111 : 1)),
   isL2Chain: jest.fn(() => false),
   getL2Type: jest.fn(() => undefined),
   DEFAULT_GAS_LIMIT: BigInt(21000),
@@ -34,11 +27,13 @@ jest.mock('../../config', () => ({
 }));
 
 jest.mock('../client', () => ({
-  getFeeData: jest.fn(() => Promise.resolve({
-    gasPrice: parseUnits('30', 'gwei'),
-    maxFeePerGas: parseUnits('50', 'gwei'),
-    maxPriorityFeePerGas: parseUnits('2', 'gwei'),
-  })),
+  getFeeData: jest.fn(() =>
+    Promise.resolve({
+      gasPrice: parseUnits('30', 'gwei'),
+      maxFeePerGas: parseUnits('50', 'gwei'),
+      maxPriorityFeePerGas: parseUnits('2', 'gwei'),
+    }),
+  ),
   estimateGas: jest.fn(() => Promise.resolve(BigInt(21000))),
   call: jest.fn(() => Promise.resolve('0x')),
   withFailover: jest.fn((chainId, testnet, fn) => fn()),
@@ -50,27 +45,27 @@ describe('Gas Functions', () => {
     it('should format gas price in gwei', () => {
       const gasPrice = parseUnits('30', 'gwei');
       const formatted = formatGasPrice(gasPrice);
-      
+
       expect(formatted).toBe('30.00 gwei');
     });
 
     it('should format gas price in mwei for small values', () => {
       const gasPrice = parseUnits('0.5', 'gwei');
       const formatted = formatGasPrice(gasPrice);
-      
+
       expect(formatted).toBe('500.00 mwei');
     });
 
     it('should handle zero gas price', () => {
       const formatted = formatGasPrice(0n);
-      
+
       expect(formatted).toBe('0.00 mwei');
     });
 
     it('should handle high gas prices', () => {
       const gasPrice = parseUnits('200', 'gwei');
       const formatted = formatGasPrice(gasPrice);
-      
+
       expect(formatted).toBe('200.00 gwei');
     });
   });
@@ -79,34 +74,34 @@ describe('Gas Functions', () => {
     it('should format fee in ETH', () => {
       const fee = parseUnits('0.001', 'ether');
       const formatted = formatFee(fee);
-      
+
       expect(formatted).toBe('0.001000 ETH');
     });
 
     it('should use custom symbol', () => {
       const fee = parseUnits('0.001', 'ether');
       const formatted = formatFee(fee, 'MATIC');
-      
+
       expect(formatted).toBe('0.001000 MATIC');
     });
 
     it('should show < 0.0001 for very small fees', () => {
       const fee = parseUnits('0.00001', 'ether');
       const formatted = formatFee(fee);
-      
+
       expect(formatted).toBe('<0.0001 ETH');
     });
 
     it('should handle zero fee', () => {
       const formatted = formatFee(0n);
-      
+
       expect(formatted).toBe('<0.0001 ETH');
     });
 
     it('should format large fees correctly', () => {
       const fee = parseUnits('1.5', 'ether');
       const formatted = formatFee(fee);
-      
+
       expect(formatted).toBe('1.500000 ETH');
     });
   });
@@ -226,15 +221,14 @@ describe('Gas Price Bounds', () => {
   it('should validate MIN_GAS_PRICE_GWEI', () => {
     const minGasPrice = 1n; // 1 gwei
     const minInWei = minGasPrice * BigInt(10 ** 9);
-    
+
     expect(minInWei).toBe(BigInt(1000000000));
   });
 
   it('should validate MAX_GAS_PRICE_GWEI', () => {
     const maxGasPrice = 1000n; // 1000 gwei
     const maxInWei = maxGasPrice * BigInt(10 ** 9);
-    
+
     expect(maxInWei).toBe(BigInt(1000000000000));
   });
 });
-

@@ -49,7 +49,7 @@ describe('Wallet Flow Integration', () => {
 
     it('should derive consistent addresses from same mnemonic', () => {
       const mnemonic = generateMnemonic();
-      
+
       const addresses1 = getAllAddressesFromMnemonic(mnemonic);
       const addresses2 = getAllAddressesFromMnemonic(mnemonic);
 
@@ -59,7 +59,7 @@ describe('Wallet Flow Integration', () => {
 
     it('should derive different addresses for different accounts', () => {
       const mnemonic = generateMnemonic();
-      
+
       const addresses0 = getAllAddressesFromMnemonic(mnemonic, 0);
       const addresses1 = getAllAddressesFromMnemonic(mnemonic, 1);
       const addresses2 = getAllAddressesFromMnemonic(mnemonic, 2);
@@ -77,11 +77,11 @@ describe('Wallet Flow Integration', () => {
       const weakPasswords = ['password', '12345678', 'abc'];
       const strongPasswords = ['MyS3cur3P@ssw0rd!', TEST_STRONG_PASSWORD];
 
-      weakPasswords.forEach(password => {
+      weakPasswords.forEach((password) => {
         expect(validatePasswordStrength(password)).toBe(false);
       });
 
-      strongPasswords.forEach(password => {
+      strongPasswords.forEach((password) => {
         expect(validatePasswordStrength(password)).toBe(true);
       });
     });
@@ -90,14 +90,14 @@ describe('Wallet Flow Integration', () => {
       const mnemonic = generateMnemonic();
       const salt = generateSalt();
       const iv = generateIV();
-      
+
       // Encrypt with correct password
       const correctKey = await deriveKeyFromPassword(TEST_STRONG_PASSWORD, salt);
       const encrypted = await encrypt(mnemonic, correctKey, iv);
 
       // Try to decrypt with wrong password
       const wrongKey = await deriveKeyFromPassword('WrongPassword123!', salt);
-      
+
       await expect(decrypt(encrypted, wrongKey, iv)).rejects.toThrow();
     });
   });
@@ -105,12 +105,12 @@ describe('Wallet Flow Integration', () => {
   describe('Multi-Chain Derivation Flow', () => {
     it('should derive both Solana and EVM keypairs for same index', () => {
       const mnemonic = generateMnemonic();
-      
+
       const keypairs = deriveKeypairsForIndex(mnemonic, 0);
 
       expect(keypairs.solanaKeypair).toBeDefined();
       expect(keypairs.evmKeypair).toBeDefined();
-      
+
       // Verify addresses match derived addresses
       const addresses = getAllAddressesFromMnemonic(mnemonic, 0);
       expect(keypairs.solanaKeypair.publicKey.toBase58()).toBe(addresses.solanaAddress);
@@ -131,9 +131,9 @@ describe('Wallet Flow Integration', () => {
       }
 
       // All addresses should be unique
-      const allSolana = accounts.map(a => a.solana);
-      const allEvm = accounts.map(a => a.evm);
-      
+      const allSolana = accounts.map((a) => a.solana);
+      const allEvm = accounts.map((a) => a.evm);
+
       expect(new Set(allSolana).size).toBe(accountCount);
       expect(new Set(allEvm).size).toBe(accountCount);
     });
@@ -198,6 +198,3 @@ describe('Wallet Flow Integration', () => {
     });
   });
 });
-
-
-

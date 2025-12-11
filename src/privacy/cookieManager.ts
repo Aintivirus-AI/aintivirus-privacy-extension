@@ -1,49 +1,33 @@
-
-
 import { storage } from '@shared/storage';
 import { SitePrivacyMode, TabDomainMapping } from './types';
 import { getSiteMode } from './siteSettings';
 import { logCookieCleanup } from './metrics';
 import { extractDomain, isSameDomain } from './utils';
 
-
 const tabDomains: TabDomainMapping = {};
 
-
 export function initializeCookieManager(): void {
-
-  
   chrome.webNavigation.onCompleted.addListener(handleNavigationCompleted);
-  
-  
+
   chrome.tabs.onRemoved.addListener(handleTabRemoved);
-  
-  
+
   chrome.webNavigation.onBeforeNavigate.addListener(handleBeforeNavigate);
-
 }
-
 
 export function shutdownCookieManager(): void {
   chrome.webNavigation.onCompleted.removeListener(handleNavigationCompleted);
   chrome.tabs.onRemoved.removeListener(handleTabRemoved);
   chrome.webNavigation.onBeforeNavigate.removeListener(handleBeforeNavigate);
-  
-  
-  Object.keys(tabDomains).forEach(key => delete tabDomains[Number(key)]);
 
+  Object.keys(tabDomains).forEach((key) => delete tabDomains[Number(key)]);
 }
-
 
 export { extractDomain, isSameDomain } from './utils';
 
-
 function handleNavigationCompleted(
-  details: chrome.webNavigation.WebNavigationFramedCallbackDetails
+  details: chrome.webNavigation.WebNavigationFramedCallbackDetails,
 ): void {
-  
   if (details.frameId !== 0) {
-    
     const tabInfo = tabDomains[details.tabId];
     if (tabInfo) {
       const domain = extractDomain(details.url);
@@ -53,11 +37,10 @@ function handleNavigationCompleted(
     }
     return;
   }
-  
+
   const domain = extractDomain(details.url);
   if (!domain) return;
-  
-  
+
   tabDomains[details.tabId] = {
     domain,
     url: details.url,
@@ -65,122 +48,98 @@ function handleNavigationCompleted(
   };
 }
 
-
 function handleBeforeNavigate(
-  details: chrome.webNavigation.WebNavigationParentedCallbackDetails
+  details: chrome.webNavigation.WebNavigationParentedCallbackDetails,
 ): void {
-  
   if (details.frameId !== 0) return;
-  
+
   const tabInfo = tabDomains[details.tabId];
   if (tabInfo) {
     tabInfo.thirdPartyDomains.clear();
   }
 }
 
-
 async function handleTabRemoved(
   tabId: number,
-  removeInfo: chrome.tabs.TabRemoveInfo
+  removeInfo: chrome.tabs.TabRemoveInfo,
 ): Promise<void> {
   const tabInfo = tabDomains[tabId];
   if (!tabInfo) return;
-  
-  
+
   delete tabDomains[tabId];
-  
-  
+
   const settings = await storage.get('privacySettings');
   if (!settings?.cookieCleanup) return;
-  
-  
+
   const siteMode = await getSiteMode(tabInfo.domain);
-  
-  
+
   if (siteMode === 'disabled') return;
-  
-  
+
   if (siteMode === 'strict') {
-    
     await cleanupCookiesForDomain(tabInfo.domain, 'all');
   } else {
-    
     await cleanupThirdPartyCookies(tabInfo.domain, tabInfo.thirdPartyDomains);
   }
 }
 
-
 export async function cleanupCookiesForDomain(
   domain: string,
-  mode: 'all' | 'third-party'
+  mode: 'all' | 'third-party',
 ): Promise<number> {
   let deletedCount = 0;
-  
+
   try {
-    
     const cookies = await chrome.cookies.getAll({ domain });
-    
-    
+
     const dotCookies = await chrome.cookies.getAll({ domain: `.${domain}` });
-    
+
     const allCookies = [...cookies, ...dotCookies];
-    
+
     for (const cookie of allCookies) {
       const url = `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`;
-      
+
       try {
         await chrome.cookies.remove({
           url,
           name: cookie.name,
         });
         deletedCount++;
-      } catch (error) {
-
-      }
+      } catch (error) {}
     }
-    
-    if (deletedCount > 0) {
 
-      
+    if (deletedCount > 0) {
       logCookieCleanup(domain, deletedCount, mode === 'all' ? 'strict' : 'normal');
     }
-    
-  } catch (error) {
+  } catch (error) {}
 
-  }
-  
   return deletedCount;
 }
 
-
 async function cleanupThirdPartyCookies(
   primaryDomain: string,
-  thirdPartyDomains: Set<string>
+  thirdPartyDomains: Set<string>,
 ): Promise<number> {
   let totalDeleted = 0;
-  
+
   for (const tpDomain of thirdPartyDomains) {
     const deleted = await cleanupCookiesForDomain(tpDomain, 'third-party');
     totalDeleted += deleted;
   }
-  
+
   return totalDeleted;
 }
-
 
 export async function manualCleanupCookies(domain: string): Promise<number> {
   return cleanupCookiesForDomain(domain, 'all');
 }
 
-
 export async function getCookiesForDomain(domain: string): Promise<chrome.cookies.Cookie[]> {
   const cookies = await chrome.cookies.getAll({ domain });
   const dotCookies = await chrome.cookies.getAll({ domain: `.${domain}` });
-  
-  
+
   const seen = new Set<string>();
   const unique: chrome.cookies.Cookie[] = [];
-  
+
   for (const cookie of [...cookies, ...dotCookies]) {
     const key = `${cookie.name}|${cookie.domain}|${cookie.path}`;
     if (!seen.has(key)) {
@@ -188,47 +147,42 @@ export async function getCookiesForDomain(domain: string): Promise<chrome.cookie
       unique.push(cookie);
     }
   }
-  
+
   return unique;
 }
 
-
 export function getTabDomains(): { [tabId: number]: { domain: string; thirdPartyCount: number } } {
   const result: { [tabId: number]: { domain: string; thirdPartyCount: number } } = {};
-  
+
   for (const [tabId, info] of Object.entries(tabDomains)) {
     result[Number(tabId)] = {
       domain: info.domain,
       thirdPartyCount: info.thirdPartyDomains.size,
     };
   }
-  
+
   return result;
 }
 
-
 export async function clearAllCookies(): Promise<number> {
   let deletedCount = 0;
-  
+
   const cookies = await chrome.cookies.getAll({});
-  
+
   for (const cookie of cookies) {
     const url = `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`;
-    
+
     try {
       await chrome.cookies.remove({
         url,
         name: cookie.name,
       });
       deletedCount++;
-    } catch {
-      
-    }
+    } catch {}
   }
 
   return deletedCount;
 }
-
 
 export async function getCookieStats(): Promise<{
   totalCookies: number;
@@ -237,26 +191,22 @@ export async function getCookieStats(): Promise<{
   httpOnlyCookies: number;
 }> {
   const cookies = await chrome.cookies.getAll({});
-  
+
   const stats = {
     totalCookies: cookies.length,
     byDomain: {} as { [domain: string]: number },
     secureCookies: 0,
     httpOnlyCookies: 0,
   };
-  
+
   for (const cookie of cookies) {
-    
-    const domain = cookie.domain.startsWith('.') 
-      ? cookie.domain.slice(1) 
-      : cookie.domain;
-    
+    const domain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+
     stats.byDomain[domain] = (stats.byDomain[domain] || 0) + 1;
-    
+
     if (cookie.secure) stats.secureCookies++;
     if (cookie.httpOnly) stats.httpOnlyCookies++;
   }
-  
+
   return stats;
 }
-

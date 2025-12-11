@@ -11,6 +11,7 @@ Blocks invasive tracking using industry-standard filter lists powered by **Ainti
 The extension uses Chrome's Manifest V3 declarativeNetRequest API for high-performance, privacy-respecting ad and tracker blocking. No remote code execution, no data collection.
 
 Additional privacy features:
+
 - Automatic tracking cookie cleanup when tabs close
 - URL tracking parameter stripping
 - Global Privacy Control (GPC) signal support
@@ -21,6 +22,7 @@ Additional privacy features:
 Websites can uniquely identify you through browser fingerprinting—canvas rendering, WebGL, screen resolution, audio context, hardware specs, etc. This extension injects noise into those APIs so your fingerprint changes per-session and per-domain, making cross-site tracking much harder.
 
 Spoofed properties include:
+
 - Canvas and WebGL rendering
 - Screen dimensions
 - Audio context
@@ -32,6 +34,7 @@ Spoofed properties include:
 Built-in non-custodial wallet for Solana. Create new wallets or import existing ones via seed phrase. Private keys are encrypted with your password and never leave the extension.
 
 Features:
+
 - Send and receive SOL
 - View transaction history
 - Manage SPL tokens
@@ -118,5 +121,6 @@ See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for detailed license info
 ### Aintivirus Adblocker Attribution
 
 This extension incorporates the Aintivirus Adblocker engine—our rebranded, MV3-friendly descendant of uBlock Origin Lite (GPL-3.0).
+
 - Original source: https://github.com/gorhill/uBlock
 - uBlock Origin Lite: https://github.com/AmpossibleAdBlocker/uBOL-home

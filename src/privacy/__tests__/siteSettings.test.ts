@@ -45,7 +45,7 @@ describe('SiteSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset mock storage
-    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
+    Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
   });
 
   describe('getAllSiteSettings', () => {
@@ -357,8 +357,8 @@ describe('SiteSettings', () => {
       const results = await searchSiteSettings('example');
 
       expect(results).toHaveLength(2);
-      expect(results.map(r => r.domain)).toContain('example.com');
-      expect(results.map(r => r.domain)).toContain('example.org');
+      expect(results.map((r) => r.domain)).toContain('example.com');
+      expect(results.map((r) => r.domain)).toContain('example.org');
     });
 
     it('should be case-insensitive', async () => {
@@ -432,6 +432,3 @@ describe('SiteSettings', () => {
     });
   });
 });
-
-
-

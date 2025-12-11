@@ -1,8 +1,6 @@
-
-
-import { ProgramInfo, ProgramRiskLevel, CustomProgramSetting } from './types';
-import { getCustomProgramSetting, getAllCustomProgramSettings } from './storage';
-
+// Catalog of Solana program metadata/risk levels plus helpers to merge user overrides.
+import { ProgramInfo, ProgramRiskLevel } from './types';
+import { getCustomProgramSetting } from './storage';
 
 const NATIVE_PROGRAMS: ProgramInfo[] = [
   {
@@ -106,7 +104,6 @@ const NATIVE_PROGRAMS: ProgramInfo[] = [
   },
 ];
 
-
 const SPL_PROGRAMS: ProgramInfo[] = [
   {
     programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -178,9 +175,7 @@ const SPL_PROGRAMS: ProgramInfo[] = [
   },
 ];
 
-
 const DEFI_PROGRAMS: ProgramInfo[] = [
-  
   {
     programId: 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
     name: 'Jupiter Aggregator v6',
@@ -201,7 +196,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://jup.ag',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',
     name: 'Raydium AMM',
@@ -222,7 +217,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://raydium.io',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP',
     name: 'Orca Swap',
@@ -243,7 +238,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://www.orca.so',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD',
     name: 'Marinade Finance',
@@ -254,7 +249,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://marinade.finance',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb',
     name: 'Jito Staking',
@@ -265,7 +260,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://www.jito.network',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA',
     name: 'Marginfi',
@@ -276,7 +271,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://marginfi.com',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'KLend2g3cP87ber41GdtFjNNEaWnD8Lu3prRvBXfr5H',
     name: 'Kamino Lend',
@@ -287,7 +282,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://kamino.finance',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K',
     name: 'Magic Eden v2',
@@ -298,7 +293,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://magiceden.io',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN',
     name: 'Tensor Swap',
@@ -309,7 +304,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://www.tensor.trade',
     lastUpdated: Date.now(),
   },
-  
+
   {
     programId: 'DeJBGdMFa1uynnnKiwrVioatTuHmNLpyFKnmB5kaFdzQ',
     name: 'Phantom Swap',
@@ -322,15 +317,9 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
   },
 ];
 
-
-const MALICIOUS_PROGRAMS: ProgramInfo[] = [
-  
-  
-];
-
+const MALICIOUS_PROGRAMS: ProgramInfo[] = [];
 
 const PROGRAM_REGISTRY: Map<string, ProgramInfo> = new Map();
-
 
 function initializeRegistry(): void {
   const allPrograms = [
@@ -339,21 +328,17 @@ function initializeRegistry(): void {
     ...DEFI_PROGRAMS,
     ...MALICIOUS_PROGRAMS,
   ];
-  
+
   for (const program of allPrograms) {
     PROGRAM_REGISTRY.set(program.programId, program);
   }
 }
 
-
 initializeRegistry();
 
-
 export async function getProgramInfo(programId: string): Promise<ProgramInfo | null> {
-  
   const customSetting = await getCustomProgramSetting(programId);
   if (customSetting) {
-    
     const registryInfo = PROGRAM_REGISTRY.get(programId);
     if (registryInfo) {
       return {
@@ -362,7 +347,7 @@ export async function getProgramInfo(programId: string): Promise<ProgramInfo | n
         name: customSetting.label || registryInfo.name,
       };
     }
-    
+
     return {
       programId,
       name: customSetting.label || 'Custom Program',
@@ -373,75 +358,62 @@ export async function getProgramInfo(programId: string): Promise<ProgramInfo | n
       lastUpdated: customSetting.addedAt,
     };
   }
-  
-  
+
   return PROGRAM_REGISTRY.get(programId) || null;
 }
-
 
 export async function getProgramRiskLevel(programId: string): Promise<ProgramRiskLevel> {
   const info = await getProgramInfo(programId);
   return info?.riskLevel || ProgramRiskLevel.UNKNOWN;
 }
 
-
 export async function isProgramVerified(programId: string): Promise<boolean> {
   const riskLevel = await getProgramRiskLevel(programId);
   return riskLevel === ProgramRiskLevel.VERIFIED;
 }
-
 
 export async function isProgramMalicious(programId: string): Promise<boolean> {
   const riskLevel = await getProgramRiskLevel(programId);
   return riskLevel === ProgramRiskLevel.MALICIOUS;
 }
 
-
 export async function isProgramFlagged(programId: string): Promise<boolean> {
   const riskLevel = await getProgramRiskLevel(programId);
   return riskLevel === ProgramRiskLevel.FLAGGED;
 }
 
-
 export function getProgramsByRiskLevel(riskLevel: ProgramRiskLevel): ProgramInfo[] {
-  return Array.from(PROGRAM_REGISTRY.values()).filter(p => p.riskLevel === riskLevel);
+  return Array.from(PROGRAM_REGISTRY.values()).filter((p) => p.riskLevel === riskLevel);
 }
-
 
 export function getProgramsByCategory(category: string): ProgramInfo[] {
-  return Array.from(PROGRAM_REGISTRY.values()).filter(p => p.category === category);
+  return Array.from(PROGRAM_REGISTRY.values()).filter((p) => p.category === category);
 }
-
 
 export function getNativePrograms(): ProgramInfo[] {
-  return Array.from(PROGRAM_REGISTRY.values()).filter(p => p.isNative);
+  return Array.from(PROGRAM_REGISTRY.values()).filter((p) => p.isNative);
 }
-
 
 export function getVerifiedDefiPrograms(): ProgramInfo[] {
   return Array.from(PROGRAM_REGISTRY.values()).filter(
-    p => p.category === 'defi' && p.riskLevel === ProgramRiskLevel.VERIFIED
+    (p) => p.category === 'defi' && p.riskLevel === ProgramRiskLevel.VERIFIED,
   );
 }
-
 
 export function searchPrograms(query: string): ProgramInfo[] {
   const lowerQuery = query.toLowerCase();
   return Array.from(PROGRAM_REGISTRY.values()).filter(
-    p => p.name.toLowerCase().includes(lowerQuery) || p.programId.includes(query)
+    (p) => p.name.toLowerCase().includes(lowerQuery) || p.programId.includes(query),
   );
 }
-
 
 export function getKnownProgramCount(): number {
   return PROGRAM_REGISTRY.size;
 }
 
-
 export function isSystemProgram(programId: string): boolean {
   return programId === '11111111111111111111111111111111';
 }
-
 
 export function isTokenProgram(programId: string): boolean {
   return (
@@ -450,20 +422,15 @@ export function isTokenProgram(programId: string): boolean {
   );
 }
 
-
 export function isAssociatedTokenProgram(programId: string): boolean {
   return programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
 }
-
 
 export function isComputeBudgetProgram(programId: string): boolean {
   return programId === 'ComputeBudget111111111111111111111111111111';
 }
 
-
-function customSettingToRiskLevel(
-  trustLevel: 'trusted' | 'neutral' | 'blocked'
-): ProgramRiskLevel {
+function customSettingToRiskLevel(trustLevel: 'trusted' | 'neutral' | 'blocked'): ProgramRiskLevel {
   switch (trustLevel) {
     case 'trusted':
       return ProgramRiskLevel.VERIFIED;
@@ -473,7 +440,6 @@ function customSettingToRiskLevel(
       return ProgramRiskLevel.UNKNOWN;
   }
 }
-
 
 export function getRiskLevelDescription(riskLevel: ProgramRiskLevel): string {
   switch (riskLevel) {
@@ -490,7 +456,6 @@ export function getRiskLevelDescription(riskLevel: ProgramRiskLevel): string {
   }
 }
 
-
 export function getRiskLevelColor(riskLevel: ProgramRiskLevel): string {
   switch (riskLevel) {
     case ProgramRiskLevel.VERIFIED:
@@ -505,4 +470,3 @@ export function getRiskLevelColor(riskLevel: ProgramRiskLevel): string {
       return 'default';
   }
 }
-

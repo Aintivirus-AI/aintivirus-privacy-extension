@@ -30,12 +30,12 @@ export function createDeferred<T>(): {
 } {
   let resolve: (value: T) => void;
   let reject: (reason?: any) => void;
-  
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
-  
+
   return {
     promise,
     resolve: resolve!,
@@ -75,7 +75,7 @@ export function createMockEvent<T extends object>(overrides?: Partial<T>): T {
  */
 export function createMockKeyboardEvent(
   key: string,
-  options?: Partial<KeyboardEvent>
+  options?: Partial<KeyboardEvent>,
 ): Partial<KeyboardEvent> {
   return {
     key,
@@ -91,9 +91,7 @@ export function createMockKeyboardEvent(
 /**
  * Create a mock mouse event
  */
-export function createMockMouseEvent(
-  options?: Partial<MouseEvent>
-): Partial<MouseEvent> {
+export function createMockMouseEvent(options?: Partial<MouseEvent>): Partial<MouseEvent> {
   return {
     button: 0,
     buttons: 1,
@@ -110,7 +108,7 @@ export function createMockMouseEvent(
  */
 export async function expectToReject(
   promise: Promise<unknown>,
-  expectedError?: string | RegExp | Error
+  expectedError?: string | RegExp | Error,
 ): Promise<void> {
   try {
     await promise;
@@ -134,10 +132,10 @@ export async function expectToReject(
  */
 export function createMockFetchResponse<T>(
   data: T,
-  options?: { status?: number; ok?: boolean; headers?: Record<string, string> }
+  options?: { status?: number; ok?: boolean; headers?: Record<string, string> },
 ): Response {
   const { status = 200, ok = true, headers = {} } = options || {};
-  
+
   return {
     ok,
     status,
@@ -202,7 +200,10 @@ export function spyOnConsole(): {
 /**
  * Create a type-safe mock function
  */
-export function createTypedMock<T extends (...args: any[]) => any>(): jest.Mock<ReturnType<T>, Parameters<T>> {
+export function createTypedMock<T extends (...args: any[]) => any>(): jest.Mock<
+  ReturnType<T>,
+  Parameters<T>
+> {
   return jest.fn<ReturnType<T>, Parameters<T>>();
 }
 
@@ -212,10 +213,10 @@ export function createTypedMock<T extends (...args: any[]) => any>(): jest.Mock<
 export async function waitForElement(
   selector: string,
   container: Element = document.body,
-  timeout: number = 5000
+  timeout: number = 5000,
 ): Promise<Element | null> {
   const startTime = Date.now();
-  
+
   while (Date.now() - startTime < timeout) {
     const element = container.querySelector(selector);
     if (element) {
@@ -223,7 +224,7 @@ export async function waitForElement(
     }
     await waitFor(50);
   }
-  
+
   return null;
 }
 
@@ -272,10 +273,7 @@ export function createPartialMock<T>(overrides: Partial<T>): T {
 /**
  * Assert object contains subset of properties
  */
-export function expectToContainSubset<T extends object>(
-  actual: T,
-  expected: Partial<T>
-): void {
+export function expectToContainSubset<T extends object>(actual: T, expected: Partial<T>): void {
   Object.keys(expected).forEach((key) => {
     expect(actual[key as keyof T]).toEqual(expected[key as keyof T]);
   });
@@ -296,7 +294,7 @@ export function setupTextEncoderMock(): void {
       }
     };
   }
-  
+
   if (typeof TextDecoder === 'undefined') {
     (global as any).TextDecoder = class {
       decode(arr: Uint8Array): string {
@@ -312,7 +310,7 @@ export function setupTextEncoderMock(): void {
 export function setupCryptoMock(): void {
   if (typeof crypto === 'undefined' || !crypto.subtle) {
     const nodeCrypto = require('crypto');
-    
+
     (global as any).crypto = {
       getRandomValues: (arr: Uint8Array) => {
         return nodeCrypto.randomFillSync(arr);
@@ -329,16 +327,16 @@ export function setupCryptoMock(): void {
 export async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  errorMessage = 'Operation timed out'
+  errorMessage = 'Operation timed out',
 ): Promise<T> {
   let timeoutId: NodeJS.Timeout;
-  
+
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(errorMessage));
     }, ms);
   });
-  
+
   try {
     const result = await Promise.race([promise, timeoutPromise]);
     clearTimeout(timeoutId!);
@@ -348,6 +346,3 @@ export async function withTimeout<T>(
     throw error;
   }
 }
-
-
-

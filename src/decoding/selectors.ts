@@ -1,11 +1,6 @@
-
-
 import { FunctionSignature, KnownContracts, KnownProtocol } from './types';
 
-
 export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
-  
-  
   '0xa9059cbb': {
     name: 'transfer',
     params: ['address to', 'uint256 amount'],
@@ -32,7 +27,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'other',
   },
 
-  
   '0x42842e0e': {
     name: 'safeTransferFrom',
     params: ['address from', 'address to', 'uint256 tokenId'],
@@ -43,8 +37,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     params: ['address from', 'address to', 'uint256 tokenId', 'bytes data'],
     category: 'nft',
   },
-  
-  
+
   '0xa22cb465': {
     name: 'setApprovalForAll',
     params: ['address operator', 'bool approved'],
@@ -56,7 +49,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'other',
   },
 
-  
   '0xf242432a': {
     name: 'safeTransferFrom',
     params: ['address from', 'address to', 'uint256 id', 'uint256 amount', 'bytes data'],
@@ -68,7 +60,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'nft',
   },
 
-  
   '0xd505accf': {
     name: 'permit',
     params: [
@@ -83,7 +74,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'approval',
   },
 
-  
   '0x2b67b570': {
     name: 'permit',
     params: ['address owner', 'PermitSingle permitSingle', 'bytes signature'],
@@ -91,12 +81,22 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
   },
   '0x2a2d80d1': {
     name: 'permitTransferFrom',
-    params: ['PermitTransferFrom permit', 'SignatureTransferDetails transferDetails', 'address owner', 'bytes signature'],
+    params: [
+      'PermitTransferFrom permit',
+      'SignatureTransferDetails transferDetails',
+      'address owner',
+      'bytes signature',
+    ],
     category: 'permit2',
   },
   '0x30f28b7a': {
     name: 'permitBatchTransferFrom',
-    params: ['PermitBatchTransferFrom permit', 'SignatureTransferDetails[] transferDetails', 'address owner', 'bytes signature'],
+    params: [
+      'PermitBatchTransferFrom permit',
+      'SignatureTransferDetails[] transferDetails',
+      'address owner',
+      'bytes signature',
+    ],
     category: 'permit2',
   },
   '0x0d58b1db': {
@@ -104,7 +104,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'permit2',
   },
 
-  
   '0x3593564c': {
     name: 'execute',
     params: ['bytes commands', 'bytes[] inputs', 'uint256 deadline'],
@@ -122,17 +121,35 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
   },
   '0x18cbafe5': {
     name: 'swapExactTokensForETH',
-    params: ['uint256 amountIn', 'uint256 amountOutMin', 'address[] path', 'address to', 'uint256 deadline'],
+    params: [
+      'uint256 amountIn',
+      'uint256 amountOutMin',
+      'address[] path',
+      'address to',
+      'uint256 deadline',
+    ],
     category: 'swap',
   },
   '0x38ed1739': {
     name: 'swapExactTokensForTokens',
-    params: ['uint256 amountIn', 'uint256 amountOutMin', 'address[] path', 'address to', 'uint256 deadline'],
+    params: [
+      'uint256 amountIn',
+      'uint256 amountOutMin',
+      'address[] path',
+      'address to',
+      'uint256 deadline',
+    ],
     category: 'swap',
   },
   '0x8803dbee': {
     name: 'swapTokensForExactTokens',
-    params: ['uint256 amountOut', 'uint256 amountInMax', 'address[] path', 'address to', 'uint256 deadline'],
+    params: [
+      'uint256 amountOut',
+      'uint256 amountInMax',
+      'address[] path',
+      'address to',
+      'uint256 deadline',
+    ],
     category: 'swap',
   },
   '0xfb3bdb41': {
@@ -142,11 +159,16 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
   },
   '0x4a25d94a': {
     name: 'swapTokensForExactETH',
-    params: ['uint256 amountOut', 'uint256 amountInMax', 'address[] path', 'address to', 'uint256 deadline'],
+    params: [
+      'uint256 amountOut',
+      'uint256 amountInMax',
+      'address[] path',
+      'address to',
+      'uint256 deadline',
+    ],
     category: 'swap',
   },
 
-  
   '0xc04b8d59': {
     name: 'exactInput',
     params: ['ExactInputParams params'],
@@ -173,7 +195,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'router',
   },
 
-  
   '0xd0e30db0': {
     name: 'deposit',
     params: [],
@@ -185,7 +206,6 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
     category: 'other',
   },
 
-  
   '0x1249c58b': {
     name: 'mint',
     params: [],
@@ -228,9 +248,7 @@ export const KNOWN_SELECTORS: Record<string, FunctionSignature> = {
   },
 };
 
-
 export const KNOWN_CONTRACTS: KnownContracts = {
-  
   '0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45': {
     name: 'Uniswap SwapRouter02',
     verified: true,
@@ -252,13 +270,11 @@ export const KNOWN_CONTRACTS: KnownContracts = {
     verified: true,
   },
 
-  
   '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': {
     name: 'Wrapped Ether (WETH)',
     verified: true,
   },
 
-  
   '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
     name: 'USD Coin (USDC)',
     verified: true,
@@ -272,19 +288,16 @@ export const KNOWN_CONTRACTS: KnownContracts = {
     verified: true,
   },
 
-  
   '0x1111111254eeb25477b68fb85ed929f73a960582': {
     name: '1inch Router V5',
     verified: true,
   },
 
-  
   '0xdef1c0ded9bec7f1a1670819833240f027b25eff': {
     name: '0x Exchange Proxy',
     verified: true,
   },
 
-  
   '0x00000000000000adc04c56bf30ac9d3c0aaf14dc': {
     name: 'OpenSea Seaport 1.5',
     verified: true,
@@ -294,107 +307,81 @@ export const KNOWN_CONTRACTS: KnownContracts = {
     verified: true,
   },
 
-  
   '0xb2ecfe4e4d61f8790bbb9de2d1259b9e2410cea5': {
     name: 'Blur Marketplace',
     verified: true,
   },
 
-  
   '0xae7ab96520de3a18e5e111b5eaab095312d7fe84': {
     name: 'Lido stETH',
     verified: true,
   },
 
-  
   '0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2': {
     name: 'Aave V3 Pool',
     verified: true,
   },
 };
 
-
 const selectorCache = new Map<string, FunctionSignature | null>();
-
 
 export function lookupSelector(selector: string): FunctionSignature | null {
   const normalized = selector.toLowerCase();
-  
-  
+
   if (selectorCache.has(normalized)) {
     return selectorCache.get(normalized)!;
   }
-  
-  
+
   const result = KNOWN_SELECTORS[normalized] || null;
-  
-  
+
   selectorCache.set(normalized, result);
-  
+
   return result;
 }
 
-
 export function preloadCommonSelectors(): void {
-  
-  const commonSelectors = [
-    '0xa9059cbb', 
-    '0x095ea7b3', 
-    '0x23b872dd', 
-    '0xa22cb465', 
-  ];
-  
+  const commonSelectors = ['0xa9059cbb', '0x095ea7b3', '0x23b872dd', '0xa22cb465'];
+
   for (const selector of commonSelectors) {
     lookupSelector(selector);
   }
 }
 
-
 const contractCache = new Map<string, KnownProtocol | null>();
-
 
 export function lookupContract(address: string): KnownProtocol | null {
   const normalized = address.toLowerCase();
-  
-  
+
   if (contractCache.has(normalized)) {
     return contractCache.get(normalized)!;
   }
-  
-  
+
   const result = KNOWN_CONTRACTS[normalized] || null;
-  
-  
+
   contractCache.set(normalized, result);
-  
+
   return result;
 }
-
 
 export function isVerifiedContract(address: string): boolean {
   const info = lookupContract(address);
   return info?.verified ?? false;
 }
 
-
 const displayNameCache = new Map<string, string>();
 
-
 export function getContractDisplayName(address: string): string {
-  
   if (displayNameCache.has(address)) {
     return displayNameCache.get(address)!;
   }
-  
+
   const info = lookupContract(address);
   const displayName = info ? info.name : `${address.slice(0, 8)}...${address.slice(-6)}`;
-  
-  
+
   displayNameCache.set(address, displayName);
-  
+
   return displayName;
 }
-
 
 export function clearSelectorCaches(): void {
   selectorCache.clear();

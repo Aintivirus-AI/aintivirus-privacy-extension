@@ -1,17 +1,15 @@
-
-
 export interface FingerprintSettings {
-  enabled: boolean;             
-  canvasNoise: boolean;         
-  webglMask: boolean;           
-  screenMask: boolean;          
-  audioNoise: boolean;          
-  clientHintsMask: boolean;     
-  hardwareConcurrencyMask: boolean;  
-  deviceMemoryMask: boolean;    
-  languagesMask: boolean;       
-  pluginsMask: boolean;         
-  timezoneMask: boolean;        
+  enabled: boolean;
+  canvasNoise: boolean;
+  webglMask: boolean;
+  screenMask: boolean;
+  audioNoise: boolean;
+  clientHintsMask: boolean;
+  hardwareConcurrencyMask: boolean;
+  deviceMemoryMask: boolean;
+  languagesMask: boolean;
+  pluginsMask: boolean;
+  timezoneMask: boolean;
 }
 
 export const DEFAULT_FINGERPRINT_SETTINGS: FingerprintSettings = {
@@ -27,7 +25,6 @@ export const DEFAULT_FINGERPRINT_SETTINGS: FingerprintSettings = {
   pluginsMask: true,
   timezoneMask: true,
 };
-
 
 export interface InjectedScriptConfig {
   noiseSeed: number;
@@ -54,7 +51,6 @@ export interface InjectedScriptConfig {
   trackerDomains: string[];
 }
 
-
 export const COMMON_RESOLUTIONS = [
   { width: 1920, height: 1080 },
   { width: 1366, height: 768 },
@@ -62,7 +58,6 @@ export const COMMON_RESOLUTIONS = [
   { width: 1440, height: 900 },
   { width: 1280, height: 720 },
 ] as const;
-
 
 export const MASKED_WEBGL = {
   RENDERER: 'WebKit WebGL',
@@ -87,4 +82,3 @@ export interface FingerprintStatus {
   };
   injectedTabCount: number;
 }
-

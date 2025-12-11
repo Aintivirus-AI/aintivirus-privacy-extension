@@ -2,24 +2,21 @@
  * Tests for EIP-712 typed data parsing
  */
 
-import {
-  decodeTypedData,
-  getChainName,
-  formatDomain,
-} from '../typedDataParser';
+import { decodeTypedData, getChainName, formatDomain } from '../typedDataParser';
 import { MOCK_TYPED_DATA } from '../../__tests__/utils/fixtures';
 
 // Mock dependencies
 jest.mock('../selectors', () => ({
   lookupContract: jest.fn(() => null),
-  getContractDisplayName: jest.fn((address: string) => 
-    address.slice(0, 6) + '...' + address.slice(-4)
+  getContractDisplayName: jest.fn(
+    (address: string) => address.slice(0, 6) + '...' + address.slice(-4),
   ),
 }));
 
 jest.mock('../warnings', () => ({
-  isInfiniteApproval: jest.fn((amount: bigint) => 
-    amount >= BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff') / 2n
+  isInfiniteApproval: jest.fn(
+    (amount: bigint) =>
+      amount >= BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff') / 2n,
   ),
   isSuspiciousDeadline: jest.fn((deadline: bigint) => {
     const now = Math.floor(Date.now() / 1000);
@@ -36,41 +33,41 @@ jest.mock('../warnings', () => ({
   formatDeadline: jest.fn((deadline: bigint) => {
     return new Date(Number(deadline) * 1000).toISOString();
   }),
-  warnInfiniteApproval: jest.fn(() => ({ 
-    level: 'critical', 
+  warnInfiniteApproval: jest.fn(() => ({
+    level: 'critical',
     code: 'INFINITE_APPROVAL',
     title: 'Infinite Approval',
-    description: 'Unlimited approval' 
+    description: 'Unlimited approval',
   })),
-  warnDeadline: jest.fn((status: string) => ({ 
-    level: 'warning', 
+  warnDeadline: jest.fn((status: string) => ({
+    level: 'warning',
     code: 'DEADLINE_WARNING',
     title: 'Deadline Warning',
-    description: `Deadline: ${status}` 
+    description: `Deadline: ${status}`,
   })),
-  warnPermitSignature: jest.fn(() => ({ 
-    level: 'info', 
+  warnPermitSignature: jest.fn(() => ({
+    level: 'info',
     code: 'PERMIT_SIGNATURE',
     title: 'Permit Signature',
-    description: 'Permit signature detected' 
+    description: 'Permit signature detected',
   })),
-  warnPermit2: jest.fn(() => ({ 
-    level: 'warning', 
+  warnPermit2: jest.fn(() => ({
+    level: 'warning',
     code: 'PERMIT2_SIGNATURE',
     title: 'Permit2 Signature',
-    description: 'Permit2 signature detected' 
+    description: 'Permit2 signature detected',
   })),
-  warnUnknownSpender: jest.fn((address: string) => ({ 
-    level: 'warning', 
+  warnUnknownSpender: jest.fn((address: string) => ({
+    level: 'warning',
     code: 'UNKNOWN_SPENDER',
     title: 'Unknown Spender',
-    description: `Unknown spender: ${address}` 
+    description: `Unknown spender: ${address}`,
   })),
-  createWarning: jest.fn((level: string, message: string) => ({ 
-    level, 
+  createWarning: jest.fn((level: string, message: string) => ({
+    level,
     code: 'CUSTOM_WARNING',
     title: 'Warning',
-    description: message 
+    description: message,
   })),
   MAX_UINT256: BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'),
 }));
@@ -91,7 +88,7 @@ describe('TypedDataParser', () => {
         ...MOCK_TYPED_DATA,
         primaryType: 'Permit',
       };
-      
+
       const result = decodeTypedData(JSON.stringify(permitData));
 
       expect(result.pattern).toBe('permit');
@@ -204,9 +201,7 @@ describe('TypedDataParser', () => {
             { name: 'name', type: 'string' },
             { name: 'chainId', type: 'uint256' },
           ],
-          CustomMessage: [
-            { name: 'data', type: 'string' },
-          ],
+          CustomMessage: [{ name: 'data', type: 'string' }],
         },
         primaryType: 'CustomMessage',
         domain: {
@@ -328,9 +323,9 @@ describe('TypedDataParser', () => {
 
       expect(result.highlightedFields).toBeDefined();
       expect(result.highlightedFields.length).toBeGreaterThan(0);
-      
+
       // Should find spender field
-      const spenderField = result.highlightedFields.find(f => f.name.toLowerCase() === 'spender');
+      const spenderField = result.highlightedFields.find((f) => f.name.toLowerCase() === 'spender');
       expect(spenderField).toBeDefined();
     });
 
@@ -368,7 +363,7 @@ describe('TypedDataParser', () => {
 
       expect(result.isValid).toBe(true);
       // Should find nested spender
-      const spenderField = result.highlightedFields.find(f => f.name === 'spender');
+      const spenderField = result.highlightedFields.find((f) => f.name === 'spender');
       expect(spenderField).toBeDefined();
     });
   });
@@ -392,8 +387,10 @@ describe('TypedDataParser', () => {
     it('should warn about Permit signatures', () => {
       const result = decodeTypedData(JSON.stringify(MOCK_TYPED_DATA));
 
-      const permitWarning = result.warnings.find(w => 
-        (w.description?.toLowerCase().includes('permit') || w.title?.toLowerCase().includes('permit'))
+      const permitWarning = result.warnings.find(
+        (w) =>
+          w.description?.toLowerCase().includes('permit') ||
+          w.title?.toLowerCase().includes('permit'),
       );
       expect(permitWarning).toBeDefined();
     });
@@ -401,8 +398,10 @@ describe('TypedDataParser', () => {
     it('should warn about unknown spender', () => {
       const result = decodeTypedData(JSON.stringify(MOCK_TYPED_DATA));
 
-      const spenderWarning = result.warnings.find(w => 
-        (w.description?.toLowerCase().includes('spender') || w.title?.toLowerCase().includes('spender'))
+      const spenderWarning = result.warnings.find(
+        (w) =>
+          w.description?.toLowerCase().includes('spender') ||
+          w.title?.toLowerCase().includes('spender'),
       );
       expect(spenderWarning).toBeDefined();
     });
@@ -476,4 +475,3 @@ describe('TypedDataParser', () => {
     });
   });
 });
-

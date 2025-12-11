@@ -1,25 +1,15 @@
-
-
-import React, {
-  createContext,
-  useContext,
-  useCallback,
-  useState,
-  useRef,
-  useEffect,
-} from 'react';
-
+import React, { createContext, useContext, useCallback, useState, useRef, useEffect } from 'react';
 
 export interface UndoAction {
   id: string;
   message: string;
-  
+
   onUndo: () => void;
-  
+
   onConfirm?: () => void;
-  
+
   duration?: number;
-  
+
   icon?: React.ReactNode;
 }
 
@@ -29,14 +19,12 @@ interface ActiveUndo extends UndoAction {
 }
 
 export interface UndoContextValue {
-  
   showUndo: (action: Omit<UndoAction, 'id'>) => string;
-  
+
   confirmUndo: (id: string) => void;
-  
+
   dismissUndo: (id: string) => void;
 }
-
 
 const UndoContext = createContext<UndoContextValue | undefined>(undefined);
 
@@ -48,24 +36,40 @@ const generateUndoId = (): string => {
   return `undo-${Date.now()}-${undoCounter}`;
 };
 
-
 function UndoIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M3 7v6h6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6.27 2.73L3 13" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M21 17a9 9 0 00-9-9 9 9 0 00-6.27 2.73L3 13"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
 function CloseIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
     </svg>
   );
 }
-
 
 interface UndoToastItemProps {
   action: ActiveUndo;
@@ -73,71 +77,60 @@ interface UndoToastItemProps {
   onDismiss: () => void;
 }
 
-const UndoToastItem: React.FC<UndoToastItemProps> = ({
-  action,
-  onUndo,
-  onDismiss,
-}) => {
+const UndoToastItem: React.FC<UndoToastItemProps> = ({ action, onUndo, onDismiss }) => {
   const [isExiting, setIsExiting] = useState(false);
   const [progress, setProgress] = useState(100);
   const duration = action.duration || DEFAULT_DURATION;
-  
-  
+
   useEffect(() => {
     const startTime = action.startTime;
     let animationFrame: number;
-    
+
     const updateProgress = () => {
       const elapsed = Date.now() - startTime;
       const remaining = Math.max(0, duration - elapsed);
       const newProgress = (remaining / duration) * 100;
-      
+
       setProgress(newProgress);
-      
+
       if (remaining > 0) {
         animationFrame = requestAnimationFrame(updateProgress);
       }
     };
-    
+
     animationFrame = requestAnimationFrame(updateProgress);
-    
+
     return () => {
       if (animationFrame) {
         cancelAnimationFrame(animationFrame);
       }
     };
   }, [action.startTime, duration]);
-  
+
   const handleUndo = () => {
     setIsExiting(true);
     setTimeout(() => {
       onUndo();
     }, 150);
   };
-  
+
   const handleDismiss = () => {
     setIsExiting(true);
     setTimeout(() => {
       onDismiss();
     }, 150);
   };
-  
+
   return (
     <>
-      <div
-        className={`undo-toast ${isExiting ? 'exiting' : ''}`}
-        role="alert"
-        aria-live="polite"
-      >
+      <div className={`undo-toast ${isExiting ? 'exiting' : ''}`} role="alert" aria-live="polite">
         <div className="undo-toast-progress" style={{ width: `${progress}%` }} />
-        
+
         <div className="undo-toast-content">
-          {action.icon && (
-            <span className="undo-toast-icon">{action.icon}</span>
-          )}
+          {action.icon && <span className="undo-toast-icon">{action.icon}</span>}
           <span className="undo-toast-message">{action.message}</span>
         </div>
-        
+
         <div className="undo-toast-actions">
           <button
             className="undo-toast-btn undo"
@@ -148,7 +141,7 @@ const UndoToastItem: React.FC<UndoToastItemProps> = ({
             <UndoIcon />
             <span>Undo</span>
           </button>
-          
+
           <button
             className="undo-toast-btn dismiss"
             onClick={handleDismiss}
@@ -159,7 +152,7 @@ const UndoToastItem: React.FC<UndoToastItemProps> = ({
           </button>
         </div>
       </div>
-      
+
       <style>{`
         .undo-toast {
           position: relative;
@@ -294,20 +287,15 @@ const UndoToastItem: React.FC<UndoToastItemProps> = ({
   );
 };
 
-
 interface UndoContainerProps {
   actions: ActiveUndo[];
   onUndo: (id: string) => void;
   onDismiss: (id: string) => void;
 }
 
-const UndoContainer: React.FC<UndoContainerProps> = ({
-  actions,
-  onUndo,
-  onDismiss,
-}) => {
+const UndoContainer: React.FC<UndoContainerProps> = ({ actions, onUndo, onDismiss }) => {
   if (actions.length === 0) return null;
-  
+
   return (
     <>
       <div className="undo-container" aria-label="Undo notifications">
@@ -320,7 +308,7 @@ const UndoContainer: React.FC<UndoContainerProps> = ({
           />
         ))}
       </div>
-      
+
       <style>{`
         .undo-container {
           position: fixed;
@@ -343,7 +331,6 @@ const UndoContainer: React.FC<UndoContainerProps> = ({
   );
 };
 
-
 interface UndoProviderProps {
   children: React.ReactNode;
 }
@@ -351,8 +338,7 @@ interface UndoProviderProps {
 export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
   const [actions, setActions] = useState<ActiveUndo[]>([]);
   const timersRef = useRef<Map<string, number>>(new Map());
-  
-  
+
   useEffect(() => {
     return () => {
       timersRef.current.forEach((timer) => {
@@ -360,91 +346,87 @@ export const UndoProvider: React.FC<UndoProviderProps> = ({ children }) => {
       });
     };
   }, []);
-  
+
   const showUndo = useCallback((action: Omit<UndoAction, 'id'>): string => {
     const id = generateUndoId();
     const duration = action.duration || DEFAULT_DURATION;
-    
+
     const activeAction: ActiveUndo = {
       ...action,
       id,
       startTime: Date.now(),
       remaining: duration,
     };
-    
+
     setActions((prev) => [...prev, activeAction]);
-    
-    
+
     const timer = window.setTimeout(() => {
       action.onConfirm?.();
       setActions((prev) => prev.filter((a) => a.id !== id));
       timersRef.current.delete(id);
     }, duration);
-    
+
     timersRef.current.set(id, timer);
-    
+
     return id;
   }, []);
-  
-  const handleUndo = useCallback((id: string) => {
-    const action = actions.find((a) => a.id === id);
-    if (!action) return;
-    
-    
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    
-    
-    action.onUndo();
-    
-    
-    setActions((prev) => prev.filter((a) => a.id !== id));
-  }, [actions]);
-  
-  const confirmUndo = useCallback((id: string) => {
-    const action = actions.find((a) => a.id === id);
-    if (!action) return;
-    
-    
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    
-    
-    action.onConfirm?.();
-    
-    
-    setActions((prev) => prev.filter((a) => a.id !== id));
-  }, [actions]);
-  
-  const dismissUndo = useCallback((id: string) => {
-    
-    confirmUndo(id);
-  }, [confirmUndo]);
-  
+
+  const handleUndo = useCallback(
+    (id: string) => {
+      const action = actions.find((a) => a.id === id);
+      if (!action) return;
+
+      const timer = timersRef.current.get(id);
+      if (timer) {
+        window.clearTimeout(timer);
+        timersRef.current.delete(id);
+      }
+
+      action.onUndo();
+
+      setActions((prev) => prev.filter((a) => a.id !== id));
+    },
+    [actions],
+  );
+
+  const confirmUndo = useCallback(
+    (id: string) => {
+      const action = actions.find((a) => a.id === id);
+      if (!action) return;
+
+      const timer = timersRef.current.get(id);
+      if (timer) {
+        window.clearTimeout(timer);
+        timersRef.current.delete(id);
+      }
+
+      action.onConfirm?.();
+
+      setActions((prev) => prev.filter((a) => a.id !== id));
+    },
+    [actions],
+  );
+
+  const dismissUndo = useCallback(
+    (id: string) => {
+      confirmUndo(id);
+    },
+    [confirmUndo],
+  );
+
   const contextValue: UndoContextValue = {
     showUndo,
     confirmUndo,
     dismissUndo,
   };
-  
+
   return (
     <UndoContext.Provider value={contextValue}>
       {children}
-      <UndoContainer
-        actions={actions}
-        onUndo={handleUndo}
-        onDismiss={dismissUndo}
-      />
+      <UndoContainer actions={actions} onUndo={handleUndo} onDismiss={dismissUndo} />
     </UndoContext.Provider>
   );
 };
-
 
 export const useUndo = (): UndoContextValue => {
   const context = useContext(UndoContext);

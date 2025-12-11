@@ -1,5 +1,3 @@
-
-
 import {
   TypedDataV4,
   TypedDataDomain,
@@ -19,11 +17,8 @@ import {
   warnPermitSignature,
   warnPermit2,
   warnUnknownSpender,
-  createWarning,
-  MAX_UINT256,
 } from './warnings';
 import { lookupContract, getContractDisplayName } from './selectors';
-
 
 const HIGHLIGHT_FIELDS = new Set([
   'spender',
@@ -43,12 +38,25 @@ const HIGHLIGHT_FIELDS = new Set([
 ]);
 
 const AMOUNT_FIELDS = new Set(['value', 'amount', 'wad', 'amountIn', 'amountOut']);
-const ADDRESS_FIELDS = new Set(['spender', 'to', 'from', 'operator', 'owner', 'token', 'verifyingContract']);
-const DEADLINE_FIELDS = new Set(['deadline', 'expiry', 'expiration', 'sigDeadline', 'validTo', 'validBefore']);
-
+const ADDRESS_FIELDS = new Set([
+  'spender',
+  'to',
+  'from',
+  'operator',
+  'owner',
+  'token',
+  'verifyingContract',
+]);
+const DEADLINE_FIELDS = new Set([
+  'deadline',
+  'expiry',
+  'expiration',
+  'sigDeadline',
+  'validTo',
+  'validBefore',
+]);
 
 export function decodeTypedData(rawData: string): TypedDataParseResult {
-  
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawData);
@@ -56,7 +64,6 @@ export function decodeTypedData(rawData: string): TypedDataParseResult {
     return createErrorResult('Invalid JSON: ' + (e instanceof Error ? e.message : 'Parse error'));
   }
 
-  
   const validation = validateTypedDataStructure(parsed);
   if (!validation.isValid) {
     return createErrorResult(validation.error!);
@@ -64,16 +71,12 @@ export function decodeTypedData(rawData: string): TypedDataParseResult {
 
   const typedData = parsed as TypedDataV4;
 
-  
   const pattern = detectPattern(typedData);
 
-  
   const warnings = generateWarnings(typedData, pattern);
 
-  
   const displayModel = buildDisplayModel(typedData);
 
-  
   const highlightedFields = extractHighlightedFields(typedData);
 
   return {
@@ -85,7 +88,6 @@ export function decodeTypedData(rawData: string): TypedDataParseResult {
     highlightedFields,
   };
 }
-
 
 interface ValidationResult {
   isValid: boolean;
@@ -99,7 +101,6 @@ function validateTypedDataStructure(data: unknown): ValidationResult {
 
   const obj = data as Record<string, unknown>;
 
-  
   if (!obj.types || typeof obj.types !== 'object') {
     return { isValid: false, error: 'Missing or invalid "types" field' };
   }
@@ -116,13 +117,11 @@ function validateTypedDataStructure(data: unknown): ValidationResult {
     return { isValid: false, error: 'Missing or invalid "message" field' };
   }
 
-  
   const domain = obj.domain as Record<string, unknown>;
   if (!domain.name && !domain.verifyingContract) {
     return { isValid: false, error: 'Domain must have "name" or "verifyingContract"' };
   }
 
-  
   const types = obj.types as Record<string, unknown>;
   if (!types[obj.primaryType as string]) {
     return { isValid: false, error: `Primary type "${obj.primaryType}" not found in types` };
@@ -131,14 +130,11 @@ function validateTypedDataStructure(data: unknown): ValidationResult {
   return { isValid: true };
 }
 
-
 function detectPattern(data: TypedDataV4): TypedDataPattern {
   const primaryType = data.primaryType.toLowerCase();
   const domainName = (data.domain.name || '').toLowerCase();
 
-  
   if (primaryType === 'permit' || primaryType.includes('permit')) {
-    
     if (
       domainName.includes('permit2') ||
       data.domain.verifyingContract?.toLowerCase() === '0x000000000022d473030f116ddee9f6b43ac78ba3'
@@ -146,7 +142,6 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
       return 'permit2';
     }
 
-    
     if (primaryType.includes('batch')) {
       return 'permit2_batch';
     }
@@ -154,7 +149,6 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
     return 'permit';
   }
 
-  
   if (
     primaryType.includes('order') ||
     primaryType.includes('trade') ||
@@ -163,12 +157,10 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
     return 'order';
   }
 
-  
   if (primaryType.includes('vote') || primaryType.includes('ballot')) {
     return 'vote';
   }
 
-  
   if (primaryType.includes('delegation') || primaryType.includes('delegate')) {
     return 'delegation';
   }
@@ -176,11 +168,9 @@ function detectPattern(data: TypedDataV4): TypedDataPattern {
   return 'unknown';
 }
 
-
 function generateWarnings(data: TypedDataV4, pattern: TypedDataPattern): TxWarning[] {
   const warnings: TxWarning[] = [];
 
-  
   switch (pattern) {
     case 'permit':
       warnings.push(warnPermitSignature());
@@ -191,7 +181,6 @@ function generateWarnings(data: TypedDataV4, pattern: TypedDataPattern): TxWarni
       break;
   }
 
-  
   analyzeMessageFields(data.message, data.types, data.primaryType, warnings, '');
 
   return warnings;
@@ -202,7 +191,7 @@ function analyzeMessageFields(
   types: Record<string, Array<{ name: string; type: string }>>,
   typeName: string,
   warnings: TxWarning[],
-  path: string
+  path: string,
 ): void {
   const typeFields = types[typeName];
   if (!typeFields) return;
@@ -212,19 +201,15 @@ function analyzeMessageFields(
     const fieldPath = path ? `${path}.${field.name}` : field.name;
     const fieldNameLower = field.name.toLowerCase();
 
-    
     if (AMOUNT_FIELDS.has(fieldNameLower) && typeof value === 'string') {
       try {
         const amount = BigInt(value);
         if (isInfiniteApproval(amount)) {
           warnings.push(warnInfiniteApproval());
         }
-      } catch {
-        
-      }
+      } catch {}
     }
 
-    
     if (DEADLINE_FIELDS.has(fieldNameLower) && value !== undefined) {
       try {
         const deadline = typeof value === 'string' ? BigInt(value) : BigInt(Number(value));
@@ -232,19 +217,15 @@ function analyzeMessageFields(
         if (deadlineStatus !== 'ok') {
           warnings.push(warnDeadline(deadlineStatus));
         }
-      } catch {
-        
-      }
+      } catch {}
     }
 
-    
     if (fieldNameLower === 'spender' && typeof value === 'string' && value.startsWith('0x')) {
       if (!lookupContract(value)) {
         warnings.push(warnUnknownSpender(value));
       }
     }
 
-    
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const nestedTypeName = field.type.replace('[]', '');
       if (types[nestedTypeName]) {
@@ -253,12 +234,11 @@ function analyzeMessageFields(
           types,
           nestedTypeName,
           warnings,
-          fieldPath
+          fieldPath,
         );
       }
     }
 
-    
     if (Array.isArray(value)) {
       const nestedTypeName = field.type.replace('[]', '');
       if (types[nestedTypeName]) {
@@ -269,7 +249,7 @@ function analyzeMessageFields(
               types,
               nestedTypeName,
               warnings,
-              `${fieldPath}[${i}]`
+              `${fieldPath}[${i}]`,
             );
           }
         }
@@ -278,21 +258,14 @@ function analyzeMessageFields(
   }
 }
 
-
 function buildDisplayModel(data: TypedDataV4): TypedDataDisplayModel {
-  const messageFields = extractFieldsFromObject(
-    data.message,
-    data.types,
-    data.primaryType,
-    ''
-  );
+  const messageFields = extractFieldsFromObject(data.message, data.types, data.primaryType, '');
 
-  
   const nestedStructs: Array<{ name: string; fields: HighlightedField[] }> = [];
 
   for (const [fieldName, value] of Object.entries(data.message)) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      const fieldType = data.types[data.primaryType]?.find(f => f.name === fieldName)?.type;
+      const fieldType = data.types[data.primaryType]?.find((f) => f.name === fieldName)?.type;
       if (fieldType && data.types[fieldType]) {
         nestedStructs.push({
           name: fieldName,
@@ -300,7 +273,7 @@ function buildDisplayModel(data: TypedDataV4): TypedDataDisplayModel {
             value as Record<string, unknown>,
             data.types,
             fieldType,
-            fieldName
+            fieldName,
           ),
         });
       }
@@ -319,7 +292,7 @@ function extractFieldsFromObject(
   obj: Record<string, unknown>,
   types: Record<string, Array<{ name: string; type: string }>>,
   typeName: string,
-  parentPath: string
+  parentPath: string,
 ): HighlightedField[] {
   const fields: HighlightedField[] = [];
   const typeFields = types[typeName];
@@ -329,7 +302,6 @@ function extractFieldsFromObject(
     const value = obj[field.name];
     const path = parentPath ? `${parentPath}.${field.name}` : field.name;
 
-    
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       continue;
     }
@@ -344,12 +316,11 @@ function createHighlightedField(
   name: string,
   type: string,
   value: unknown,
-  path: string
+  path: string,
 ): HighlightedField {
   const nameLower = name.toLowerCase();
   const valueStr = String(value ?? '');
 
-  
   let highlight: HighlightedField['highlight'] = 'normal';
   if (HIGHLIGHT_FIELDS.has(nameLower)) {
     if (nameLower === 'spender') highlight = 'spender';
@@ -361,7 +332,6 @@ function createHighlightedField(
     else if (nameLower === 'operator') highlight = 'operator';
   }
 
-  
   let displayValue = valueStr;
 
   if (ADDRESS_FIELDS.has(nameLower) && valueStr.startsWith('0x')) {
@@ -390,7 +360,6 @@ function createHighlightedField(
   };
 }
 
-
 function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
   const highlighted: HighlightedField[] = [];
 
@@ -400,7 +369,6 @@ function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
       const fieldPath = path ? `${path}.${key}` : key;
 
       if (HIGHLIGHT_FIELDS.has(keyLower)) {
-        
         let type = 'unknown';
         if (ADDRESS_FIELDS.has(keyLower)) type = 'address';
         else if (AMOUNT_FIELDS.has(keyLower)) type = 'uint256';
@@ -409,12 +377,10 @@ function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
         highlighted.push(createHighlightedField(key, type, value, fieldPath));
       }
 
-      
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         extract(value as Record<string, unknown>, fieldPath);
       }
 
-      
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
           if (value[i] && typeof value[i] === 'object') {
@@ -429,7 +395,6 @@ function extractHighlightedFields(data: TypedDataV4): HighlightedField[] {
   return highlighted;
 }
 
-
 function createErrorResult(error: string): TypedDataParseResult {
   return {
     isValid: false,
@@ -441,7 +406,6 @@ function createErrorResult(error: string): TypedDataParseResult {
     highlightedFields: [],
   };
 }
-
 
 export function getChainName(chainId: number | undefined): string {
   if (!chainId) return 'Unknown';
@@ -466,7 +430,6 @@ export function getChainName(chainId: number | undefined): string {
 
   return chains[chainId] || `Chain ${chainId}`;
 }
-
 
 export function formatDomain(domain: TypedDataDomain): string {
   const parts: string[] = [];

@@ -1,30 +1,21 @@
-
-
 import { TxWarning, WarningLevel } from './types';
 import { isVerifiedContract } from './selectors';
 
-
 export const MAX_UINT256 = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
 );
-
 
 export const HALF_MAX_UINT256 = MAX_UINT256 / 2n;
 
 export const WARNING_THRESHOLDS = {
-  
   INFINITE_APPROVAL: HALF_MAX_UINT256,
 
-  
-  LARGE_ETH_VALUE: 10n * 10n ** 18n, 
+  LARGE_ETH_VALUE: 10n * 10n ** 18n,
 
-  
   SUSPICIOUS_DEADLINE_YEARS: 10,
 
-  
   HIGH_GAS_LIMIT: 1_000_000,
 };
-
 
 export const WARNING_CODES = {
   INFINITE_APPROVAL: 'INFINITE_APPROVAL',
@@ -43,31 +34,26 @@ export const WARNING_CODES = {
   EMPTY_DATA: 'EMPTY_DATA',
 } as const;
 
-
 export function createWarning(
   level: WarningLevel,
   code: string,
   title: string,
-  description: string
+  description: string,
 ): TxWarning {
   return { level, code, title, description };
 }
-
 
 export function isInfiniteApproval(amount: bigint): boolean {
   return amount >= WARNING_THRESHOLDS.INFINITE_APPROVAL;
 }
 
-
 export function isSuspiciousDeadline(deadline: bigint | number): 'none' | 'long' | 'ok' {
   const deadlineNum = typeof deadline === 'bigint' ? Number(deadline) : deadline;
 
-  
   if (deadlineNum > Number.MAX_SAFE_INTEGER || deadline === MAX_UINT256) {
     return 'none';
   }
 
-  
   const nowSeconds = Math.floor(Date.now() / 1000);
   const yearsFromNow = (deadlineNum - nowSeconds) / (365.25 * 24 * 60 * 60);
 
@@ -78,7 +64,6 @@ export function isSuspiciousDeadline(deadline: bigint | number): 'none' | 'long'
   return 'ok';
 }
 
-
 export function formatDeadline(deadline: bigint | number): string {
   const deadlineNum = typeof deadline === 'bigint' ? Number(deadline) : deadline;
 
@@ -86,7 +71,6 @@ export function formatDeadline(deadline: bigint | number): string {
     return 'Never expires';
   }
 
-  
   if (deadlineNum > 946684800) {
     const date = new Date(deadlineNum * 1000);
     return date.toLocaleDateString('en-US', {
@@ -98,70 +82,62 @@ export function formatDeadline(deadline: bigint | number): string {
     });
   }
 
-  
   return deadlineNum.toLocaleString();
 }
-
 
 export function warnInfiniteApproval(): TxWarning {
   return createWarning(
     'danger',
     WARNING_CODES.INFINITE_APPROVAL,
     'Unlimited Approval',
-    'This grants unlimited spending permission for your tokens. The spender can transfer all tokens of this type from your wallet at any time.'
+    'This grants unlimited spending permission for your tokens. The spender can transfer all tokens of this type from your wallet at any time.',
   );
 }
-
 
 export function warnUnknownSpender(address: string): TxWarning {
   return createWarning(
     'caution',
     WARNING_CODES.UNKNOWN_SPENDER,
     'Unknown Spender',
-    `The spender address (${address.slice(0, 10)}...) is not a recognized protocol. Verify this is the intended recipient.`
+    `The spender address (${address.slice(0, 10)}...) is not a recognized protocol. Verify this is the intended recipient.`,
   );
 }
-
 
 export function warnContractCreation(): TxWarning {
   return createWarning(
     'caution',
     WARNING_CODES.CONTRACT_CREATION,
     'Contract Deployment',
-    'This transaction will deploy a new smart contract. Make sure you understand what code is being deployed.'
+    'This transaction will deploy a new smart contract. Make sure you understand what code is being deployed.',
   );
 }
-
 
 export function warnValueWithCall(ethValue: string): TxWarning {
   return createWarning(
     'caution',
     WARNING_CODES.VALUE_WITH_CALL,
     'ETH Sent with Call',
-    `This transaction sends ${ethValue} ETH to a contract. Ensure this is intentional.`
+    `This transaction sends ${ethValue} ETH to a contract. Ensure this is intentional.`,
   );
 }
-
 
 export function warnUnverifiedContract(): TxWarning {
   return createWarning(
     'caution',
     WARNING_CODES.UNVERIFIED_CONTRACT,
     'Unverified Contract',
-    'This contract is not verified on our known protocols list. Exercise caution.'
+    'This contract is not verified on our known protocols list. Exercise caution.',
   );
 }
-
 
 export function warnLargeValue(ethValue: string): TxWarning {
   return createWarning(
     'caution',
     WARNING_CODES.LARGE_VALUE_TRANSFER,
     'Large Transfer',
-    `This transaction transfers ${ethValue} ETH. Please verify this amount is correct.`
+    `This transaction transfers ${ethValue} ETH. Please verify this amount is correct.`,
   );
 }
-
 
 export function warnDeadline(type: 'none' | 'long'): TxWarning {
   if (type === 'none') {
@@ -169,47 +145,43 @@ export function warnDeadline(type: 'none' | 'long'): TxWarning {
       'danger',
       WARNING_CODES.NO_DEADLINE,
       'No Expiration',
-      'This approval never expires. Consider using a shorter deadline for better security.'
+      'This approval never expires. Consider using a shorter deadline for better security.',
     );
   }
   return createWarning(
     'caution',
     WARNING_CODES.LONG_DEADLINE,
     'Long Deadline',
-    'This approval has an unusually long expiration (>10 years). Consider using a shorter deadline.'
+    'This approval has an unusually long expiration (>10 years). Consider using a shorter deadline.',
   );
 }
-
 
 export function warnPermitSignature(): TxWarning {
   return createWarning(
     'info',
     WARNING_CODES.PERMIT_SIGNATURE,
     'Token Spending Permission',
-    'This signature grants permission to spend your tokens. Only sign if you trust this site.'
+    'This signature grants permission to spend your tokens. Only sign if you trust this site.',
   );
 }
-
 
 export function warnPermit2(): TxWarning {
   return createWarning(
     'info',
     WARNING_CODES.PERMIT2_DETECTED,
     'Permit2 Approval',
-    'This uses Uniswap Permit2 for token approvals. The signature allows token transfers without additional on-chain approval.'
+    'This uses Uniswap Permit2 for token approvals. The signature allows token transfers without additional on-chain approval.',
   );
 }
-
 
 export function warnNftApprovalForAll(): TxWarning {
   return createWarning(
     'danger',
     WARNING_CODES.NFT_APPROVAL_ALL,
     'Approve All NFTs',
-    'This grants permission to transfer ALL your NFTs from this collection. The operator can move any token at any time.'
+    'This grants permission to transfer ALL your NFTs from this collection. The operator can move any token at any time.',
   );
 }
-
 
 export function analyzeApprovalAmount(amount: bigint, spender: string): TxWarning[] {
   const warnings: TxWarning[] = [];
@@ -224,7 +196,6 @@ export function analyzeApprovalAmount(amount: bigint, spender: string): TxWarnin
 
   return warnings;
 }
-
 
 export function analyzeEthValue(valueWei: bigint, hasData: boolean): TxWarning[] {
   const warnings: TxWarning[] = [];
@@ -242,7 +213,6 @@ export function analyzeEthValue(valueWei: bigint, hasData: boolean): TxWarning[]
   return warnings;
 }
 
-
 export function formatAmount(amount: bigint, decimals: number = 18): string {
   if (isInfiniteApproval(amount)) {
     return 'UNLIMITED';
@@ -259,7 +229,6 @@ export function formatAmount(amount: bigint, decimals: number = 18): string {
   const fractionStr = fraction.toString().padStart(decimals, '0').slice(0, 4);
   return `${whole.toLocaleString()}.${fractionStr}`;
 }
-
 
 export function formatEthValue(weiValue: bigint | string): string {
   const wei = typeof weiValue === 'string' ? BigInt(weiValue) : weiValue;

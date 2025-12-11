@@ -2,14 +2,24 @@
 // Provides harmless Sentry API stubs to pass "script execution" tests.
 // Sentry checks for window.Sentry existence.
 
-(function() {
+(function () {
   'use strict';
-  
-  const noop = function() { return Promise.resolve(); };
-  noop.then = function(cb) { cb && cb(); return noop; };
-  noop.catch = function() { return noop; };
-  noop.finally = function(cb) { cb && cb(); return noop; };
-  
+
+  const noop = function () {
+    return Promise.resolve();
+  };
+  noop.then = function (cb) {
+    cb && cb();
+    return noop;
+  };
+  noop.catch = function () {
+    return noop;
+  };
+  noop.finally = function (cb) {
+    cb && cb();
+    return noop;
+  };
+
   // Sentry SDK stub
   const SentryStub = {
     // Core methods
@@ -26,12 +36,16 @@
     setExtras: noop,
     setExtra: noop,
     setContext: noop,
-    
+
     // Hub methods
-    getCurrentHub: function() {
+    getCurrentHub: function () {
       return {
-        getClient: function() { return SentryStub; },
-        getScope: function() { return SentryStub; },
+        getClient: function () {
+          return SentryStub;
+        },
+        getScope: function () {
+          return SentryStub;
+        },
         captureException: noop,
         captureMessage: noop,
         captureEvent: noop,
@@ -47,38 +61,46 @@
         bindClient: noop,
       };
     },
-    
+
     // Scope methods (for configureScope callback)
     setLevel: noop,
     setFingerprint: noop,
     setTransaction: noop,
     clear: noop,
     addEventProcessor: noop,
-    
+
     // Browser-specific
     showReportDialog: noop,
-    lastEventId: function() { return null; },
-    
+    lastEventId: function () {
+      return null;
+    },
+
     // Tracing
-    startTransaction: function() {
+    startTransaction: function () {
       return {
         finish: noop,
         setStatus: noop,
         setData: noop,
         setTag: noop,
-        startChild: function() {
+        startChild: function () {
           return { finish: noop, setStatus: noop };
         },
       };
     },
-    
+
     // Integration placeholder
     Integrations: {
-      BrowserTracing: function() { return {}; },
-      Vue: function() { return {}; },
-      React: function() { return {}; },
+      BrowserTracing: function () {
+        return {};
+      },
+      Vue: function () {
+        return {};
+      },
+      React: function () {
+        return {};
+      },
     },
-    
+
     // Severity levels
     Severity: {
       Fatal: 'fatal',
@@ -88,24 +110,24 @@
       Info: 'info',
       Debug: 'debug',
     },
-    
+
     // Status
     Status: {
       Ok: 'ok',
       Unknown: 'unknown',
     },
-    
+
     // SDK info
     SDK_VERSION: '0.0.0-noop',
   };
-  
+
   // Expose globally
   window.Sentry = SentryStub;
   window.__SENTRY__ = {
     hub: SentryStub.getCurrentHub(),
     extensions: {},
   };
-  
+
   // Also handle dynamic imports
   if (typeof window.sentryOnLoad === 'function') {
     try {
@@ -113,7 +135,3 @@
     } catch (e) {}
   }
 })();
-
-
-
-

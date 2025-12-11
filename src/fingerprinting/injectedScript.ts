@@ -1,6 +1,4 @@
-
-
-(function() {
+(function () {
   'use strict';
   interface InjectedConfig {
     noiseSeed: number;
@@ -25,38 +23,39 @@
       pixelDepth: number;
     };
     trackerDomains: string[];
-    _configKey?: string; 
+    _configKey?: string;
   }
 
-  
   const win = window as unknown as Record<string, InjectedConfig | undefined>;
   let config: InjectedConfig | undefined;
   let configKey: string | undefined;
-  
+
   for (const key in win) {
-    if (key.startsWith('_fp_cfg_') && typeof win[key] === 'object' && win[key]?.noiseSeed !== undefined) {
+    if (
+      key.startsWith('_fp_cfg_') &&
+      typeof win[key] === 'object' &&
+      win[key]?.noiseSeed !== undefined
+    ) {
       config = win[key];
       configKey = key;
       break;
     }
   }
-  
+
   if (!config) {
-    return; 
+    return;
   }
 
-  
   try {
     if (configKey) delete win[configKey];
   } catch {
     if (configKey) win[configKey] = undefined;
   }
 
-  
   function createSeededRandom(seed: number): () => number {
     let state = seed >>> 0;
-    return function(): number {
-      state = (state + 0x6D2B79F5) >>> 0;
+    return function (): number {
+      state = (state + 0x6d2b79f5) >>> 0;
       let t = state;
       t = Math.imul(t ^ (t >>> 15), t | 1);
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -74,7 +73,6 @@
     return Math.max(0, Math.min(255, Math.round(value)));
   }
 
-  
   if (config.protections.canvas) {
     const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
     const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
@@ -82,36 +80,32 @@
     function addNoiseToImageData(imageData: ImageData): void {
       const data = imageData.data;
       const noiseAmplitude = 2;
-      
+
       for (let i = 0; i < data.length; i += 4) {
-        
         data[i] = clampByte(data[i] + generateIntNoise(noiseAmplitude));
         data[i + 1] = clampByte(data[i + 1] + generateIntNoise(noiseAmplitude));
         data[i + 2] = clampByte(data[i + 2] + generateIntNoise(noiseAmplitude));
       }
     }
 
-    CanvasRenderingContext2D.prototype.getImageData = function(
-      sx: number, 
-      sy: number, 
-      sw: number, 
+    CanvasRenderingContext2D.prototype.getImageData = function (
+      sx: number,
+      sy: number,
+      sw: number,
       sh: number,
-      settings?: ImageDataSettings
+      settings?: ImageDataSettings,
     ): ImageData {
       const imageData = originalGetImageData.call(this, sx, sy, sw, sh, settings);
       addNoiseToImageData(imageData);
       return imageData;
     };
 
-    HTMLCanvasElement.prototype.toDataURL = function(
-      type?: string,
-      quality?: number
-    ): string {
+    HTMLCanvasElement.prototype.toDataURL = function (type?: string, quality?: number): string {
       const canvas = document.createElement('canvas');
       canvas.width = this.width;
       canvas.height = this.height;
       const ctx = canvas.getContext('2d');
-      
+
       if (ctx) {
         ctx.drawImage(this, 0, 0);
         const imageData = originalGetImageData.call(ctx, 0, 0, canvas.width, canvas.height);
@@ -119,20 +113,20 @@
         ctx.putImageData(imageData, 0, 0);
         return originalToDataURL.call(canvas, type, quality);
       }
-      
+
       return originalToDataURL.call(this, type, quality);
     };
 
-    HTMLCanvasElement.prototype.toBlob = function(
+    HTMLCanvasElement.prototype.toBlob = function (
       callback: BlobCallback,
       type?: string,
-      quality?: number
+      quality?: number,
     ): void {
       const canvas = document.createElement('canvas');
       canvas.width = this.width;
       canvas.height = this.height;
       const ctx = canvas.getContext('2d');
-      
+
       if (ctx) {
         ctx.drawImage(this, 0, 0);
         const imageData = originalGetImageData.call(ctx, 0, 0, canvas.width, canvas.height);
@@ -140,12 +134,11 @@
         ctx.putImageData(imageData, 0, 0);
         return originalToBlob.call(canvas, callback, type, quality);
       }
-      
+
       return originalToBlob.call(this, callback, type, quality);
     };
   }
 
-  
   if (config.protections.webgl) {
     const MASKED_WEBGL = {
       RENDERER: 'WebKit WebGL',
@@ -155,37 +148,36 @@
     };
 
     const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(pname: GLenum): unknown {
-      if (pname === 0x1F01) return MASKED_WEBGL.RENDERER;
-      if (pname === 0x1F00) return MASKED_WEBGL.VENDOR;
-      
+    WebGLRenderingContext.prototype.getParameter = function (pname: GLenum): unknown {
+      if (pname === 0x1f01) return MASKED_WEBGL.RENDERER;
+      if (pname === 0x1f00) return MASKED_WEBGL.VENDOR;
+
       const debugExt = this.getExtension('WEBGL_debug_renderer_info');
       if (debugExt) {
         if (pname === debugExt.UNMASKED_RENDERER_WEBGL) return MASKED_WEBGL.UNMASKED_RENDERER;
         if (pname === debugExt.UNMASKED_VENDOR_WEBGL) return MASKED_WEBGL.UNMASKED_VENDOR;
       }
-      
+
       return originalGetParameter.call(this, pname);
     };
 
     if (typeof WebGL2RenderingContext !== 'undefined') {
       const originalGetParameter2 = WebGL2RenderingContext.prototype.getParameter;
-      WebGL2RenderingContext.prototype.getParameter = function(pname: GLenum): unknown {
-        if (pname === 0x1F01) return MASKED_WEBGL.RENDERER;
-        if (pname === 0x1F00) return MASKED_WEBGL.VENDOR;
-        
+      WebGL2RenderingContext.prototype.getParameter = function (pname: GLenum): unknown {
+        if (pname === 0x1f01) return MASKED_WEBGL.RENDERER;
+        if (pname === 0x1f00) return MASKED_WEBGL.VENDOR;
+
         const debugExt = this.getExtension('WEBGL_debug_renderer_info');
         if (debugExt) {
           if (pname === debugExt.UNMASKED_RENDERER_WEBGL) return MASKED_WEBGL.UNMASKED_RENDERER;
           if (pname === debugExt.UNMASKED_VENDOR_WEBGL) return MASKED_WEBGL.UNMASKED_VENDOR;
         }
-        
+
         return originalGetParameter2.call(this, pname);
       };
     }
   }
 
-  
   if (config.protections.screen) {
     const maskedScreen = config.maskedScreen;
     Object.defineProperties(window.screen, {
@@ -199,15 +191,15 @@
 
     const originalOuterWidth = window.outerWidth;
     const originalOuterHeight = window.outerHeight;
-    
+
     Object.defineProperties(window, {
-      outerWidth: { 
-        get: () => Math.min(originalOuterWidth, maskedScreen.width), 
-        configurable: true 
+      outerWidth: {
+        get: () => Math.min(originalOuterWidth, maskedScreen.width),
+        configurable: true,
       },
-      outerHeight: { 
-        get: () => Math.min(originalOuterHeight, maskedScreen.height), 
-        configurable: true 
+      outerHeight: {
+        get: () => Math.min(originalOuterHeight, maskedScreen.height),
+        configurable: true,
       },
     });
 
@@ -217,13 +209,14 @@
     });
   }
 
-  
   if (config.protections.audio) {
-    const OriginalAudioContext = window.AudioContext || (window as unknown as Record<string, typeof AudioContext>).webkitAudioContext;
-    
+    const OriginalAudioContext =
+      window.AudioContext ||
+      (window as unknown as Record<string, typeof AudioContext>).webkitAudioContext;
+
     if (OriginalAudioContext) {
       const originalGetFloatFrequencyData = AnalyserNode.prototype.getFloatFrequencyData;
-      AnalyserNode.prototype.getFloatFrequencyData = function(array: Float32Array): void {
+      AnalyserNode.prototype.getFloatFrequencyData = function (array: Float32Array): void {
         originalGetFloatFrequencyData.call(this, array as unknown as Float32Array<ArrayBuffer>);
         const noiseAmplitude = 0.0001;
         for (let i = 0; i < array.length; i++) {
@@ -232,7 +225,7 @@
       };
 
       const originalGetByteFrequencyData = AnalyserNode.prototype.getByteFrequencyData;
-      AnalyserNode.prototype.getByteFrequencyData = function(array: Uint8Array): void {
+      AnalyserNode.prototype.getByteFrequencyData = function (array: Uint8Array): void {
         originalGetByteFrequencyData.call(this, array as unknown as Uint8Array<ArrayBuffer>);
         for (let i = 0; i < array.length; i++) {
           array[i] = clampByte(array[i] + generateIntNoise(1));
@@ -240,9 +233,11 @@
       };
 
       const originalGetChannelData = AudioBuffer.prototype.getChannelData;
-      (AudioBuffer.prototype as unknown as { getChannelData: (channel: number) => Float32Array }).getChannelData = function(channel: number): Float32Array {
+      (
+        AudioBuffer.prototype as unknown as { getChannelData: (channel: number) => Float32Array }
+      ).getChannelData = function (channel: number): Float32Array {
         const data = originalGetChannelData.call(this, channel);
-        const noiseAmplitude = 0.0000001; 
+        const noiseAmplitude = 0.0000001;
         for (let i = 0; i < data.length; i++) {
           data[i] += (random() * 2 - 1) * noiseAmplitude;
         }
@@ -251,18 +246,22 @@
     }
   }
 
-  
   if (config.protections.clientHints) {
     if ('userAgentData' in navigator) {
       const originalUserAgentData = navigator.userAgentData as NavigatorUAData;
-      
-      if (originalUserAgentData && typeof originalUserAgentData.getHighEntropyValues === 'function') {
-        const originalGetHighEntropyValues = originalUserAgentData.getHighEntropyValues.bind(originalUserAgentData);
-        
-        originalUserAgentData.getHighEntropyValues = async function(hints: string[]): Promise<UADataValues> {
+
+      if (
+        originalUserAgentData &&
+        typeof originalUserAgentData.getHighEntropyValues === 'function'
+      ) {
+        const originalGetHighEntropyValues =
+          originalUserAgentData.getHighEntropyValues.bind(originalUserAgentData);
+
+        originalUserAgentData.getHighEntropyValues = async function (
+          hints: string[],
+        ): Promise<UADataValues> {
           const realValues = await originalGetHighEntropyValues(hints);
-          
-          
+
           return {
             ...realValues,
             platformVersion: realValues.platformVersion ? '10.0.0' : undefined,
@@ -275,7 +274,6 @@
     }
   }
 
-  
   if (config.protections.hardwareConcurrency) {
     Object.defineProperty(navigator, 'hardwareConcurrency', {
       get: () => 4,
@@ -283,7 +281,6 @@
     });
   }
 
-  
   if (config.protections.deviceMemory) {
     if ('deviceMemory' in navigator) {
       Object.defineProperty(navigator, 'deviceMemory', {
@@ -293,7 +290,6 @@
     }
   }
 
-  
   if (config.protections.plugins) {
     const emptyPluginArray = {
       length: 0,
@@ -321,10 +317,9 @@
     });
   }
 
-  
   if (config.protections.languages) {
     const normalizedLanguages = ['en-US', 'en'];
-    
+
     Object.defineProperty(navigator, 'languages', {
       get: () => Object.freeze([...normalizedLanguages]),
       configurable: true,
@@ -336,22 +331,21 @@
     });
   }
 
-  
   if (config.protections.timezone) {
     const OriginalDate = Date;
     const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-    const NORMALIZED_OFFSET = 480; 
+    const NORMALIZED_OFFSET = 480;
     const NORMALIZED_TIMEZONE = 'America/Los_Angeles';
-    
-    Date.prototype.getTimezoneOffset = function(): number {
+
+    Date.prototype.getTimezoneOffset = function (): number {
       return NORMALIZED_OFFSET;
     };
-    
+
     const OriginalDateTimeFormat = Intl.DateTimeFormat;
-    
-    (Intl as unknown as { DateTimeFormat: typeof Intl.DateTimeFormat }).DateTimeFormat = function(
+
+    (Intl as unknown as { DateTimeFormat: typeof Intl.DateTimeFormat }).DateTimeFormat = function (
       locales?: string | string[],
-      options?: Intl.DateTimeFormatOptions
+      options?: Intl.DateTimeFormatOptions,
     ): Intl.DateTimeFormat {
       const normalizedOptions = {
         ...options,
@@ -359,28 +353,30 @@
       };
       return new OriginalDateTimeFormat(locales, normalizedOptions);
     } as typeof Intl.DateTimeFormat;
-    
+
     Object.setPrototypeOf(Intl.DateTimeFormat, OriginalDateTimeFormat);
-    (Intl.DateTimeFormat as unknown as { supportedLocalesOf: typeof OriginalDateTimeFormat.supportedLocalesOf }).supportedLocalesOf = 
-      OriginalDateTimeFormat.supportedLocalesOf;
+    (
+      Intl.DateTimeFormat as unknown as {
+        supportedLocalesOf: typeof OriginalDateTimeFormat.supportedLocalesOf;
+      }
+    ).supportedLocalesOf = OriginalDateTimeFormat.supportedLocalesOf;
   }
 
-  
   if (config.trackerDomains && config.trackerDomains.length > 0) {
     const trackerDomains = config.trackerDomains;
     const originalSendBeacon = navigator.sendBeacon.bind(navigator);
-    
+
     function isTrackerUrl(urlString: string): boolean {
       try {
         const url = new URL(urlString);
         const hostname = url.hostname.toLowerCase();
-        
+
         for (const tracker of trackerDomains) {
           if (hostname === tracker || hostname.endsWith('.' + tracker)) {
             return true;
           }
         }
-        
+
         const analyticsPatterns = [
           /google-analytics\.com/i,
           /googletagmanager\.com/i,
@@ -393,38 +389,34 @@
           /telemetry\./i,
           /metrics\./i,
         ];
-        
+
         const fullUrl = urlString.toLowerCase();
         for (const pattern of analyticsPatterns) {
           if (pattern.test(fullUrl)) {
             return true;
           }
         }
-        
+
         return false;
       } catch {
         return false;
       }
     }
-    
-    (navigator as unknown as { sendBeacon: typeof navigator.sendBeacon }).sendBeacon = function(
+
+    (navigator as unknown as { sendBeacon: typeof navigator.sendBeacon }).sendBeacon = function (
       url: string | URL,
-      data?: BodyInit | null
+      data?: BodyInit | null,
     ): boolean {
       const urlString = url.toString();
-      
-      
+
       if (isTrackerUrl(urlString)) {
         return true;
       }
-      
+
       return originalSendBeacon(urlString, data);
     };
   }
-
-  
 })();
-
 
 interface NavigatorUAData {
   brands: { brand: string; version: string }[];
@@ -453,4 +445,3 @@ declare global {
 }
 
 export {};
-

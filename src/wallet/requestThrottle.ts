@@ -1,15 +1,14 @@
-
-
+// Request throttle guards ensure we stay within RPC/external API rate limits
+// while also coalescing closely timed calls.
 export interface ThrottleConfig {
-  
   maxRequests: number;
-  
+
   windowMs: number;
-  
+
   maxConcurrent: number;
-  
+
   backoffMultiplier: number;
-  
+
   maxBackoffMs: number;
 }
 
@@ -27,15 +26,13 @@ interface CoalescedRequest<T> {
   timestamp: number;
 }
 
-
 const DEFAULT_CONFIG: ThrottleConfig = {
-  maxRequests: 10,        
-  windowMs: 1000,         
-  maxConcurrent: 5,       
-  backoffMultiplier: 2,   
-  maxBackoffMs: 30000,    
+  maxRequests: 10,
+  windowMs: 1000,
+  maxConcurrent: 5,
+  backoffMultiplier: 2,
+  maxBackoffMs: 30000,
 };
-
 
 class RequestThrottle {
   private config: ThrottleConfig;
@@ -51,20 +48,12 @@ class RequestThrottle {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  
-  async execute<T>(
-    key: string,
-    execute: () => Promise<T>,
-    priority: number = 0
-  ): Promise<T> {
-    
+  async execute<T>(key: string, execute: () => Promise<T>, priority: number = 0): Promise<T> {
     const coalesced = this.coalescedRequests.get(key);
     if (coalesced && Date.now() - coalesced.timestamp < 100) {
-      
       return coalesced.promise as Promise<T>;
     }
 
-    
     const promise = new Promise<T>((resolve, reject) => {
       this.queue.push({
         key,
@@ -74,50 +63,41 @@ class RequestThrottle {
         priority,
         timestamp: Date.now(),
       });
-      
-      
+
       this.queue.sort((a, b) => b.priority - a.priority);
     });
 
-    
     this.coalescedRequests.set(key, {
       promise: promise as Promise<unknown>,
       timestamp: Date.now(),
     });
 
-    
     this.processQueue();
 
     return promise;
   }
 
-  
   private async processQueue(): Promise<void> {
     if (this.processing) return;
     this.processing = true;
 
     try {
       while (this.queue.length > 0) {
-        
         const now = Date.now();
         if (now < this.backoffUntil) {
           await this.sleep(this.backoffUntil - now);
         }
 
-        
         await this.waitForRateLimit();
 
-        
         if (this.currentConcurrent >= this.config.maxConcurrent) {
           await this.sleep(50);
           continue;
         }
 
-        
         const request = this.queue.shift();
         if (!request) break;
 
-        
         this.currentConcurrent++;
         this.recordRequest();
 
@@ -128,24 +108,20 @@ class RequestThrottle {
     }
   }
 
-  
   private async executeRequest(request: PendingRequest<unknown>): Promise<void> {
     try {
       const result = await request.execute();
       request.resolve(result);
-      
-      
+
       this.currentBackoffMs = 1000;
     } catch (error) {
-      
       if (this.isRateLimitError(error)) {
-        
         this.backoffUntil = Date.now() + this.currentBackoffMs;
         this.currentBackoffMs = Math.min(
           this.currentBackoffMs * this.config.backoffMultiplier,
-          this.config.maxBackoffMs
+          this.config.maxBackoffMs,
         );
-        
+
         this.queue.unshift(request);
       } else {
         request.reject(error instanceof Error ? error : new Error(String(error)));
@@ -156,35 +132,28 @@ class RequestThrottle {
     }
   }
 
-  
   private async waitForRateLimit(): Promise<void> {
     const now = Date.now();
-    
-    
-    this.requestTimestamps = this.requestTimestamps.filter(
-      ts => now - ts < this.config.windowMs
-    );
 
-    
+    this.requestTimestamps = this.requestTimestamps.filter((ts) => now - ts < this.config.windowMs);
+
     while (this.requestTimestamps.length >= this.config.maxRequests) {
       const oldestTs = this.requestTimestamps[0];
       const waitTime = oldestTs + this.config.windowMs - now + 10;
       if (waitTime > 0) {
         await this.sleep(waitTime);
       }
-      
+
       this.requestTimestamps = this.requestTimestamps.filter(
-        ts => Date.now() - ts < this.config.windowMs
+        (ts) => Date.now() - ts < this.config.windowMs,
       );
     }
   }
 
-  
   private recordRequest(): void {
     this.requestTimestamps.push(Date.now());
   }
 
-  
   private isRateLimitError(error: unknown): boolean {
     if (error instanceof Error) {
       const msg = error.message.toLowerCase();
@@ -198,7 +167,6 @@ class RequestThrottle {
     return false;
   }
 
-  
   private cleanupCoalesced(key: string): void {
     setTimeout(() => {
       const coalesced = this.coalescedRequests.get(key);
@@ -208,22 +176,18 @@ class RequestThrottle {
     }, 5000);
   }
 
-  
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  
   getQueueSize(): number {
     return this.queue.length;
   }
 
-  
   getConcurrentCount(): number {
     return this.currentConcurrent;
   }
 
-  
   clear(): void {
     for (const request of this.queue) {
       request.reject(new Error('Request cancelled'));
@@ -233,60 +197,53 @@ class RequestThrottle {
   }
 }
 
-
 export const solanaThrottle = new RequestThrottle({
-  maxRequests: 8,       
+  maxRequests: 8,
   windowMs: 1000,
-  maxConcurrent: 4,     
+  maxConcurrent: 4,
   backoffMultiplier: 2,
   maxBackoffMs: 30000,
 });
-
 
 export const evmThrottle = new RequestThrottle({
-  maxRequests: 12,      
+  maxRequests: 12,
   windowMs: 1000,
-  maxConcurrent: 6,     
+  maxConcurrent: 6,
   backoffMultiplier: 2,
   maxBackoffMs: 30000,
 });
 
-
 export const externalApiThrottle = new RequestThrottle({
-  maxRequests: 5,       
+  maxRequests: 5,
   windowMs: 1000,
-  maxConcurrent: 3,     
-  backoffMultiplier: 3, 
-  maxBackoffMs: 60000,  
+  maxConcurrent: 3,
+  backoffMultiplier: 3,
+  maxBackoffMs: 60000,
 });
-
 
 export async function throttledSolanaRpc<T>(
   key: string,
   execute: () => Promise<T>,
-  priority: number = 0
+  priority: number = 0,
 ): Promise<T> {
   return solanaThrottle.execute(key, execute, priority);
 }
 
-
 export async function throttledEvmRpc<T>(
   key: string,
   execute: () => Promise<T>,
-  priority: number = 0
+  priority: number = 0,
 ): Promise<T> {
   return evmThrottle.execute(key, execute, priority);
 }
 
-
 export async function throttledExternalApi<T>(
   key: string,
   execute: () => Promise<T>,
-  priority: number = 0
+  priority: number = 0,
 ): Promise<T> {
   return externalApiThrottle.execute(key, execute, priority);
 }
-
 
 export function isHardFailure(error: unknown): boolean {
   if (error instanceof Error) {
@@ -299,12 +256,11 @@ export function isHardFailure(error: unknown): boolean {
       msg.includes('access denied') ||
       msg.includes('api key') ||
       msg.includes('invalid api') ||
-      msg.includes('-32052') 
+      msg.includes('-32052')
     );
   }
   return false;
 }
-
 
 export function isSoftFailure(error: unknown): boolean {
   if (error instanceof Error) {
@@ -321,6 +277,3 @@ export function isSoftFailure(error: unknown): boolean {
   }
   return false;
 }
-
-
-

@@ -11,7 +11,11 @@ import {
   getSolanaKeywords,
   getThreatIntelHealth,
 } from '../index';
-import { MOCK_THREAT_INTEL_DATA, LEGITIMATE_DOMAINS, SCAM_DOMAINS } from '../../__tests__/utils/fixtures';
+import {
+  MOCK_THREAT_INTEL_DATA,
+  LEGITIMATE_DOMAINS,
+  SCAM_DOMAINS,
+} from '../../__tests__/utils/fixtures';
 
 // Mock storage
 const mockStorage: Record<string, any> = {};
@@ -59,9 +63,9 @@ jest.mock('../sources', () => ({
     scamDomains: ['phantom-app.com', 'solana-airdrop.xyz'],
     suspiciousTlds: ['xyz', 'tk', 'ml', 'ga', 'cf'],
     homoglyphMap: {
-      'o': ['0', 'ο'],
-      'a': ['а', '@'],
-      'e': ['е', '3'],
+      o: ['0', 'ο'],
+      a: ['а', '@'],
+      e: ['е', '3'],
     },
     solanaKeywords: ['sol', 'solana', 'phantom', 'airdrop', 'wallet'],
     version: 'bootstrap',
@@ -75,8 +79,8 @@ describe('ThreatIntel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Clear mock storages
-    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
-    Object.keys(mockChromeStorage).forEach(key => delete mockChromeStorage[key]);
+    Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
+    Object.keys(mockChromeStorage).forEach((key) => delete mockChromeStorage[key]);
   });
 
   describe('getThreatIntelData', () => {
@@ -248,6 +252,3 @@ describe('Protected Domains', () => {
     expect(isScam).toBe(false);
   });
 });
-
-
-

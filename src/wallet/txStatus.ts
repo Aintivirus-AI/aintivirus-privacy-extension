@@ -1,83 +1,69 @@
-
-
-export type TxDisplayStatus = 
-  | 'pending'      
-  | 'confirming'   
-  | 'confirmed'    
-  | 'failed'       
-  | 'unknown'      
-  | 'dropped'      
-  | 'replaced';    
-
+// Utilities for interpreting transaction confirmation progress and mapping it to
+// badge metadata the UI can render.
+export type TxDisplayStatus =
+  | 'pending'
+  | 'confirming'
+  | 'confirmed'
+  | 'failed'
+  | 'unknown'
+  | 'dropped'
+  | 'replaced';
 
 export type SolanaCommitment = 'processed' | 'confirmed' | 'finalized';
 
-
 export interface TxConfirmationProgress {
-  
   current: number;
-  
+
   target: number;
-  
+
   percentage: number;
-  
+
   label: string;
 }
 
-
 export interface SolanaConfirmationProgress extends TxConfirmationProgress {
-  
   commitment: SolanaCommitment;
-  
+
   slot?: number;
 }
 
-
 export interface EVMConfirmationProgress extends TxConfirmationProgress {
-  
   blockNumber?: number;
-  
+
   currentBlock?: number;
 }
 
-
 export interface TxStatusBadgeConfig {
-  
   status: TxDisplayStatus;
-  
+
   label: string;
-  
+
   color: string;
-  
+
   bgColor: string;
-  
+
   icon: 'pending' | 'confirming' | 'check' | 'x' | 'question' | 'dropped' | 'replace';
-  
+
   animate: boolean;
 }
 
-
 export const EVM_CONFIRMATION_TARGETS: Record<string, number> = {
-  ethereum: 12,    
-  polygon: 64,     
-  arbitrum: 12,    
-  optimism: 12,    
-  base: 12,        
-  
+  ethereum: 12,
+  polygon: 64,
+  arbitrum: 12,
+  optimism: 12,
+  base: 12,
+
   sepolia: 3,
   goerli: 3,
   'polygon-mumbai': 3,
 };
 
-
 export const DEFAULT_EVM_CONFIRMATIONS = 12;
 
-
-export const STUCK_THRESHOLD_MS = 10 * 60 * 1000; 
-
+export const STUCK_THRESHOLD_MS = 10 * 60 * 1000;
 
 export const SOLANA_COMMITMENT_ORDER: SolanaCommitment[] = ['processed', 'confirmed', 'finalized'];
-
 
 export const STATUS_BADGE_CONFIGS: Record<TxDisplayStatus, TxStatusBadgeConfig> = {
   pending: {
@@ -138,32 +124,27 @@ export const STATUS_BADGE_CONFIGS: Record<TxDisplayStatus, TxStatusBadgeConfig> 
   },
 };
 
-
 export function mapSolanaStatus(
   commitment: SolanaCommitment | null,
   hasError: boolean,
-  submittedAt?: number
+  submittedAt?: number,
 ): TxDisplayStatus {
-  
   if (hasError) {
     return 'failed';
   }
 
-  
   if (!commitment) {
-    
     if (submittedAt && Date.now() - submittedAt > STUCK_THRESHOLD_MS) {
       return 'unknown';
     }
     return 'pending';
   }
 
-  
   switch (commitment) {
     case 'processed':
       return 'confirming';
     case 'confirmed':
-      return 'confirming'; 
+      return 'confirming';
     case 'finalized':
       return 'confirmed';
     default:
@@ -171,15 +152,12 @@ export function mapSolanaStatus(
   }
 }
 
-
 export function getSolanaProgress(
   commitment: SolanaCommitment | null,
-  slot?: number
+  slot?: number,
 ): SolanaConfirmationProgress {
-  const commitmentIndex = commitment 
-    ? SOLANA_COMMITMENT_ORDER.indexOf(commitment) 
-    : -1;
-  
+  const commitmentIndex = commitment ? SOLANA_COMMITMENT_ORDER.indexOf(commitment) : -1;
+
   const current = commitmentIndex + 1;
   const target = SOLANA_COMMITMENT_ORDER.length;
   const percentage = Math.round((current / target) * 100);
@@ -209,7 +187,6 @@ export function getSolanaProgress(
   };
 }
 
-
 export function getSolanaCommitmentDescription(commitment: SolanaCommitment): string {
   switch (commitment) {
     case 'processed':
@@ -223,12 +200,11 @@ export function getSolanaCommitmentDescription(commitment: SolanaCommitment): st
   }
 }
 
-
 export function mapEVMStatus(
   status: 'pending' | 'mined' | 'failed' | 'dropped' | 'replaced',
   confirmations: number,
   chainId: string,
-  submittedAt?: number
+  submittedAt?: number,
 ): TxDisplayStatus {
   switch (status) {
     case 'failed':
@@ -246,7 +222,6 @@ export function mapEVMStatus(
     }
     case 'pending':
     default:
-      
       if (submittedAt && Date.now() - submittedAt > STUCK_THRESHOLD_MS) {
         return 'unknown';
       }
@@ -254,17 +229,15 @@ export function mapEVMStatus(
   }
 }
 
-
 export function getEVMConfirmationTarget(chainId: string): number {
   return EVM_CONFIRMATION_TARGETS[chainId.toLowerCase()] ?? DEFAULT_EVM_CONFIRMATIONS;
 }
-
 
 export function getEVMProgress(
   confirmations: number,
   chainId: string,
   blockNumber?: number,
-  currentBlock?: number
+  currentBlock?: number,
 ): EVMConfirmationProgress {
   const target = getEVMConfirmationTarget(chainId);
   const current = Math.min(confirmations, target);
@@ -289,10 +262,9 @@ export function getEVMProgress(
   };
 }
 
-
 export function calculateEVMConfirmations(
   txBlockNumber: number | undefined,
-  currentBlockNumber: number | undefined
+  currentBlockNumber: number | undefined,
 ): number {
   if (!txBlockNumber || !currentBlockNumber) {
     return 0;
@@ -301,21 +273,17 @@ export function calculateEVMConfirmations(
   return Math.max(0, confirmations);
 }
 
-
 export function getStatusBadgeConfig(status: TxDisplayStatus): TxStatusBadgeConfig {
   return STATUS_BADGE_CONFIGS[status] || STATUS_BADGE_CONFIGS.unknown;
 }
-
 
 export function isInProgress(status: TxDisplayStatus): boolean {
   return status === 'pending' || status === 'confirming';
 }
 
-
 export function isTerminal(status: TxDisplayStatus): boolean {
   return ['confirmed', 'failed', 'dropped', 'replaced'].includes(status);
 }
-
 
 export function mightBeStuck(status: TxDisplayStatus, submittedAt: number): boolean {
   if (status !== 'pending') {
@@ -324,35 +292,31 @@ export function mightBeStuck(status: TxDisplayStatus, submittedAt: number): bool
   return Date.now() - submittedAt > STUCK_THRESHOLD_MS;
 }
 
-
 export function getEstimatedTimeRemaining(
   status: TxDisplayStatus,
   chainType: 'solana' | 'evm',
   chainId?: string,
-  progress?: TxConfirmationProgress
+  progress?: TxConfirmationProgress,
 ): string | null {
   if (status === 'confirmed' || status === 'failed' || !progress) {
     return null;
   }
 
   if (chainType === 'solana') {
-    
     const remainingSteps = progress.target - progress.current;
     if (remainingSteps <= 0) return null;
-    
-    const estimatedSeconds = remainingSteps * 12; 
+
+    const estimatedSeconds = remainingSteps * 12;
     return formatDuration(estimatedSeconds);
   } else {
-    
     const blockTimeSeconds = getEVMBlockTime(chainId || 'ethereum');
     const remainingConfirmations = progress.target - progress.current;
     if (remainingConfirmations <= 0) return null;
-    
+
     const estimatedSeconds = remainingConfirmations * blockTimeSeconds;
     return formatDuration(estimatedSeconds);
   }
 }
-
 
 function getEVMBlockTime(chainId: string): number {
   const blockTimes: Record<string, number> = {
@@ -364,7 +328,6 @@ function getEVMBlockTime(chainId: string): number {
   };
   return blockTimes[chainId.toLowerCase()] ?? 12;
 }
-
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) {
@@ -379,10 +342,9 @@ function formatDuration(seconds: number): string {
   }
 }
 
-
 export function getStatusActionSuggestion(
   status: TxDisplayStatus,
-  chainType: 'solana' | 'evm'
+  chainType: 'solana' | 'evm',
 ): string | null {
   switch (status) {
     case 'pending':

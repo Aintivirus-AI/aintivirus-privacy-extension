@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import type { EVMPendingTxInfo, EVMChainId } from '@shared/types';
+import { useState, useMemo } from 'react';
+import type { EVMPendingTxInfo } from '@shared/types';
 import { SpeedUpModal } from './SpeedUpModal';
 import { CancelModal } from './CancelModal';
 import { ExplorerLinkIcon } from './ExplorerLinkIcon';
@@ -12,40 +12,35 @@ import {
   type EVMConfirmationProgress,
 } from '@wallet/txStatus';
 
-
 export interface TxDetailsDrawerProps {
   tx: EVMPendingTxInfo;
   onClose: () => void;
   onTxReplaced?: (oldHash: string, newHash: string) => void;
 }
 
-
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString();
 }
 
-
 function estimateConfirmations(tx: EVMPendingTxInfo): number {
   if (tx.status !== 'mined') return 0;
-  
+
   const secondsSinceMined = Math.floor((Date.now() - tx.submittedAt) / 1000);
   return Math.max(0, Math.floor(secondsSinceMined / 12));
 }
-
 
 export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerProps) {
   const [showSpeedUp, setShowSpeedUp] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
 
-  
   const confirmations = useMemo(() => estimateConfirmations(tx), [tx]);
-  
+
   const displayStatus: TxDisplayStatus = useMemo(() => {
     return mapEVMStatus(
       tx.status as 'pending' | 'mined' | 'failed' | 'dropped' | 'replaced',
       confirmations,
       tx.chainId,
-      tx.submittedAt
+      tx.submittedAt,
     );
   }, [tx.status, confirmations, tx.chainId, tx.submittedAt]);
 
@@ -72,27 +67,22 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
     <>
       <div className="drawer-overlay" onClick={onClose}>
         <div className="drawer-content" onClick={(e) => e.stopPropagation()}>
-          {}
+          {/* Header */}
           <div className="drawer-header">
             <h2>Transaction Details</h2>
-            <button className="close-btn" onClick={onClose}>✕</button>
+            <button className="close-btn" onClick={onClose}>
+              ✕
+            </button>
           </div>
 
-          {}
+          {/* Status summary + (optional) confirmation progress */}
           <div className="status-section">
-            <TxStatusBadge
-              status={displayStatus}
-              size="lg"
-              progress={progress}
-            />
+            <TxStatusBadge status={displayStatus} size="lg" progress={progress} />
             {isPending && (
-              <span className="pending-note">
-                Transaction is waiting to be included in a block
-              </span>
+              <span className="pending-note">Transaction is waiting to be included in a block</span>
             )}
           </div>
 
-          {}
           {showProgress && (
             <div className="confirmation-progress-section">
               <TxConfirmationProgress
@@ -105,16 +95,13 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
             </div>
           )}
 
-          {}
+          {/* Details grid */}
           <div className="details-grid">
             <div className="detail-row">
               <span className="label">Hash</span>
               <div className="value-row">
                 <span className="value monospace">{tx.hash}</span>
-                <button
-                  className="copy-btn"
-                  onClick={() => navigator.clipboard.writeText(tx.hash)}
-                >
+                <button className="copy-btn" onClick={() => navigator.clipboard.writeText(tx.hash)}>
                   📋
                 </button>
                 <ExplorerLinkIcon
@@ -138,10 +125,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
               <span className="label">From</span>
               <div className="value-row">
                 <span className="value monospace">{tx.from}</span>
-                <button
-                  className="copy-btn"
-                  onClick={() => navigator.clipboard.writeText(tx.from)}
-                >
+                <button className="copy-btn" onClick={() => navigator.clipboard.writeText(tx.from)}>
                   📋
                 </button>
                 <ExplorerLinkIcon
@@ -160,10 +144,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
               <span className="label">To</span>
               <div className="value-row">
                 <span className="value monospace">{tx.to}</span>
-                <button
-                  className="copy-btn"
-                  onClick={() => navigator.clipboard.writeText(tx.to)}
-                >
+                <button className="copy-btn" onClick={() => navigator.clipboard.writeText(tx.to)}>
                   📋
                 </button>
                 <ExplorerLinkIcon
@@ -200,7 +181,9 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
 
             <div className="detail-row">
               <span className="label">Chain</span>
-              <span className="value">{tx.chainId} {tx.testnet ? '(Testnet)' : ''}</span>
+              <span className="value">
+                {tx.chainId} {tx.testnet ? '(Testnet)' : ''}
+              </span>
             </div>
 
             {tx.replacedBy && (
@@ -218,7 +201,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
             )}
           </div>
 
-          {}
+          {/* Actions */}
           <div className="drawer-actions">
             <ExplorerLinkIcon
               type="tx"
@@ -233,16 +216,10 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
 
             {isPending && (
               <>
-                <button
-                  className="btn primary"
-                  onClick={() => setShowSpeedUp(true)}
-                >
+                <button className="btn primary" onClick={() => setShowSpeedUp(true)}>
                   ⚡ Speed Up
                 </button>
-                <button
-                  className="btn danger"
-                  onClick={() => setShowCancel(true)}
-                >
+                <button className="btn danger" onClick={() => setShowCancel(true)}>
                   ✕ Cancel
                 </button>
               </>
@@ -251,7 +228,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
         </div>
       </div>
 
-      {}
+      {/* Overlays */}
       {showSpeedUp && (
         <SpeedUpModal
           tx={tx}
@@ -261,11 +238,7 @@ export function TxDetailsDrawer({ tx, onClose, onTxReplaced }: TxDetailsDrawerPr
       )}
 
       {showCancel && (
-        <CancelModal
-          tx={tx}
-          onClose={() => setShowCancel(false)}
-          onSuccess={handleCancelSuccess}
-        />
+        <CancelModal tx={tx} onClose={() => setShowCancel(false)} onSuccess={handleCancelSuccess} />
       )}
 
       <style>{`

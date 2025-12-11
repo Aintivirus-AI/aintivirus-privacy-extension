@@ -1,5 +1,3 @@
-
-
 import {
   Wallet,
   Transaction,
@@ -28,21 +26,16 @@ import {
   withFailover,
   getBestProvider,
 } from './client';
-import {
-  estimateNativeTransferGas,
-  estimateTokenTransferGas,
-  type GasEstimate,
-} from './gas';
+import { estimateNativeTransferGas, estimateTokenTransferGas, type GasEstimate } from './gas';
 import { evmKeypairToWallet, isValidEVMAddress } from '../../keychain';
 
-
+// Transaction builders, signing, and broadcasting helpers for EVM networks.
 export interface NativeTransferParams {
   from: string;
   to: string;
   amount: bigint;
   gasEstimate?: GasEstimate;
 }
-
 
 export interface TokenTransferParams {
   from: string;
@@ -52,7 +45,6 @@ export interface TokenTransferParams {
   gasEstimate?: GasEstimate;
 }
 
-
 export interface EVMTransactionResult {
   hash: string;
   explorerUrl: string;
@@ -60,7 +52,6 @@ export interface EVMTransactionResult {
   receipt?: TransactionReceipt;
   error?: string;
 }
-
 
 export interface UnsignedEVMTransaction {
   chainId: number;
@@ -75,39 +66,31 @@ export interface UnsignedEVMTransaction {
   type: number;
 }
 
-
 const ERC20_TRANSFER_ABI = ['function transfer(address to, uint256 amount) returns (bool)'];
 
-
 const erc20Interface = new Interface(ERC20_TRANSFER_ABI);
-
 
 export async function createNativeTransfer(
   chainId: EVMChainId,
   testnet: boolean,
-  params: NativeTransferParams
+  params: NativeTransferParams,
 ): Promise<UnsignedEVMTransaction> {
   const { from, to, amount } = params;
-  
-  
+
   if (!isValidEVMAddress(from)) {
     throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'evm');
   }
   if (!isValidEVMAddress(to)) {
     throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid recipient address', 'evm');
   }
-  
-  
-  const gasEstimate = params.gasEstimate || 
-    await estimateNativeTransferGas(chainId, testnet, from, to, amount);
-  
-  
+
+  const gasEstimate =
+    params.gasEstimate || (await estimateNativeTransferGas(chainId, testnet, from, to, amount));
+
   const nonce = await getTransactionCount(chainId, testnet, from, 'pending');
-  
-  
+
   const numericChainId = getNumericChainId(chainId, testnet);
-  
-  
+
   if (gasEstimate.isEIP1559) {
     return {
       chainId: numericChainId,
@@ -118,7 +101,7 @@ export async function createNativeTransfer(
       maxFeePerGas: gasEstimate.gasPrice,
       maxPriorityFeePerGas: gasEstimate.maxPriorityFee,
       nonce,
-      type: 2, 
+      type: 2,
     };
   } else {
     return {
@@ -129,20 +112,18 @@ export async function createNativeTransfer(
       gasLimit: gasEstimate.gasLimit,
       gasPrice: gasEstimate.gasPrice,
       nonce,
-      type: 0, 
+      type: 0,
     };
   }
 }
 
-
 export async function createTokenTransfer(
   chainId: EVMChainId,
   testnet: boolean,
-  params: TokenTransferParams
+  params: TokenTransferParams,
 ): Promise<UnsignedEVMTransaction> {
   const { from, to, tokenAddress, amount } = params;
-  
-  
+
   if (!isValidEVMAddress(from)) {
     throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'evm');
   }
@@ -152,21 +133,17 @@ export async function createTokenTransfer(
   if (!isValidEVMAddress(tokenAddress)) {
     throw new ChainError(ChainErrorCode.INVALID_TOKEN, 'Invalid token address', 'evm');
   }
-  
-  
+
   const data = erc20Interface.encodeFunctionData('transfer', [to, amount]);
-  
-  
-  const gasEstimate = params.gasEstimate ||
-    await estimateTokenTransferGas(chainId, testnet, from, to, tokenAddress, amount);
-  
-  
+
+  const gasEstimate =
+    params.gasEstimate ||
+    (await estimateTokenTransferGas(chainId, testnet, from, to, tokenAddress, amount));
+
   const nonce = await getTransactionCount(chainId, testnet, from, 'pending');
-  
-  
+
   const numericChainId = getNumericChainId(chainId, testnet);
-  
-  
+
   if (gasEstimate.isEIP1559) {
     return {
       chainId: numericChainId,
@@ -193,25 +170,21 @@ export async function createTokenTransfer(
   }
 }
 
-
 export function signTransaction(
   tx: UnsignedEVMTransaction,
   keypair: EVMKeypair,
-  expectedChainId: number
+  expectedChainId: number,
 ): string {
-  
   if (tx.chainId !== expectedChainId) {
     throw new ChainError(
       ChainErrorCode.CHAIN_MISMATCH,
       `Transaction chain ID (${tx.chainId}) does not match expected (${expectedChainId})`,
-      'evm'
+      'evm',
     );
   }
-  
-  
+
   const wallet = evmKeypairToWallet(keypair);
-  
-  
+
   const transaction = Transaction.from({
     chainId: tx.chainId,
     to: tx.to,
@@ -220,53 +193,55 @@ export function signTransaction(
     gasLimit: tx.gasLimit,
     nonce: tx.nonce,
     type: tx.type,
-    ...(tx.type === 2 ? {
-      maxFeePerGas: tx.maxFeePerGas,
-      maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
-    } : {
-      gasPrice: tx.gasPrice,
-    }),
+    ...(tx.type === 2
+      ? {
+          maxFeePerGas: tx.maxFeePerGas,
+          maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+        }
+      : {
+          gasPrice: tx.gasPrice,
+        }),
   });
-  
-  
+
   const signedTx = wallet.signingKey.sign(transaction.unsignedHash);
   transaction.signature = signedTx;
-  
+
   return transaction.serialized;
 }
-
 
 export async function broadcastTransaction(
   chainId: EVMChainId,
   testnet: boolean,
-  signedTx: string
+  signedTx: string,
 ): Promise<TransactionResponse> {
   try {
     return await sendTransaction(chainId, testnet, signedTx);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    
-    
+
     if (message.includes('insufficient funds')) {
       throw new ChainError(ChainErrorCode.INSUFFICIENT_FUNDS, 'Insufficient funds for gas', 'evm');
     }
     if (message.includes('nonce')) {
-      throw new ChainError(ChainErrorCode.TRANSACTION_FAILED, 'Nonce error - please try again', 'evm');
+      throw new ChainError(
+        ChainErrorCode.TRANSACTION_FAILED,
+        'Nonce error - please try again',
+        'evm',
+      );
     }
     if (message.includes('gas')) {
       throw new ChainError(ChainErrorCode.INSUFFICIENT_GAS, message, 'evm');
     }
-    
+
     throw new ChainError(ChainErrorCode.BROADCAST_FAILED, message, 'evm');
   }
 }
-
 
 export async function confirmTransaction(
   chainId: EVMChainId,
   testnet: boolean,
   txHash: string,
-  confirmations: number = 1
+  confirmations: number = 1,
 ): Promise<TransactionReceipt | null> {
   try {
     return await waitForTransaction(
@@ -274,11 +249,9 @@ export async function confirmTransaction(
       testnet,
       txHash,
       confirmations,
-      TX_CONFIRMATION_TIMEOUT
+      TX_CONFIRMATION_TIMEOUT,
     );
   } catch (error) {
-    
-    
     try {
       return await getTransactionReceipt(chainId, testnet, txHash);
     } catch {
@@ -287,35 +260,31 @@ export async function confirmTransaction(
   }
 }
 
-
 export async function sendNativeToken(
   chainId: EVMChainId,
   testnet: boolean,
   keypair: EVMKeypair,
   to: string,
-  amount: bigint
+  amount: bigint,
 ): Promise<EVMTransactionResult> {
   const config = getEVMChainConfig(chainId);
   const numericChainId = getNumericChainId(chainId, testnet);
   const explorerBase = getEVMExplorerUrl(chainId, testnet);
-  
-  
+
   const unsignedTx = await createNativeTransfer(chainId, testnet, {
     from: keypair.address,
     to,
     amount,
   });
-  
-  
+
   const signedTx = signTransaction(unsignedTx, keypair, numericChainId);
-  
-  
+
   const txResponse = await broadcastTransaction(chainId, testnet, signedTx);
   const hash = txResponse.hash;
   const explorerUrl = `${explorerBase}/tx/${hash}`;
-  
+
   const receipt = await confirmTransaction(chainId, testnet, hash);
-  
+
   if (receipt) {
     const success = receipt.status === 1;
     return {
@@ -326,7 +295,7 @@ export async function sendNativeToken(
       error: success ? undefined : 'Transaction reverted',
     };
   }
-  
+
   return {
     hash,
     explorerUrl,
@@ -334,7 +303,6 @@ export async function sendNativeToken(
     error: 'Confirmation timeout - check explorer for status',
   };
 }
-
 
 export async function sendToken(
   chainId: EVMChainId,
@@ -342,29 +310,26 @@ export async function sendToken(
   keypair: EVMKeypair,
   to: string,
   tokenAddress: string,
-  amount: bigint
+  amount: bigint,
 ): Promise<EVMTransactionResult> {
   const numericChainId = getNumericChainId(chainId, testnet);
   const explorerBase = getEVMExplorerUrl(chainId, testnet);
-  
-  
+
   const unsignedTx = await createTokenTransfer(chainId, testnet, {
     from: keypair.address,
     to,
     tokenAddress,
     amount,
   });
-  
-  
+
   const signedTx = signTransaction(unsignedTx, keypair, numericChainId);
-  
-  
+
   const txResponse = await broadcastTransaction(chainId, testnet, signedTx);
   const hash = txResponse.hash;
   const explorerUrl = `${explorerBase}/tx/${hash}`;
-  
+
   const receipt = await confirmTransaction(chainId, testnet, hash);
-  
+
   if (receipt) {
     const success = receipt.status === 1;
     return {
@@ -375,7 +340,7 @@ export async function sendToken(
       error: success ? undefined : 'Transaction reverted',
     };
   }
-  
+
   return {
     hash,
     explorerUrl,
@@ -384,30 +349,27 @@ export async function sendToken(
   };
 }
 
-
 export function parseAmount(input: string, decimals: number = 18): bigint {
   const cleaned = input.trim().replace(/,/g, '');
   return parseUnits(cleaned, decimals);
 }
 
-
 export function formatAmount(
   amount: bigint,
   decimals: number = 18,
-  maxDecimals: number = 6
+  maxDecimals: number = 6,
 ): string {
   const formatted = formatUnits(amount, decimals);
   const num = parseFloat(formatted);
-  
+
   if (num === 0) return '0';
   if (num < 0.000001) return num.toExponential(2);
-  
+
   return num.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: maxDecimals,
   });
 }
-
 
 export function validateTransferParams(params: {
   to: string;
@@ -416,15 +378,15 @@ export function validateTransferParams(params: {
   estimatedFee: bigint;
 }): { valid: boolean; error?: string } {
   const { to, amount, balance, estimatedFee } = params;
-  
+
   if (!isValidEVMAddress(to)) {
     return { valid: false, error: 'Invalid recipient address' };
   }
-  
+
   if (amount <= 0n) {
     return { valid: false, error: 'Amount must be greater than 0' };
   }
-  
+
   const totalRequired = amount + estimatedFee;
   if (totalRequired > balance) {
     const shortfall = totalRequired - balance;
@@ -433,15 +395,11 @@ export function validateTransferParams(params: {
       error: `Insufficient balance. Need ${formatUnits(shortfall, 18)} more ETH`,
     };
   }
-  
+
   return { valid: true };
 }
-
 
 export function calculateMaxSend(balance: bigint, estimatedFee: bigint): bigint {
   const max = balance - estimatedFee;
   return max > 0n ? max : 0n;
 }
-
-
-

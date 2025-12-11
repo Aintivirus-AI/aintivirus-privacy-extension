@@ -1,9 +1,6 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { sendToBackground } from '@shared/messaging';
 import { TokenIcon } from './TokenIcon';
-
 
 interface TokenSearchResult {
   address: string;
@@ -14,22 +11,20 @@ interface TokenSearchResult {
 }
 
 interface TokenSearchDropdownProps {
-  
   value: string;
-  
+
   onChange: (value: string) => void;
-  
+
   onTokenSelect: (token: TokenSearchResult) => void;
-  
+
   chainType: 'solana' | 'evm';
-  
+
   placeholder?: string;
-  
+
   isSearching?: boolean;
-  
+
   setIsSearching?: (searching: boolean) => void;
 }
-
 
 const DEXSCREENER_SEARCH_API = 'https://api.dexscreener.com/latest/dex/search';
 
@@ -63,12 +58,9 @@ async function searchDexScreener(query: string): Promise<TokenSearchResult | nul
     }
 
     const data: DexScreenerResponse = await response.json();
-    
-    
-    const pair = data.pairs?.find(p => 
-      p.baseToken.address.toLowerCase() === query.toLowerCase()
-    );
-    
+
+    const pair = data.pairs?.find((p) => p.baseToken.address.toLowerCase() === query.toLowerCase());
+
     if (!pair) {
       return null;
     }
@@ -77,13 +69,12 @@ async function searchDexScreener(query: string): Promise<TokenSearchResult | nul
       symbol: pair.baseToken.symbol,
       name: pair.baseToken.name,
       logoUri: pair.info?.imageUrl,
-      decimals: 9, 
+      decimals: 9,
     };
   } catch (error) {
     return null;
   }
 }
-
 
 export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
   value,
@@ -100,26 +91,25 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSearchedRef = useRef<string>('');
 
-  
-  const isValidAddress = useCallback((addr: string) => {
-    const trimmed = addr.trim();
-    if (chainType === 'evm') {
-      return trimmed.length === 42 && trimmed.startsWith('0x');
-    }
-    
-    return trimmed.length >= 32 && trimmed.length <= 44;
-  }, [chainType]);
+  const isValidAddress = useCallback(
+    (addr: string) => {
+      const trimmed = addr.trim();
+      if (chainType === 'evm') {
+        return trimmed.length === 42 && trimmed.startsWith('0x');
+      }
 
-  
+      return trimmed.length >= 32 && trimmed.length <= 44;
+    },
+    [chainType],
+  );
+
   useEffect(() => {
     const trimmedValue = value.trim();
-    
-    
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    
     if (!trimmedValue || !isValidAddress(trimmedValue)) {
       setSearchResult(null);
       setSearchError(null);
@@ -128,25 +118,21 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
       return;
     }
 
-    
     if (trimmedValue === lastSearchedRef.current) {
       return;
     }
 
-    
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true);
       setSearchError(null);
       lastSearchedRef.current = trimmedValue;
       try {
-        
-        
         if (chainType === 'evm') {
           const res = await sendToBackground({
             type: 'WALLET_GET_TOKEN_METADATA',
             payload: { mint: trimmedValue },
           });
-          
+
           if (res.success && res.data) {
             const metadata = res.data as { symbol: string; name: string; logoUri?: string };
             setSearchResult({
@@ -160,10 +146,9 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
             return;
           }
         }
-        
-        
+
         const result = await searchDexScreener(trimmedValue);
-        
+
         if (result) {
           setSearchResult(result);
           setIsOpen(true);
@@ -185,24 +170,24 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
     };
   }, [value, chainType, isValidAddress]);
 
-  
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value);
-  }, [onChange]);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange(e.target.value);
+    },
+    [onChange],
+  );
 
-  
   const handleTokenSelect = useCallback(() => {
     if (searchResult) {
       onTokenSelect(searchResult);
@@ -210,15 +195,17 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
     }
   }, [searchResult, onTokenSelect]);
 
-  
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && searchResult && isOpen) {
-      e.preventDefault();
-      handleTokenSelect();
-    } else if (e.key === 'Escape') {
-      setIsOpen(false);
-    }
-  }, [searchResult, isOpen, handleTokenSelect]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && searchResult && isOpen) {
+        e.preventDefault();
+        handleTokenSelect();
+      } else if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    },
+    [searchResult, isOpen, handleTokenSelect],
+  );
 
   return (
     <div className="token-search-dropdown" ref={containerRef}>
@@ -240,25 +227,19 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
           </div>
         )}
       </div>
-      
+
       {}
-      {value.trim() && isValidAddress(value.trim()) && !isSearching && !searchResult && searchError && (
-        <div className="token-search-status error">
-          {searchError}
-        </div>
-      )}
+      {value.trim() &&
+        isValidAddress(value.trim()) &&
+        !isSearching &&
+        !searchResult &&
+        searchError && <div className="token-search-status error">{searchError}</div>}
 
       {}
       {isOpen && searchResult && (
         <div className="token-search-results">
-          <div className="token-search-header">
-            Token Found
-          </div>
-          <div
-            className="token-search-item"
-            onClick={handleTokenSelect}
-            role="option"
-          >
+          <div className="token-search-header">Token Found</div>
+          <div className="token-search-item" onClick={handleTokenSelect} role="option">
             <TokenIcon
               symbol={searchResult.symbol}
               logoUri={searchResult.logoUri}
@@ -279,6 +260,3 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
 };
 
 export default TokenSearchDropdown;
-
-
-

@@ -1,5 +1,3 @@
-
-
 import { Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import type {
   ChainAdapter,
@@ -24,7 +22,6 @@ import {
   validateMnemonic,
 } from '../../keychain';
 import {
-  getBalance as getSolanaBalance,
   getBalanceWithRetry,
   setNetwork as setSolanaNetwork,
   getCurrentNetwork,
@@ -34,59 +31,48 @@ import {
   getTransactionExplorerUrl,
   getCurrentConnection,
 } from '../../rpc';
-import {
-  sendSol,
-  estimateTransactionFee,
-  validateRecipient,
-} from '../../transactions';
+import { sendSol, estimateTransactionFee, validateRecipient } from '../../transactions';
 import { getTransactionHistory as getSolanaHistory } from '../../history';
 import { getTokenBalances as getSPLTokenBalances } from '../../tokens';
 import type { SolanaNetwork, TransactionHistoryItem } from '../../types';
 
-
+// Solana adapter bridges the shared ChainAdapter interface to Solana helpers.
 export class SolanaAdapter implements ChainAdapter {
   readonly chainType = 'solana' as const;
   readonly chainName = 'Solana';
   readonly nativeSymbol = 'SOL';
-  
+
   private _network: NetworkEnvironment;
-  
+
   constructor(network: NetworkEnvironment = 'mainnet') {
     this._network = network;
-    
+
     const solanaNetwork: SolanaNetwork = network === 'mainnet' ? 'mainnet-beta' : 'devnet';
     setSolanaNetwork(solanaNetwork);
   }
-  
+
   get network(): NetworkEnvironment {
     return this._network;
   }
-  
-  
+
   async deriveAddress(mnemonic: string, index: number = 0): Promise<string> {
-    
-    
     if (index !== 0) {
     }
-    
+
     const normalized = normalizeMnemonic(mnemonic);
     if (!validateMnemonic(normalized)) {
-      throw new ChainError(
-        ChainErrorCode.INVALID_ADDRESS,
-        'Invalid mnemonic phrase',
-        'solana'
-      );
+      throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid mnemonic phrase', 'solana');
     }
-    
+
     return getPublicKeyFromMnemonic(normalized);
   }
-  
+
   async getKeypair(mnemonic: string, index: number = 0): Promise<ChainKeypair> {
     if (index !== 0) {
     }
-    
+
     const keypair = deriveKeypair(mnemonic);
-    
+
     return {
       chainType: 'solana',
       address: keypair.publicKey.toBase58(),
@@ -94,24 +80,19 @@ export class SolanaAdapter implements ChainAdapter {
       _raw: keypair,
     };
   }
-  
+
   isValidAddress(address: string): boolean {
     return isValidSolanaAddress(address);
   }
-  
-  
+
   async getBalance(address: string): Promise<ChainBalance> {
     if (!this.isValidAddress(address)) {
-      throw new ChainError(
-        ChainErrorCode.INVALID_ADDRESS,
-        'Invalid Solana address',
-        'solana'
-      );
+      throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid Solana address', 'solana');
     }
-    
+
     try {
       const balance = await getBalanceWithRetry(address);
-      
+
       return {
         raw: BigInt(balance.lamports),
         formatted: balance.sol,
@@ -123,24 +104,20 @@ export class SolanaAdapter implements ChainAdapter {
       throw new ChainError(
         ChainErrorCode.NETWORK_ERROR,
         `Failed to get Solana balance: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'solana'
+        'solana',
       );
     }
   }
-  
+
   async getTokenBalances(address: string): Promise<TokenBalance[]> {
     if (!this.isValidAddress(address)) {
-      throw new ChainError(
-        ChainErrorCode.INVALID_ADDRESS,
-        'Invalid Solana address',
-        'solana'
-      );
+      throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid Solana address', 'solana');
     }
-    
+
     try {
       const splBalances = await getSPLTokenBalances();
-      
-      return splBalances.map(token => ({
+
+      return splBalances.map((token) => ({
         address: token.mint,
         symbol: token.symbol,
         name: token.name,
@@ -153,12 +130,11 @@ export class SolanaAdapter implements ChainAdapter {
       throw new ChainError(
         ChainErrorCode.NETWORK_ERROR,
         `Failed to get token balances: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'solana'
+        'solana',
       );
     }
   }
-  
-  
+
   async createTransfer(from: string, to: string, amount: bigint): Promise<UnsignedChainTx> {
     if (!this.isValidAddress(from)) {
       throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'solana');
@@ -166,8 +142,7 @@ export class SolanaAdapter implements ChainAdapter {
     if (!this.isValidAddress(to)) {
       throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid recipient address', 'solana');
     }
-    
-    
+
     return {
       chainType: 'solana',
       to,
@@ -175,15 +150,13 @@ export class SolanaAdapter implements ChainAdapter {
       _raw: { from, to, amount },
     };
   }
-  
+
   async createTokenTransfer(
     from: string,
     to: string,
     tokenAddress: string,
-    amount: bigint
+    amount: bigint,
   ): Promise<UnsignedChainTx> {
-    
-    
     if (!this.isValidAddress(from)) {
       throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'solana');
     }
@@ -193,7 +166,7 @@ export class SolanaAdapter implements ChainAdapter {
     if (!this.isValidAddress(tokenAddress)) {
       throw new ChainError(ChainErrorCode.INVALID_TOKEN, 'Invalid token mint address', 'solana');
     }
-    
+
     return {
       chainType: 'solana',
       to,
@@ -202,12 +175,12 @@ export class SolanaAdapter implements ChainAdapter {
       _raw: { from, to, tokenAddress, amount },
     };
   }
-  
+
   async estimateFee(tx: UnsignedChainTx): Promise<ChainFeeEstimate> {
     try {
       const amountSol = Number(tx.amount) / LAMPORTS_PER_SOL;
       const feeEstimate = await estimateTransactionFee(tx.to, amountSol);
-      
+
       return {
         fee: BigInt(feeEstimate.feeLamports),
         feeFormatted: feeEstimate.feeSol,
@@ -215,7 +188,6 @@ export class SolanaAdapter implements ChainAdapter {
         priorityFee: BigInt(feeEstimate.priorityFee),
       };
     } catch (error) {
-      
       return {
         fee: BigInt(5000),
         feeFormatted: 0.000005,
@@ -223,18 +195,16 @@ export class SolanaAdapter implements ChainAdapter {
       };
     }
   }
-  
+
   async signTransaction(tx: UnsignedChainTx, keypair: ChainKeypair): Promise<SignedChainTx> {
-    
     if (tx.chainType !== 'solana' || keypair.chainType !== 'solana') {
       throw new ChainError(
         ChainErrorCode.CHAIN_MISMATCH,
         'Transaction and keypair must be for Solana',
-        'solana'
+        'solana',
       );
     }
-    
-    
+
     return {
       chainType: 'solana',
       serialized: JSON.stringify({
@@ -242,33 +212,31 @@ export class SolanaAdapter implements ChainAdapter {
         amount: tx.amount.toString(),
         tokenAddress: tx.tokenAddress,
       }),
-      hash: '', 
+      hash: '',
       _raw: { tx, keypair },
     };
   }
-  
+
   async broadcastTransaction(signedTx: SignedChainTx): Promise<TxResult> {
     if (signedTx.chainType !== 'solana') {
       throw new ChainError(
         ChainErrorCode.CHAIN_MISMATCH,
         'Transaction must be for Solana',
-        'solana'
+        'solana',
       );
     }
-    
-    
+
     const rawData = signedTx._raw as { tx: UnsignedChainTx; keypair: ChainKeypair };
     const { tx } = rawData;
-    
-    
+
     const amountSol = Number(tx.amount) / LAMPORTS_PER_SOL;
-    
+
     try {
       const result = await sendSol({
         recipient: tx.to,
         amountSol,
       });
-      
+
       return {
         hash: result.signature,
         explorerUrl: result.explorerUrl,
@@ -276,28 +244,28 @@ export class SolanaAdapter implements ChainAdapter {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transaction failed';
-      
+
       if (message.includes('insufficient')) {
         throw new ChainError(ChainErrorCode.INSUFFICIENT_FUNDS, message, 'solana');
       }
-      
+
       throw new ChainError(ChainErrorCode.BROADCAST_FAILED, message, 'solana');
     }
   }
-  
+
   async getTransactionHistory(
     address: string,
     limit: number = 20,
-    before?: string
+    before?: string,
   ): Promise<{ transactions: ChainTxHistoryItem[]; hasMore: boolean; cursor: string | null }> {
     if (!this.isValidAddress(address)) {
       throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid Solana address', 'solana');
     }
-    
+
     try {
       const result = await getSolanaHistory({ limit, before });
-      
-      const transactions: ChainTxHistoryItem[] = result.transactions.map(tx => ({
+
+      const transactions: ChainTxHistoryItem[] = result.transactions.map((tx) => ({
         hash: tx.signature,
         timestamp: tx.timestamp,
         direction: tx.direction,
@@ -310,7 +278,7 @@ export class SolanaAdapter implements ChainAdapter {
         type: tx.type,
         block: tx.slot,
       }));
-      
+
       return {
         transactions,
         hasMore: result.hasMore,
@@ -320,17 +288,16 @@ export class SolanaAdapter implements ChainAdapter {
       throw new ChainError(
         ChainErrorCode.NETWORK_ERROR,
         `Failed to get transaction history: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'solana'
+        'solana',
       );
     }
   }
-  
-  
+
   async getNetworkStatus(): Promise<NetworkStatus> {
     try {
       const status = await getSolanaNetworkStatus();
       const config = await getCurrentNetwork();
-      
+
       return {
         connected: status.connected,
         latencyMs: status.latency,
@@ -346,19 +313,19 @@ export class SolanaAdapter implements ChainAdapter {
       };
     }
   }
-  
+
   setNetwork(network: NetworkEnvironment): void {
     this._network = network;
     const solanaNetwork: SolanaNetwork = network === 'mainnet' ? 'mainnet-beta' : 'devnet';
     setSolanaNetwork(solanaNetwork);
   }
-  
+
   getAddressExplorerUrl(address: string): string {
     const config = SOLANA_CHAINS[this._network === 'mainnet' ? 'mainnet-beta' : 'devnet'];
     const clusterParam = this._network === 'mainnet' ? '' : '?cluster=devnet';
     return `${config.explorerUrl}/address/${address}${clusterParam}`;
   }
-  
+
   getTxExplorerUrl(hash: string): string {
     const config = SOLANA_CHAINS[this._network === 'mainnet' ? 'mainnet-beta' : 'devnet'];
     const clusterParam = this._network === 'mainnet' ? '' : '?cluster=devnet';
@@ -366,10 +333,6 @@ export class SolanaAdapter implements ChainAdapter {
   }
 }
 
-
 export function createSolanaAdapter(network: NetworkEnvironment = 'mainnet'): SolanaAdapter {
   return new SolanaAdapter(network);
 }
-
-
-

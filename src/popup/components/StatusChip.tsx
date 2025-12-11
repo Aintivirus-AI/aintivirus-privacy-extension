@@ -1,9 +1,6 @@
-
-
 import React from 'react';
 
-
-export type StatusType = 
+export type StatusType =
   | 'pending'
   | 'confirming'
   | 'confirmed'
@@ -13,18 +10,16 @@ export type StatusType =
   | 'replaced';
 
 export interface StatusChipProps {
-  
   status: StatusType;
-  
+
   size?: 'xs' | 'sm' | 'md';
-  
+
   label?: string;
-  
+
   iconOnly?: boolean;
-  
+
   className?: string;
 }
-
 
 interface StatusConfig {
   label: string;
@@ -85,7 +80,6 @@ const STATUS_CONFIG: Record<StatusType, StatusConfig> = {
     animate: false,
   },
 };
-
 
 function PendingIcon() {
   return (
@@ -149,7 +143,6 @@ function ReplacedIcon() {
   );
 }
 
-
 export const StatusChip: React.FC<StatusChipProps> = ({
   status,
   size = 'sm',
@@ -159,7 +152,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({
 }) => {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
   const displayLabel = label || config.label;
-  
+
   const sizeStyles = {
     xs: {
       height: '16px',
@@ -183,28 +176,28 @@ export const StatusChip: React.FC<StatusChipProps> = ({
       gap: '5px',
     },
   };
-  
+
   const s = sizeStyles[size];
-  
+
   return (
     <>
       <span
         className={`status-chip status-chip-${size} ${config.animate ? 'animate' : ''} ${className}`}
-        style={{
-          '--status-color': config.color,
-          '--status-bg': config.bgColor,
-        } as React.CSSProperties}
+        style={
+          {
+            '--status-color': config.color,
+            '--status-bg': config.bgColor,
+          } as React.CSSProperties
+        }
         role="status"
         aria-label={displayLabel}
       >
         <span className="status-chip-icon" aria-hidden="true">
           {config.icon}
         </span>
-        {!iconOnly && (
-          <span className="status-chip-label">{displayLabel}</span>
-        )}
+        {!iconOnly && <span className="status-chip-label">{displayLabel}</span>}
       </span>
-      
+
       <style>{`
         .status-chip {
           display: inline-flex;

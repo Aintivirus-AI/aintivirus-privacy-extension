@@ -1,7 +1,4 @@
-
-
 export * from './types';
-
 
 export {
   initializeDAppHandlers,
@@ -9,7 +6,6 @@ export {
   broadcastChainChanged,
   broadcastDisconnect,
 } from './handlers';
-
 
 export {
   getPermission,
@@ -25,7 +21,6 @@ export {
   updatePermissionSettings,
 } from './permissions/store';
 
-
 export {
   enqueue,
   getRequest,
@@ -40,8 +35,4 @@ export {
   getQueueStats,
 } from './queue/requestQueue';
 
-
-export {
-  initializeDAppBridge,
-  injectDAppScript,
-} from './bridge/contentBridge';
+export { initializeDAppBridge, injectDAppScript } from './bridge/contentBridge';

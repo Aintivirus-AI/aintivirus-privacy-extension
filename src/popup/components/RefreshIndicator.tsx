@@ -1,44 +1,38 @@
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
-
 export interface RefreshIndicatorProps {
-  
   lastUpdated?: number;
-  
+
   isRefreshing?: boolean;
-  
+
   onRefresh?: () => void;
-  
+
   showButton?: boolean;
-  
+
   size?: 'sm' | 'md';
-  
+
   align?: 'left' | 'center' | 'right';
-  
+
   className?: string;
 }
 
-
 function formatLastUpdated(timestamp: number | undefined): string {
   if (!timestamp) return 'Never updated';
-  
+
   const now = Date.now();
   const diff = now - timestamp;
-  
+
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
-  
+
   if (seconds < 10) return 'Just now';
   if (seconds < 60) return `${seconds}s ago`;
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
-  
+
   return new Date(timestamp).toLocaleString();
 }
-
 
 function RefreshIcon({ spinning }: { spinning?: boolean }) {
   return (
@@ -49,10 +43,7 @@ function RefreshIcon({ spinning }: { spinning?: boolean }) {
       strokeWidth="1.5"
       className={spinning ? 'refresh-icon-spinning' : ''}
     >
-      <path
-        d="M2 8a6 6 0 0111.2-3M14 8a6 6 0 01-11.2 3"
-        strokeLinecap="round"
-      />
+      <path d="M2 8a6 6 0 0111.2-3M14 8a6 6 0 01-11.2 3" strokeLinecap="round" />
       <path d="M14 3v2.5h-2.5M2 13v-2.5h2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -66,7 +57,6 @@ function CheckIcon() {
   );
 }
 
-
 export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
   lastUpdated,
   isRefreshing = false,
@@ -79,20 +69,18 @@ export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
   const [displayTime, setDisplayTime] = useState(() => formatLastUpdated(lastUpdated));
   const [showSuccess, setShowSuccess] = useState(false);
   const prevRefreshing = React.useRef(isRefreshing);
-  
-  
+
   useEffect(() => {
     const updateTime = () => {
       setDisplayTime(formatLastUpdated(lastUpdated));
     };
-    
+
     updateTime();
-    const interval = setInterval(updateTime, 10000); 
-    
+    const interval = setInterval(updateTime, 10000);
+
     return () => clearInterval(interval);
   }, [lastUpdated]);
-  
-  
+
   useEffect(() => {
     if (prevRefreshing.current && !isRefreshing) {
       setShowSuccess(true);
@@ -101,13 +89,13 @@ export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
     }
     prevRefreshing.current = isRefreshing;
   }, [isRefreshing]);
-  
+
   const handleClick = useCallback(() => {
     if (!isRefreshing && onRefresh) {
       onRefresh();
     }
   }, [isRefreshing, onRefresh]);
-  
+
   const sizeStyles = {
     sm: {
       fontSize: '10px',
@@ -122,9 +110,9 @@ export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
       padding: '6px 10px',
     },
   };
-  
+
   const s = sizeStyles[size];
-  
+
   return (
     <>
       <div className={`refresh-indicator refresh-indicator-${size} align-${align} ${className}`}>
@@ -165,7 +153,7 @@ export const RefreshIndicator: React.FC<RefreshIndicatorProps> = ({
           </span>
         )}
       </div>
-      
+
       <style>{`
         .refresh-indicator {
           display: flex;

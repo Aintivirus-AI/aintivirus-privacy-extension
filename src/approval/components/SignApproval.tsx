@@ -228,7 +228,11 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         const bytes = Uint8Array.from(decoded, (c) => c.charCodeAt(0));
         return {
           text: decoded,
-          hex: '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(''),
+          hex:
+            '0x' +
+            Array.from(bytes)
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join(''),
           isHex: false,
           byteLength: bytes.length,
         };
@@ -360,40 +364,20 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
         warning.type === 'danger' ? (
           <div key={idx} style={styles.dangerBox}>
             <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L2 22h20L12 2z"
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="2"
-              />
-              <path
-                d="M12 10v4M12 18h.01"
-                stroke="#ef4444"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
+              <path d="M12 2L2 22h20L12 2z" fill="none" stroke="#ef4444" strokeWidth="2" />
+              <path d="M12 10v4M12 18h.01" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
             </svg>
             <span style={styles.dangerText}>{warning.message}</span>
           </div>
         ) : (
           <div key={idx} style={styles.warningBox}>
             <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L2 22h20L12 2z"
-                fill="none"
-                stroke="#fbbf24"
-                strokeWidth="2"
-              />
-              <path
-                d="M12 10v4M12 18h.01"
-                stroke="#fbbf24"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
+              <path d="M12 2L2 22h20L12 2z" fill="none" stroke="#fbbf24" strokeWidth="2" />
+              <path d="M12 10v4M12 18h.01" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
             </svg>
             <span style={styles.warningText}>{warning.message}</span>
           </div>
-        )
+        ),
       )}
 
       <div style={styles.section}>
@@ -445,16 +429,10 @@ export function SignApproval({ request, onApprove, onReject }: Props) {
       </div>
 
       <div style={styles.buttons}>
-        <button
-          style={{ ...styles.button, ...styles.rejectButton }}
-          onClick={() => onReject()}
-        >
+        <button style={{ ...styles.button, ...styles.rejectButton }} onClick={() => onReject()}>
           Cancel
         </button>
-        <button
-          style={{ ...styles.button, ...styles.approveButton }}
-          onClick={onApprove}
-        >
+        <button style={{ ...styles.button, ...styles.approveButton }} onClick={onApprove}>
           Sign
         </button>
       </div>
@@ -477,7 +455,12 @@ function hexToString(hex: string): string {
 
 function stringToHex(str: string): string {
   const bytes = new TextEncoder().encode(str);
-  return '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return (
+    '0x' +
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
 }
 
 export default SignApproval;

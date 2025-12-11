@@ -29,8 +29,8 @@ jest.mock('../selectors', () => ({
     return selectors[selector.toLowerCase()] || null;
   }),
   lookupContract: jest.fn(() => null),
-  getContractDisplayName: jest.fn((address: string) => 
-    address.slice(0, 6) + '...' + address.slice(-4)
+  getContractDisplayName: jest.fn(
+    (address: string) => address.slice(0, 6) + '...' + address.slice(-4),
   ),
 }));
 
@@ -49,8 +49,9 @@ jest.mock('../warnings', () => ({
     if (eth === 0) return '0 ETH';
     return eth.toFixed(6) + ' ETH';
   }),
-  isInfiniteApproval: jest.fn((amount: bigint) => 
-    amount >= BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff') / 2n
+  isInfiniteApproval: jest.fn(
+    (amount: bigint) =>
+      amount >= BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff') / 2n,
   ),
   warnContractCreation: jest.fn(() => ({ level: 'warning', message: 'Contract creation' })),
   warnNftApprovalForAll: jest.fn(() => ({ level: 'high', message: 'NFT approval for all' })),
@@ -124,8 +125,10 @@ describe('EVM Decoder', () => {
     describe('ERC20 Transfer', () => {
       it('should decode ERC20 transfer', () => {
         // transfer(address to, uint256 amount)
-        const data = EVM_FUNCTION_SELECTORS.transfer +
-          '000000000000000000000000' + TEST_RECIPIENT_EVM.slice(2) + // to address
+        const data =
+          EVM_FUNCTION_SELECTORS.transfer +
+          '000000000000000000000000' +
+          TEST_RECIPIENT_EVM.slice(2) + // to address
           '0000000000000000000000000000000000000000000000000de0b6b3a7640000'; // 1 token
 
         const tx: EvmTxInput = {
@@ -147,8 +150,10 @@ describe('EVM Decoder', () => {
       it('should decode ERC20 approve', () => {
         // approve(address spender, uint256 amount)
         const spender = TEST_RECIPIENT_EVM;
-        const data = EVM_FUNCTION_SELECTORS.approve +
-          '000000000000000000000000' + spender.slice(2) +
+        const data =
+          EVM_FUNCTION_SELECTORS.approve +
+          '000000000000000000000000' +
+          spender.slice(2) +
           '0000000000000000000000000000000000000000000000000de0b6b3a7640000'; // amount
 
         const tx: EvmTxInput = {
@@ -166,8 +171,10 @@ describe('EVM Decoder', () => {
 
       it('should detect unlimited approval', () => {
         // Max uint256 approval
-        const data = EVM_FUNCTION_SELECTORS.approve +
-          '000000000000000000000000' + TEST_RECIPIENT_EVM.slice(2) +
+        const data =
+          EVM_FUNCTION_SELECTORS.approve +
+          '000000000000000000000000' +
+          TEST_RECIPIENT_EVM.slice(2) +
           'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; // MAX_UINT256
 
         const tx: EvmTxInput = {
@@ -186,8 +193,10 @@ describe('EVM Decoder', () => {
     describe('NFT Operations', () => {
       it('should decode setApprovalForAll', () => {
         // setApprovalForAll(address operator, bool approved)
-        const data = '0xa22cb465' +
-          '000000000000000000000000' + TEST_RECIPIENT_EVM.slice(2) +
+        const data =
+          '0xa22cb465' +
+          '000000000000000000000000' +
+          TEST_RECIPIENT_EVM.slice(2) +
           '0000000000000000000000000000000000000000000000000000000000000001'; // true
 
         const tx: EvmTxInput = {
@@ -204,9 +213,12 @@ describe('EVM Decoder', () => {
 
       it('should decode NFT safeTransferFrom', () => {
         // safeTransferFrom(address from, address to, uint256 tokenId)
-        const data = '0x42842e0e' +
-          '000000000000000000000000' + TEST_EVM_ADDRESS.slice(2) + // from
-          '000000000000000000000000' + TEST_RECIPIENT_EVM.slice(2) + // to
+        const data =
+          '0x42842e0e' +
+          '000000000000000000000000' +
+          TEST_EVM_ADDRESS.slice(2) + // from
+          '000000000000000000000000' +
+          TEST_RECIPIENT_EVM.slice(2) + // to
           '0000000000000000000000000000000000000000000000000000000000000001'; // tokenId 1
 
         const tx: EvmTxInput = {
@@ -225,7 +237,8 @@ describe('EVM Decoder', () => {
 
     describe('Unknown Functions', () => {
       it('should handle unknown function selectors', () => {
-        const data = '0xdeadbeef' + // Unknown selector
+        const data =
+          '0xdeadbeef' + // Unknown selector
           '0000000000000000000000000000000000000000000000000000000000000000';
 
         const tx: EvmTxInput = {
@@ -295,8 +308,10 @@ describe('EVM Decoder', () => {
       });
 
       it('should calculate data size', () => {
-        const data = '0xa9059cbb' +
-          '000000000000000000000000' + TEST_RECIPIENT_EVM.slice(2) +
+        const data =
+          '0xa9059cbb' +
+          '000000000000000000000000' +
+          TEST_RECIPIENT_EVM.slice(2) +
           '0000000000000000000000000000000000000000000000000de0b6b3a7640000';
 
         const tx: EvmTxInput = {
@@ -314,63 +329,70 @@ describe('EVM Decoder', () => {
   describe('Helper Functions', () => {
     describe('decodeAddress', () => {
       it('should decode address from correct position', () => {
-        const data = '0xa9059cbb' +
+        const data =
+          '0xa9059cbb' +
           '000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f7ce51' +
           '0000000000000000000000000000000000000000000000000000000000000001';
 
         const address = decodeAddress(data, 0);
-        
+
         expect(address.toLowerCase()).toBe('0x742d35cc6634c0532925a3b844bc9e7595f7ce51');
       });
 
       it('should decode second parameter address', () => {
-        const data = '0x23b872dd' + // transferFrom
+        const data =
+          '0x23b872dd' + // transferFrom
           '0000000000000000000000001111111111111111111111111111111111111111' + // from
           '0000000000000000000000002222222222222222222222222222222222222222' + // to
-          '0000000000000000000000000000000000000000000000000000000000000001';   // amount
+          '0000000000000000000000000000000000000000000000000000000000000001'; // amount
 
         const toAddress = decodeAddress(data, 1);
-        
+
         expect(toAddress.toLowerCase()).toBe('0x2222222222222222222222222222222222222222');
       });
     });
 
     describe('decodeUint256', () => {
       it('should decode uint256 from correct position', () => {
-        const data = '0xa9059cbb' +
+        const data =
+          '0xa9059cbb' +
           '000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f7ce51' +
           '0000000000000000000000000000000000000000000000000de0b6b3a7640000'; // 1e18
 
         const amount = decodeUint256(data, 1);
-        
+
         expect(amount).toBe(BigInt('1000000000000000000'));
       });
 
       it('should handle zero value', () => {
-        const data = '0xa9059cbb' +
+        const data =
+          '0xa9059cbb' +
           '000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f7ce51' +
           '0000000000000000000000000000000000000000000000000000000000000000';
 
         const amount = decodeUint256(data, 1);
-        
+
         expect(amount).toBe(0n);
       });
 
       it('should handle max uint256', () => {
-        const data = '0xa9059cbb' +
+        const data =
+          '0xa9059cbb' +
           '000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f7ce51' +
           'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
         const amount = decodeUint256(data, 1);
-        
-        expect(amount).toBe(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
+
+        expect(amount).toBe(
+          BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'),
+        );
       });
 
       it('should return 0 for out of bounds', () => {
         const data = '0xa9059cbb';
 
         const amount = decodeUint256(data, 5);
-        
+
         expect(amount).toBe(0n);
       });
     });
@@ -395,6 +417,3 @@ describe('EVM Decoder', () => {
     });
   });
 });
-
-
-

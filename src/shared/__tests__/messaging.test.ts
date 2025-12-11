@@ -21,7 +21,7 @@ describe('Messaging', () => {
   describe('sendToBackground', () => {
     it('should send message to background script', async () => {
       const message = { type: 'PING' as const, payload: undefined };
-      
+
       await sendToBackground(message);
 
       expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(message);
@@ -62,7 +62,7 @@ describe('Messaging', () => {
     it('should send message to specific tab', async () => {
       const tabId = 123;
       const message = { type: 'PING' as const, payload: undefined };
-      
+
       await sendToTab(tabId, message);
 
       expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(tabId, message);
@@ -89,11 +89,7 @@ describe('Messaging', () => {
 
   describe('broadcastToAllTabs', () => {
     it('should query all tabs and send message', async () => {
-      const tabs = [
-        { id: 1 },
-        { id: 2 },
-        { id: 3 },
-      ];
+      const tabs = [{ id: 1 }, { id: 2 }, { id: 3 }];
       (chrome.tabs.query as jest.Mock).mockResolvedValue(tabs);
 
       const message = { type: 'PRIVACY_STATE_CHANGED' as const, payload: { enabled: true } };
@@ -107,11 +103,7 @@ describe('Messaging', () => {
     });
 
     it('should skip tabs without id', async () => {
-      const tabs = [
-        { id: 1 },
-        { id: undefined },
-        { id: 3 },
-      ];
+      const tabs = [{ id: 1 }, { id: undefined }, { id: 3 }];
       (chrome.tabs.query as jest.Mock).mockResolvedValue(tabs);
 
       const message = { type: 'PING' as const, payload: undefined };
@@ -128,7 +120,7 @@ describe('Messaging', () => {
         .mockRejectedValueOnce(new Error('Tab closed'));
 
       const message = { type: 'PING' as const, payload: undefined };
-      
+
       // Should not throw
       await expect(broadcastToAllTabs(message)).resolves.not.toThrow();
     });
@@ -146,7 +138,7 @@ describe('Messaging', () => {
   describe('createMessageListener', () => {
     it('should add listener to runtime.onMessage', () => {
       const handler = jest.fn();
-      
+
       createMessageListener(handler);
 
       expect(chrome.runtime.onMessage.addListener).toHaveBeenCalled();
@@ -154,12 +146,12 @@ describe('Messaging', () => {
 
     it('should wrap handler correctly', () => {
       const handler = jest.fn();
-      
+
       createMessageListener(handler);
 
       // Get the wrapped handler that was passed to addListener
       const wrappedHandler = (chrome.runtime.onMessage.addListener as jest.Mock).mock.calls[0][0];
-      
+
       const message = { type: 'PING', payload: undefined };
       const sender = { id: 'test' };
       const sendResponse = jest.fn();
@@ -170,6 +162,3 @@ describe('Messaging', () => {
     });
   });
 });
-
-
-

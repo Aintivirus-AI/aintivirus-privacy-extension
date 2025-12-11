@@ -1,60 +1,48 @@
-
-
 export const DAPP_MESSAGE_SOURCE = {
   INPAGE: 'aintivirus-inpage',
   CONTENT: 'aintivirus-content',
   BACKGROUND: 'aintivirus-background',
 } as const;
 
-export type DAppMessageSource = typeof DAPP_MESSAGE_SOURCE[keyof typeof DAPP_MESSAGE_SOURCE];
-
+export type DAppMessageSource = (typeof DAPP_MESSAGE_SOURCE)[keyof typeof DAPP_MESSAGE_SOURCE];
 
 export type DAppChainType = 'evm' | 'solana';
 
-
 export type DAppMessageType =
-  
   | 'DAPP_CONNECT'
   | 'DAPP_DISCONNECT'
   | 'DAPP_IS_CONNECTED'
-  
   | 'EVM_REQUEST'
   | 'EVM_CHAIN_CHANGED'
   | 'EVM_ACCOUNTS_CHANGED'
   | 'EVM_CONNECT'
   | 'EVM_DISCONNECT'
-  
   | 'SOLANA_CONNECT'
   | 'SOLANA_DISCONNECT'
   | 'SOLANA_SIGN_TRANSACTION'
   | 'SOLANA_SIGN_ALL_TRANSACTIONS'
   | 'SOLANA_SIGN_MESSAGE'
   | 'SOLANA_SIGN_AND_SEND'
-  
   | 'DAPP_RESPONSE'
   | 'DAPP_ERROR'
-  
   | 'DAPP_GET_STATE'
   | 'DAPP_APPROVAL_RESULT';
 
-
 export interface DAppMessage<T = unknown> {
-  
   id: string;
-  
+
   source: DAppMessageSource;
-  
+
   type: DAppMessageType;
-  
+
   chainType: DAppChainType;
-  
+
   payload: T;
-  
+
   origin: string;
-  
+
   timestamp: number;
 }
-
 
 export interface DAppResponse<T = unknown> {
   id: string;
@@ -63,44 +51,40 @@ export interface DAppResponse<T = unknown> {
   error?: DAppError;
 }
 
-
 export interface DAppError {
   code: number;
   message: string;
   data?: unknown;
 }
 
-
 export const EIP1193_ERROR_CODES = {
-  
   USER_REJECTED: 4001,
-  
+
   UNAUTHORIZED: 4100,
-  
+
   UNSUPPORTED_METHOD: 4200,
-  
+
   DISCONNECTED: 4900,
-  
+
   CHAIN_DISCONNECTED: 4901,
-  
+
   INVALID_PARAMS: -32602,
-  
+
   INTERNAL_ERROR: -32603,
-  
+
   PARSE_ERROR: -32700,
-  
+
   INVALID_REQUEST: -32600,
-  
+
   METHOD_NOT_FOUND: -32601,
 } as const;
 
-export type EIP1193ErrorCode = typeof EIP1193_ERROR_CODES[keyof typeof EIP1193_ERROR_CODES];
-
+export type EIP1193ErrorCode = (typeof EIP1193_ERROR_CODES)[keyof typeof EIP1193_ERROR_CODES];
 
 export function createEIP1193Error(
   code: EIP1193ErrorCode,
   message?: string,
-  data?: unknown
+  data?: unknown,
 ): DAppError {
   const defaultMessages: Record<number, string> = {
     [EIP1193_ERROR_CODES.USER_REJECTED]: 'User rejected the request',
@@ -122,28 +106,22 @@ export function createEIP1193Error(
   };
 }
 
-
 export interface EVMRequestPayload {
   method: string;
   params?: unknown[];
 }
 
-
 export type EVMMethod =
-  
   | 'eth_requestAccounts'
   | 'eth_accounts'
   | 'eth_coinbase'
-  
   | 'eth_chainId'
   | 'net_version'
-  
   | 'personal_sign'
   | 'eth_sign'
   | 'eth_signTypedData'
   | 'eth_signTypedData_v3'
   | 'eth_signTypedData_v4'
-  
   | 'eth_sendTransaction'
   | 'eth_sendRawTransaction'
   | 'eth_getTransactionByHash'
@@ -152,22 +130,18 @@ export type EVMMethod =
   | 'eth_gasPrice'
   | 'eth_maxPriorityFeePerGas'
   | 'eth_feeHistory'
-  
   | 'eth_blockNumber'
   | 'eth_getBlockByNumber'
   | 'eth_getBlockByHash'
-  
   | 'eth_getBalance'
   | 'eth_getCode'
   | 'eth_getStorageAt'
   | 'eth_call'
-  
   | 'wallet_switchEthereumChain'
   | 'wallet_addEthereumChain'
   | 'wallet_watchAsset'
   | 'wallet_getPermissions'
   | 'wallet_requestPermissions';
-
 
 export interface EVMTransactionParams {
   from: string;
@@ -180,7 +154,6 @@ export interface EVMTransactionParams {
   maxPriorityFeePerGas?: string;
   nonce?: string;
 }
-
 
 export interface AddEthereumChainParams {
   chainId: string;
@@ -195,12 +168,9 @@ export interface AddEthereumChainParams {
   iconUrls?: string[];
 }
 
-
 export interface SolanaConnectOptions {
-  
   onlyIfTrusted?: boolean;
 }
-
 
 export interface SolanaSendOptions {
   skipPreflight?: boolean;
@@ -209,51 +179,43 @@ export interface SolanaSendOptions {
   minContextSlot?: number;
 }
 
-
 export interface SerializedTransaction {
-  
   data: string;
-  
+
   isVersioned: boolean;
 }
 
-
 export interface SitePermission {
-  
   origin: string;
-  
+
   chainType: DAppChainType;
-  
+
   accounts: string[];
-  
+
   chains: string[];
-  
+
   connectedAt: number;
-  
+
   lastAccessed: number;
-  
+
   remember: boolean;
-  
+
   label?: string;
 }
 
-
 export interface PermissionStore {
-  
   version: number;
-  
+
   permissions: Record<string, SitePermission>;
-  
+
   settings: PermissionSettings;
 }
 
-
 export interface PermissionSettings {
-  
   autoRevokeAfterDays: number;
-  
+
   requireApprovalPerTransaction: boolean;
-  
+
   maxConnectedSites: number;
 }
 
@@ -263,82 +225,85 @@ export const DEFAULT_PERMISSION_SETTINGS: PermissionSettings = {
   maxConnectedSites: 0,
 };
 
+export type QueuedRequestStatus =
+  | 'pending'
+  | 'processing'
+  | 'approved'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
 
-export type QueuedRequestStatus = 'pending' | 'processing' | 'approved' | 'rejected' | 'expired' | 'cancelled';
-
-
-export type ApprovalType = 'connect' | 'sign' | 'signMessage' | 'transaction' | 'switchChain' | 'addChain';
-
+export type ApprovalType =
+  | 'connect'
+  | 'sign'
+  | 'signMessage'
+  | 'transaction'
+  | 'switchChain'
+  | 'addChain';
 
 export interface QueuedRequest {
-  
   id: string;
-  
+
   nonce: string;
-  
+
   origin: string;
-  
+
   tabId: number;
-  
+
   chainType: DAppChainType;
-  
+
   method: string;
-  
+
   params: unknown;
-  
+
   approvalType: ApprovalType;
-  
+
   createdAt: number;
-  
+
   expiresAt: number;
-  
+
   status: QueuedRequestStatus;
-  
+
   favicon?: string;
-  
+
   title?: string;
-  
+
   result?: unknown;
-  
+
   error?: DAppError;
 }
 
-
 export interface RequestQueueStore {
-  
   version: number;
-  
+
   requests: QueuedRequest[];
-  
+
   timeoutMs: number;
 }
 
-export const DEFAULT_REQUEST_TIMEOUT_MS = 5 * 60 * 1000; 
-
+export const DEFAULT_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface ApprovalWindowData {
-  
   requestId: string;
-  
+
   approvalType: ApprovalType;
-  
+
   origin: string;
-  
+
   chainType: DAppChainType;
-  
+
   method: string;
-  
+
   params: unknown;
-  
+
   availableAccounts: AccountInfo[];
-  
+
   currentChainId: string;
-  
+
   favicon?: string;
-  
+
   title?: string;
 }
-
 
 export interface AccountInfo {
   address: string;
@@ -347,42 +312,35 @@ export interface AccountInfo {
   isActive: boolean;
 }
 
-
 export interface ApprovalResult {
-  
   requestId: string;
-  
+
   approved: boolean;
-  
+
   selectedAccounts?: string[];
-  
+
   remember?: boolean;
-  
+
   error?: string;
 }
 
-
 export interface EVMProviderState {
-  
   isConnected: boolean;
-  
+
   chainId: string;
-  
+
   accounts: string[];
-  
+
   networkVersion: string;
 }
 
-
 export interface SolanaProviderState {
-  
   isConnected: boolean;
-  
+
   publicKey: string | null;
-  
+
   network: 'mainnet-beta' | 'devnet' | 'testnet';
 }
-
 
 export type DAppBackgroundMessageType =
   | 'DAPP_REQUEST'
@@ -396,7 +354,6 @@ export type DAppBackgroundMessageType =
   | 'DAPP_GET_PROVIDER_STATE'
   | 'DAPP_SWITCH_CHAIN'
   | 'DAPP_ADD_CHAIN';
-
 
 export interface DAppBackgroundPayloads {
   DAPP_REQUEST: {
@@ -437,7 +394,6 @@ export interface DAppBackgroundPayloads {
   DAPP_ADD_CHAIN: AddEthereumChainParams;
 }
 
-
 export function isDAppMessage(value: unknown): value is DAppMessage {
   if (typeof value !== 'object' || value === null) return false;
   const msg = value as Record<string, unknown>;
@@ -451,7 +407,6 @@ export function isDAppMessage(value: unknown): value is DAppMessage {
   );
 }
 
-
 export function isValidDAppSource(source: unknown): source is DAppMessageSource {
   return (
     source === DAPP_MESSAGE_SOURCE.INPAGE ||
@@ -460,46 +415,41 @@ export function isValidDAppSource(source: unknown): source is DAppMessageSource 
   );
 }
 
-
 export function isFromInpage(msg: DAppMessage): boolean {
   return msg.source === DAPP_MESSAGE_SOURCE.INPAGE;
 }
-
 
 export function isFromContent(msg: DAppMessage): boolean {
   return msg.source === DAPP_MESSAGE_SOURCE.CONTENT;
 }
 
-
 export function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
-
 export function generateSecureNonce(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
 }
-
 
 export function createPermissionKey(origin: string, chainType: DAppChainType): string {
   return `${origin}:${chainType}`;
 }
 
-
-export function parsePermissionKey(key: string): { origin: string; chainType: DAppChainType } | null {
+export function parsePermissionKey(
+  key: string,
+): { origin: string; chainType: DAppChainType } | null {
   const lastColonIndex = key.lastIndexOf(':');
   if (lastColonIndex === -1) return null;
-  
+
   const origin = key.substring(0, lastColonIndex);
   const chainType = key.substring(lastColonIndex + 1) as DAppChainType;
-  
+
   if (chainType !== 'evm' && chainType !== 'solana') return null;
-  
+
   return { origin, chainType };
 }
-
 
 export function getApprovalType(method: string, chainType: DAppChainType): ApprovalType {
   if (chainType === 'evm') {
@@ -539,7 +489,6 @@ export function getApprovalType(method: string, chainType: DAppChainType): Appro
   }
 }
 
-
 export function requiresApproval(method: string, chainType: DAppChainType): boolean {
   if (chainType === 'evm') {
     const approvalMethods = [
@@ -567,7 +516,6 @@ export function requiresApproval(method: string, chainType: DAppChainType): bool
   }
 }
 
-
 export function toHexChainId(chainId: number | string): string {
   if (typeof chainId === 'string') {
     if (chainId.startsWith('0x')) return chainId;
@@ -575,7 +523,6 @@ export function toHexChainId(chainId: number | string): string {
   }
   return `0x${chainId.toString(16)}`;
 }
-
 
 export function fromHexChainId(hexChainId: string): number {
   return parseInt(hexChainId, 16);

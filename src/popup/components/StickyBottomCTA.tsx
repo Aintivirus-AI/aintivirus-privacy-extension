@@ -1,39 +1,34 @@
-
-
 import React from 'react';
 
-
 export interface StickyBottomCTAProps {
-  
   children: React.ReactNode;
-  
+
   primaryLabel: string;
-  
+
   onPrimary: () => void;
-  
+
   primaryDisabled?: boolean;
-  
+
   loading?: boolean;
-  
+
   loadingText?: string;
-  
+
   secondaryLabel?: string;
-  
+
   onSecondary?: () => void;
-  
+
   secondaryDisabled?: boolean;
-  
+
   danger?: boolean;
-  
+
   className?: string;
-  
+
   footerClassName?: string;
-  
+
   maxContentHeight?: string;
-  
+
   showShadow?: boolean;
 }
-
 
 export const StickyBottomCTA: React.FC<StickyBottomCTAProps> = ({
   children,
@@ -52,14 +47,12 @@ export const StickyBottomCTA: React.FC<StickyBottomCTAProps> = ({
   showShadow = true,
 }) => {
   const isDisabled = primaryDisabled || loading;
-  
+
   return (
     <>
       <div className={`sticky-cta-container ${className}`}>
-        <div className="sticky-cta-content">
-          {children}
-        </div>
-        
+        <div className="sticky-cta-content">{children}</div>
+
         <div className={`sticky-cta-footer ${showShadow ? 'with-shadow' : ''} ${footerClassName}`}>
           {secondaryLabel && onSecondary && (
             <button
@@ -71,7 +64,7 @@ export const StickyBottomCTA: React.FC<StickyBottomCTAProps> = ({
               {secondaryLabel}
             </button>
           )}
-          
+
           <button
             className={`sticky-cta-btn primary ${danger ? 'danger' : ''} ${loading ? 'loading' : ''}`}
             onClick={onPrimary}
@@ -90,7 +83,7 @@ export const StickyBottomCTA: React.FC<StickyBottomCTAProps> = ({
           </button>
         </div>
       </div>
-      
+
       <style>{`
         .sticky-cta-container {
           display: flex;

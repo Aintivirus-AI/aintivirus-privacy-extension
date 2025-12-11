@@ -82,11 +82,7 @@ describe('Content Script', () => {
     it('should handle PRIVACY_STATE_CHANGED message', () => {
       const handler = jest.fn();
       mockAddListener.mockImplementation((callback) => {
-        callback(
-          { type: 'PRIVACY_STATE_CHANGED', payload: { enabled: true } },
-          {},
-          handler
-        );
+        callback({ type: 'PRIVACY_STATE_CHANGED', payload: { enabled: true } }, {}, handler);
       });
 
       mockAddListener(handler);
@@ -97,11 +93,7 @@ describe('Content Script', () => {
     it('should handle AD_BLOCKER_TOGGLED message', () => {
       const handler = jest.fn();
       mockAddListener.mockImplementation((callback) => {
-        callback(
-          { type: 'AD_BLOCKER_TOGGLED', payload: { enabled: false } },
-          {},
-          handler
-        );
+        callback({ type: 'AD_BLOCKER_TOGGLED', payload: { enabled: false } }, {}, handler);
       });
 
       mockAddListener(handler);
@@ -126,10 +118,7 @@ describe('Content Script', () => {
       const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
       window.addEventListener('message', () => {});
 
-      expect(addEventListenerSpy).toHaveBeenCalledWith(
-        'message',
-        expect.any(Function)
-      );
+      expect(addEventListenerSpy).toHaveBeenCalledWith('message', expect.any(Function));
     });
 
     it('should forward dapp requests to background', async () => {
@@ -176,13 +165,13 @@ describe('Content Script', () => {
   describe('Domain Detection', () => {
     it('should extract domain from location', () => {
       const domain = window.location.hostname;
-      
+
       expect(domain).toBe('example.com');
     });
 
     it('should get full URL', () => {
       const url = window.location.href;
-      
+
       expect(url).toBe('https://example.com/page');
     });
   });
@@ -246,14 +235,14 @@ describe('Content Script', () => {
     it('should verify origin before processing messages', () => {
       const trustedOrigin = 'https://example.com';
       const messageOrigin = 'https://example.com';
-      
+
       expect(messageOrigin).toBe(trustedOrigin);
     });
 
     it('should reject messages from untrusted origins', () => {
       const trustedOrigin = 'https://example.com';
       const messageOrigin = 'https://malicious.com';
-      
+
       expect(messageOrigin).not.toBe(trustedOrigin);
     });
   });
@@ -272,7 +261,7 @@ describe('Content Script CSS Injection', () => {
       .adsbygoogle { display: none !important; }
       [id^="google_ads"] { display: none !important; }
     `;
-    
+
     const style = mockDocument.createElement('style');
     style.textContent = cssRules;
     mockDocument.head.appendChild(style);
@@ -280,4 +269,3 @@ describe('Content Script CSS Injection', () => {
     expect(mockDocument.head.appendChild).toHaveBeenCalled();
   });
 });
-

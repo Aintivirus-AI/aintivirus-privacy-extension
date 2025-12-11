@@ -3,9 +3,16 @@
  */
 
 export const parseUnits = (value: string, unit: string | number): bigint => {
-  const decimals = typeof unit === 'string' ? 
-    (unit === 'ether' ? 18 : unit === 'gwei' ? 9 : unit === 'wei' ? 0 : 18) : 
-    unit;
+  const decimals =
+    typeof unit === 'string'
+      ? unit === 'ether'
+        ? 18
+        : unit === 'gwei'
+          ? 9
+          : unit === 'wei'
+            ? 0
+            : 18
+      : unit;
   const [whole, fraction = ''] = value.split('.');
   const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
   return BigInt(whole + paddedFraction);
@@ -43,7 +50,12 @@ export const getBytes = (value: string): Uint8Array => {
 export const hexlify = (value: Uint8Array | number[] | string): string => {
   if (typeof value === 'string') return value;
   const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
-  return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return (
+    '0x' +
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
 };
 
 export const keccak256 = (data: Uint8Array | string): string => {
@@ -89,7 +101,7 @@ export class HDNodeWallet {
     this.mnemonic = null;
     this.path = path || null;
     this._mnemonicPhrase = mnemonicPhrase;
-    
+
     // Generate deterministic address based on path and mnemonic
     if (path && mnemonicPhrase) {
       const hash = this._hashPathAndMnemonic(path, mnemonicPhrase);
@@ -366,4 +378,3 @@ export class TypedDataEncoder {
     return '0x' + 'd'.repeat(64);
   }
 }
-

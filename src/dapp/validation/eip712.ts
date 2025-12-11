@@ -25,7 +25,7 @@ export interface EIP712TypedData {
  * Validate EIP-712 typed data structure
  */
 export function validateEIP712TypedData(
-  data: unknown
+  data: unknown,
 ): { valid: true; data: EIP712TypedData } | { valid: false; error: string } {
   if (!data || typeof data !== 'object') {
     return { valid: false, error: 'Typed data must be an object' };
@@ -51,25 +51,28 @@ export function validateEIP712TypedData(
   }
 
   const types = typedData.types as Record<string, unknown>;
-  
+
   // Validate types structure
   for (const [typeName, typeFields] of Object.entries(types)) {
     if (!Array.isArray(typeFields)) {
       return { valid: false, error: `Type "${typeName}" must be an array of field definitions` };
     }
-    
+
     for (const field of typeFields) {
       if (!field || typeof field !== 'object') {
         return { valid: false, error: `Invalid field definition in type "${typeName}"` };
       }
-      
+
       const fieldDef = field as Record<string, unknown>;
       if (typeof fieldDef.name !== 'string' || !fieldDef.name) {
         return { valid: false, error: `Field in type "${typeName}" missing valid "name"` };
       }
-      
+
       if (typeof fieldDef.type !== 'string' || !fieldDef.type) {
-        return { valid: false, error: `Field "${fieldDef.name}" in type "${typeName}" missing valid "type"` };
+        return {
+          valid: false,
+          error: `Field "${fieldDef.name}" in type "${typeName}" missing valid "type"`,
+        };
       }
     }
   }
@@ -80,14 +83,14 @@ export function validateEIP712TypedData(
   }
 
   // Safe cast after validation
-  return { 
-    valid: true, 
+  return {
+    valid: true,
     data: {
       types: typedData.types,
       primaryType: typedData.primaryType,
       domain: typedData.domain,
       message: typedData.message,
-    } as EIP712TypedData 
+    } as EIP712TypedData,
   };
 }
 
@@ -96,13 +99,13 @@ export function validateEIP712TypedData(
  */
 export function validateDomainChainId(
   domain: EIP712Domain,
-  expectedChainId: number
+  expectedChainId: number,
 ): { valid: true } | { valid: false; error: string } {
   if (domain.chainId !== undefined) {
     if (typeof domain.chainId !== 'number') {
       return { valid: false, error: 'Domain chainId must be a number' };
     }
-    
+
     if (domain.chainId !== expectedChainId) {
       return {
         valid: false,

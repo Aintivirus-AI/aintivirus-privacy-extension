@@ -1,59 +1,48 @@
-
-
 export type SitePrivacyMode = 'normal' | 'strict' | 'disabled';
-
 
 export type FilteringLevel = 'off' | 'minimal' | 'basic' | 'optimal' | 'complete';
 
-
 export interface PrivacySettings {
-  
   enabled: boolean;
-  
+
   adBlockerEnabled: boolean;
-  
+
   filteringLevel: FilteringLevel;
-  
+
   blockTrackers: boolean;
-  
+
   cookieCleanup: boolean;
-  
+
   defaultCookieMode: 'third-party' | 'all' | 'none';
-  
+
   headerMinimization: boolean;
-  
+
   stripTrackingParams: boolean;
-  
+
   sendGPC: boolean;
-  
+
   filterListUrls: string[];
-  
+
   lastFilterUpdate: number | null;
 }
-
 
 export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   enabled: true,
   adBlockerEnabled: true,
-  filteringLevel: 'optimal', 
+  filteringLevel: 'optimal',
   blockTrackers: true,
   cookieCleanup: true,
   defaultCookieMode: 'third-party',
   headerMinimization: true,
   stripTrackingParams: true,
   sendGPC: true,
-  filterListUrls: [
-    
-    
-  ],
+  filterListUrls: [],
   lastFilterUpdate: null,
 };
-
 
 export interface SitePrivacySettings {
   [domain: string]: SitePrivacyMode;
 }
-
 
 export interface CachedFilterList {
   url: string;
@@ -62,89 +51,77 @@ export interface CachedFilterList {
   expiresAt: number;
 }
 
-
 export interface FilterListCache {
   [url: string]: CachedFilterList;
 }
 
-
 export interface ParsedFilterRule {
-  
   raw: string;
-  
+
   type: 'block' | 'allow';
-  
+
   pattern: string;
-  
+
   isDomainAnchored: boolean;
-  
+
   resourceTypes: chrome.declarativeNetRequest.ResourceType[];
-  
+
   domains?: string[];
-  
+
   excludedDomains?: string[];
 }
 
-
 export interface PrivacyDNRRule extends chrome.declarativeNetRequest.Rule {
-  
   sourceList?: string;
 }
 
-
 export interface BlockedRequest {
-  
   tabId: number;
-  
+
   url: string;
-  
+
   domain: string;
-  
+
   initiator: string | null;
-  
+
   resourceType: string;
-  
+
   ruleId: number;
-  
+
   timestamp: number;
 }
-
 
 export interface CookieCleanupEntry {
-  
   domain: string;
-  
+
   count: number;
-  
+
   mode: SitePrivacyMode;
-  
+
   timestamp: number;
 }
 
-
 export interface PrivacyMetrics {
-  
   totalBlockedRequests: number;
-  
+
   blockedByDomain: { [domain: string]: number };
-  
+
   totalCookiesDeleted: number;
-  
+
   activeRuleCount: number;
-  
+
   filterListCount: number;
-  
+
   recentBlocked: BlockedRequest[];
-  
+
   recentCookieCleanups: CookieCleanupEntry[];
-  
+
   sessionStart: number;
-  
+
   scriptsIntercepted: number;
-  
+
   requestsModified: number;
 }
-
 
 export const DEFAULT_PRIVACY_METRICS: PrivacyMetrics = {
   totalBlockedRequests: 0,
@@ -159,7 +136,6 @@ export const DEFAULT_PRIVACY_METRICS: PrivacyMetrics = {
   requestsModified: 0,
 };
 
-
 export interface TabDomainMapping {
   [tabId: number]: {
     domain: string;
@@ -168,27 +144,23 @@ export interface TabDomainMapping {
   };
 }
 
-
 export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
-  
   'trackersimulator.org',
   'eviltracker.net',
   'do-not-tracker.org',
   'firstpartysimulator.org',
   'firstpartysimulator.net',
-  
-  
+
   'adblock-tester.com',
-  'd3pkae9owd2lcf.cloudfront.net', 
-  
-  
+  'd3pkae9owd2lcf.cloudfront.net',
+
   'sentry.io',
   'browser.sentry-cdn.com',
   'sentry-cdn.com',
   'ingest.sentry.io',
   'o0.ingest.sentry.io',
   'bugsnag.com',
-  'd2wy8f7a9ursnm.cloudfront.net', 
+  'd2wy8f7a9ursnm.cloudfront.net',
   'sessions.bugsnag.com',
   'notify.bugsnag.com',
   'app.bugsnag.com',
@@ -200,8 +172,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'logrocket.io',
   'lr-ingest.io',
   'lr-in.com',
-  
-  
+
   'mc.yandex.ru',
   'mc.yandex.com',
   'yandex.ru/metrika',
@@ -210,8 +181,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'watch.yandex.ru',
   'informer.yandex.ru',
   'webvisor.com',
-  
-  
+
   'google-analytics.com',
   'googleadservices.com',
   'googlesyndication.com',
@@ -221,26 +191,26 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'pagead2.googlesyndication.com',
   'adservice.google.com',
   'tpc.googlesyndication.com',
-  'imasdk.googleapis.com', 
-  
+  'imasdk.googleapis.com',
+
   'facebook.net',
   'facebook.com/tr',
   'connect.facebook.net',
   'pixel.facebook.com',
   'an.facebook.com',
-  
+
   'analytics.twitter.com',
   't.co',
   'platform.twitter.com',
   'ads-twitter.com',
-  
+
   'clarity.ms',
   'bat.bing.com',
   'ads.microsoft.com',
-  
+
   'amazon-adsystem.com',
   'aax.amazon-adsystem.com',
-  
+
   'taboola.com',
   'outbrain.com',
   'criteo.com',
@@ -268,7 +238,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'teads.tv',
   'spotxchange.com',
   'springserve.com',
-  
+
   'hotjar.com',
   'mixpanel.com',
   'segment.io',
@@ -288,7 +258,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'chartbeat.com',
   'parsely.com',
   'comscore.com',
-  
+
   'demdex.net',
   'bluekai.com',
   'krxd.net',
@@ -299,7 +269,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'liveramp.com',
   'adsymptotic.com',
   'adgrx.com',
-  
+
   'serving-sys.com',
   'adserver.com',
   'adtechus.com',
@@ -307,9 +277,7 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'atdmt.com',
 ];
 
-
 export const TRACKING_PARAMS: string[] = [
-  
   'utm_source',
   'utm_medium',
   'utm_campaign',
@@ -317,19 +285,19 @@ export const TRACKING_PARAMS: string[] = [
   'utm_content',
   'gclid',
   'gclsrc',
-  
+
   'fbclid',
   'fb_action_ids',
   'fb_action_types',
   'fb_source',
-  
+
   'msclkid',
-  
+
   'twclid',
-  
+
   'mc_cid',
   'mc_eid',
-  
+
   '_ga',
   '_gl',
   'ref',
@@ -339,7 +307,7 @@ export const TRACKING_PARAMS: string[] = [
   '__hstc',
   '__hsfp',
   'hsCtaTracking',
-  
+
   'oly_anon_id',
   'oly_enc_id',
   'vero_id',
@@ -351,9 +319,7 @@ export const TRACKING_PARAMS: string[] = [
   'spm',
 ];
 
-
 export const FILTER_LIST_TTL = 24 * 60 * 60 * 1000;
-
 
 export const BOOTSTRAP_URL_PATTERNS: string[] = [
   '*/ads/*',
@@ -369,7 +335,7 @@ export const BOOTSTRAP_URL_PATTERNS: string[] = [
   '*ad.png',
   '*ad.webp',
   '*ads.gif',
-  '*ads.jpg', 
+  '*ads.jpg',
   '*ads.png',
   '*banner.gif',
   '*banner.jpg',
@@ -428,44 +394,35 @@ export const BOOTSTRAP_URL_PATTERNS: string[] = [
   '*tester*banner*',
 ];
 
-
-export const MAX_DYNAMIC_RULES = 4500; 
-
+export const MAX_DYNAMIC_RULES = 4500;
 
 export const MAX_RECENT_BLOCKED = 50;
 
-
 export const MAX_RECENT_CLEANUPS = 20;
-
 
 export type CosmeticRuleType = 'generic' | 'domain-specific' | 'exception';
 
-
 export interface CosmeticRule {
-  
   raw: string;
-  
+
   type: CosmeticRuleType;
-  
+
   selector: string;
-  
+
   domains?: string[];
-  
+
   excludedDomains?: string[];
 }
 
-
 export interface CachedCosmeticRules {
-  
   generic: string[];
-  
+
   domainSpecific: { [domain: string]: string[] };
-  
+
   exceptions: { [domain: string]: string[] };
-  
+
   updatedAt: number;
 }
-
 
 export const DEFAULT_COSMETIC_RULES: CachedCosmeticRules = {
   generic: [],
@@ -474,28 +431,25 @@ export const DEFAULT_COSMETIC_RULES: CachedCosmeticRules = {
   updatedAt: 0,
 };
 
-
 export interface FilterListHealth {
-  
   url: string;
-  
+
   lastFetchStatus: 'success' | 'error' | 'pending';
-  
+
   lastFetchAt: number;
-  
+
   lastError?: string;
-  
+
   ruleCount: number;
-  
+
   parseErrors: number;
-  
+
   unsupportedPatterns: string[];
-  
+
   hasLastKnownGood: boolean;
-  
+
   lastSuccessAt?: number;
 }
-
 
 export interface LastKnownGoodFilterList {
   url: string;
@@ -504,22 +458,19 @@ export interface LastKnownGoodFilterList {
   ruleCount: number;
 }
 
-
 export interface FilterListHealthSummary {
-  
   totalLists: number;
-  
+
   healthyLists: number;
-  
+
   errorLists: number;
-  
+
   totalRules: number;
-  
+
   lastRefresh: number;
-  
+
   lists: FilterListHealth[];
 }
-
 
 export function createDefaultFilterListHealth(url: string): FilterListHealth {
   return {
@@ -533,28 +484,21 @@ export function createDefaultFilterListHealth(url: string): FilterListHealth {
   };
 }
 
-
 export interface FilterListHealthStorage {
   [url: string]: FilterListHealth;
 }
-
 
 export interface LastKnownGoodStorage {
   [url: string]: LastKnownGoodFilterList;
 }
 
-
 export const DEFAULT_FILTER_LIST_HEALTH: FilterListHealthStorage = {};
-
 
 export const DEFAULT_LAST_KNOWN_GOOD: LastKnownGoodStorage = {};
 
-
 export const MAX_UNSUPPORTED_PATTERNS = 50;
 
-
 export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
-  
   '.adsbygoogle',
   'ins.adsbygoogle',
   '[id^="google_ads_iframe"]',
@@ -562,26 +506,22 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   '[data-ad-slot]',
   '[data-ad-client]',
   '[data-google-query-id]',
-  
-  
+
   '.taboola-widget',
   '[id^="taboola-"]',
   '.OUTBRAIN',
   '[data-widget-id^="outbrain"]',
   '.adthrive-ad',
   '[id^="adthrive-"]',
-  
-  
+
   'iframe[src*="googlesyndication.com"]',
   'iframe[src*="doubleclick.net"]',
   'iframe[id^="google_ads_"]',
-  
-  
+
   '[aria-label="Advertisement"]',
   '[data-testid="ad"]',
   '[data-ad-unit]',
-  
-  
+
   'img[src*="/ads/"]',
   'img[src*="/adv/"]',
   'img[src*="/banner"]',
@@ -589,12 +529,10 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   'img[src*="/adserver"]',
   'a[href*="doubleclick.net"] img',
   'a[href*="googleadservices.com"] img',
-  
-  
+
   'object[data*="ads"]',
   'embed[src*="ads"]',
-  
-  
+
   '.ad-img',
   '.ad-banner',
   '.banner-ad',
@@ -603,12 +541,10 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   '#ad-banner',
   '.advertisement-image',
   '.sponsored-banner',
-  
-  
+
   '#sentry-feedback',
   '.sentry-error-embed',
 ];
-
 
 export const PROTECTED_SITES: string[] = [
   'twitter.com',
@@ -632,4 +568,3 @@ export const PROTECTED_SITES: string[] = [
   'notion.so',
   'figma.com',
 ];
-

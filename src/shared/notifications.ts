@@ -1,8 +1,6 @@
-
-
 import { getFeatureFlag } from './featureFlags';
 
-export type NotificationType = 
+export type NotificationType =
   | 'phishing'
   | 'connection_warning'
   | 'transaction_warning'
@@ -17,19 +15,24 @@ export interface NotificationOptions {
   title: string;
   message: string;
   priority?: NotificationPriority;
-  actionUrl?: string;      
-  tabId?: number;          
-  contextId?: string;      
-  requireInteraction?: boolean;  
+  actionUrl?: string;
+  tabId?: number;
+  contextId?: string;
+  requireInteraction?: boolean;
 }
 
 function getPriorityLevel(priority: NotificationPriority): 0 | 1 | 2 {
   switch (priority) {
-    case 'critical': return 2;
-    case 'high': return 2;
-    case 'medium': return 1;
-    case 'low': return 0;
-    default: return 1;
+    case 'critical':
+      return 2;
+    case 'high':
+      return 2;
+    case 'medium':
+      return 1;
+    case 'low':
+      return 0;
+    default:
+      return 1;
   }
 }
 
@@ -49,11 +52,9 @@ export async function areNotificationsEnabled(): Promise<boolean> {
   return getFeatureFlag('notifications');
 }
 
-
 export async function showNotification(options: NotificationOptions): Promise<string | null> {
   const enabled = await areNotificationsEnabled();
   if (!enabled) {
-
     return null;
   }
 
@@ -69,7 +70,7 @@ export async function showNotification(options: NotificationOptions): Promise<st
   } = options;
 
   const notificationId = generateNotificationId(type, contextId);
-  
+
   if (actionUrl || tabId) {
     notificationHandlers.set(notificationId, { actionUrl, tabId });
   }
@@ -87,13 +88,11 @@ export async function showNotification(options: NotificationOptions): Promise<st
       },
       (createdId) => {
         if (chrome.runtime.lastError) {
-
           resolve(null);
         } else {
-
           resolve(createdId);
         }
-      }
+      },
     );
   });
 }
@@ -103,10 +102,8 @@ export function clearNotification(notificationId: string): void {
   notificationHandlers.delete(notificationId);
 }
 
-
 export function initializeNotificationHandlers(): void {
   chrome.notifications.onClicked.addListener((notificationId) => {
-
     const handler = notificationHandlers.get(notificationId);
     if (handler) {
       if (handler.tabId) {
@@ -127,14 +124,12 @@ export function initializeNotificationHandlers(): void {
   chrome.notifications.onClosed.addListener((notificationId) => {
     notificationHandlers.delete(notificationId);
   });
-
 }
-
 
 export async function notifyPhishingSite(
   domain: string,
   riskLevel: string,
-  tabId?: number
+  tabId?: number,
 ): Promise<string | null> {
   return showNotification({
     type: 'phishing',
@@ -150,7 +145,7 @@ export async function notifyPhishingSite(
 export async function notifyConnectionRequest(
   domain: string,
   riskLevel: string,
-  tabId?: number
+  tabId?: number,
 ): Promise<string | null> {
   return showNotification({
     type: 'connection_warning',
@@ -166,12 +161,13 @@ export async function notifyRiskyTransaction(
   domain: string,
   riskLevel: string,
   warnings: string[],
-  tabId?: number
+  tabId?: number,
 ): Promise<string | null> {
-  const warningText = warnings.length > 0 
-    ? ` Issues: ${warnings.slice(0, 2).join(', ')}${warnings.length > 2 ? '...' : ''}`
-    : '';
-  
+  const warningText =
+    warnings.length > 0
+      ? ` Issues: ${warnings.slice(0, 2).join(', ')}${warnings.length > 2 ? '...' : ''}`
+      : '';
+
   return showNotification({
     type: 'transaction_warning',
     title: 'Transaction Risk Alert',
@@ -183,20 +179,16 @@ export async function notifyRiskyTransaction(
   });
 }
 
-
 let blockedCount = 0;
 let blockedNotificationTimeout: ReturnType<typeof setTimeout> | null = null;
 
-export async function notifyBlockedContent(
-  domain: string,
-  count: number = 1
-): Promise<void> {
+export async function notifyBlockedContent(domain: string, count: number = 1): Promise<void> {
   blockedCount += count;
-  
+
   if (blockedNotificationTimeout) {
     return;
   }
-  
+
   blockedNotificationTimeout = setTimeout(async () => {
     if (blockedCount > 0) {
       await showNotification({
@@ -216,7 +208,7 @@ export async function notifySecurityAlert(
   title: string,
   message: string,
   priority: NotificationPriority = 'medium',
-  tabId?: number
+  tabId?: number,
 ): Promise<string | null> {
   return showNotification({
     type: 'security_alert',
@@ -226,4 +218,3 @@ export async function notifySecurityAlert(
     tabId,
   });
 }
-

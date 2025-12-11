@@ -1,4 +1,7 @@
-if (typeof globalThis !== 'undefined' && typeof (globalThis as unknown as Record<string, unknown>).window === 'undefined') {
+if (
+  typeof globalThis !== 'undefined' &&
+  typeof (globalThis as unknown as Record<string, unknown>).window === 'undefined'
+) {
   (globalThis as unknown as Record<string, unknown>).window = globalThis;
 }
 
@@ -6,14 +9,9 @@ import { initializeStorage } from '@shared/storage';
 import { createMessageListener } from '@shared/messaging';
 import { getFeatureFlags, setFeatureFlag } from '@shared/featureFlags';
 import { ExtensionMessage, MessageResponse, FeatureFlags } from '@shared/types';
-import { 
-  initializeNotificationHandlers,
-  notifyPhishingSite,
-  notifyConnectionRequest,
-  notifyRiskyTransaction,
-} from '@shared/notifications';
+import { initializeNotificationHandlers } from '@shared/notifications';
 
-import { 
+import {
   initializePrivacyEngine,
   handlePrivacyMessage,
   togglePrivacyProtection,
@@ -35,35 +33,18 @@ import {
   toggleThreatIntelSource,
 } from '../threatIntel';
 
-import {
-  getFilterListHealth,
-  resetFilterList,
-} from '../privacy/filterListManager';
+import { getFilterListHealth, resetFilterList } from '../privacy/filterListManager';
 
-import {
-  initializeFingerprintProtection,
-  handleFingerprintMessage,
-} from '../fingerprinting';
+import { initializeFingerprintProtection, handleFingerprintMessage } from '../fingerprinting';
 
-import {
-  initializeWalletModule,
-  handleWalletMessage,
-  WalletMessageType,
-} from '../wallet';
-import {
-  handleAutoLockAlarm,
-  getAutoLockAlarmName,
-} from '../wallet/storage';
+import { initializeWalletModule, handleWalletMessage, WalletMessageType } from '../wallet';
+import { handleAutoLockAlarm, getAutoLockAlarmName } from '../wallet/storage';
 import {
   TX_POLL_ALARM_NAME,
   handleTxPollAlarm,
   setupTxPollingAlarm,
 } from '../wallet/chains/evm/pendingTxStore';
-import {
-  getSolPriceWithChange,
-  getEthPriceWithChange,
-  getTokenPrices,
-} from '../wallet/prices';
+import { getSolPriceWithChange, getEthPriceWithChange, getTokenPrices } from '../wallet/prices';
 
 import {
   initializeSecurityModule,
@@ -75,7 +56,6 @@ import {
 import {
   initializeDAppHandlers,
   handleDAppMessage,
-  handleDAppTabClosed,
   handleDAppWalletLocked,
 } from '../dapp/handlers';
 import { handleRequestQueueAlarm } from '../dapp/queue/requestQueue';
@@ -86,7 +66,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await initializeStorage();
 
   if (details.reason === 'install') {
+    // First install: storage is initialized above.
   } else if (details.reason === 'update') {
+    // Extension update: migrations (if any) happen inside module initializers.
   }
 
   await initializePrivacyEngine();
@@ -100,17 +82,15 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  const flags = await getFeatureFlags();
-
   await initializePrivacyEngine();
   await initializeFingerprintProtection();
   await initializeWalletModule();
   await initializeSecurityModule();
   await initializeThreatIntel();
   await initializeDAppHandlers();
-  
+
   await checkAndRefreshFilterLists();
-  
+
   await setupTxPollingAlarm();
 });
 
@@ -121,7 +101,7 @@ chrome.alarms.create('filterListRefresh', {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   const handledByQueue = await handleRequestQueueAlarm(alarm);
   if (handledByQueue) return;
-  
+
   if (alarm.name === 'filterListRefresh') {
     await checkAndRefreshFilterLists();
   } else if (alarm.name === getAutoLockAlarmName()) {
@@ -136,7 +116,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id) return;
-  
+
   try {
     await chrome.sidePanel.open({ windowId: tab.windowId });
   } catch (error) {
@@ -159,9 +139,8 @@ createMessageListener((message, sender, sendResponse) => {
 
 async function handleMessage(
   message: ExtensionMessage | { what?: string; css?: string },
-  sender: chrome.runtime.MessageSender
+  sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
-  
   if ('what' in message && message.what) {
     const legacyMessage = message as { what: string; css?: string };
     const tabId = sender.tab?.id;
@@ -215,7 +194,6 @@ async function handleMessage(
     }
   }
 
-  
   const extMessage = message as ExtensionMessage;
 
   switch (extMessage.type) {
@@ -253,37 +231,37 @@ async function handleMessage(
 
     case 'GET_FILTER_LIST_HEALTH':
       return handleGetFilterListHealth();
-    
+
     case 'RESET_FILTER_LIST':
       return handleResetFilterList(extMessage.payload);
 
     case 'GET_RULESET_STATS':
       return handleGetRulesetStats();
-    
+
     case 'ENABLE_RULESET':
       return handleEnableRuleset(extMessage.payload);
-    
+
     case 'DISABLE_RULESET':
       return handleDisableRuleset(extMessage.payload);
-    
+
     case 'TOGGLE_RULESET':
       return handleToggleRuleset(extMessage.payload);
 
     case 'GET_THREAT_INTEL_HEALTH':
       return handleGetThreatIntelHealth();
-    
+
     case 'REFRESH_THREAT_INTEL':
       return handleRefreshThreatIntel();
-    
+
     case 'GET_THREAT_INTEL_SOURCES':
       return handleGetThreatIntelSources();
-    
+
     case 'ADD_THREAT_INTEL_SOURCE':
       return handleAddThreatIntelSource(extMessage.payload);
-    
+
     case 'REMOVE_THREAT_INTEL_SOURCE':
       return handleRemoveThreatIntelSource(extMessage.payload);
-    
+
     case 'TOGGLE_THREAT_INTEL_SOURCE':
       return handleToggleThreatIntelSource(extMessage.payload);
 
@@ -374,14 +352,18 @@ async function handleMessage(
     case 'SECURITY_SET_DOMAIN_TRUST':
     case 'SECURITY_GET_PROGRAM_INFO':
     case 'SECURITY_SET_PROGRAM_TRUST':
-      return handleSecurityMessageWrapper(extMessage.type as SecurityMessageType, extMessage.payload, sender.tab?.id);
+      return handleSecurityMessageWrapper(
+        extMessage.type as SecurityMessageType,
+        extMessage.payload,
+        sender.tab?.id,
+      );
 
     case 'GET_SOL_PRICE':
       return handleGetSolPrice();
-    
+
     case 'GET_ETH_PRICE':
       return handleGetEthPrice();
-    
+
     case 'GET_TOKEN_PRICES':
       return handleGetTokenPrices(extMessage.payload);
 
@@ -411,9 +393,10 @@ async function handleGetFeatureFlags(): Promise<MessageResponse<FeatureFlags>> {
   return { success: true, data: flags };
 }
 
-async function handleSetFeatureFlag(
-  payload: { id: 'privacy' | 'wallet' | 'notifications'; enabled: boolean }
-): Promise<MessageResponse> {
+async function handleSetFeatureFlag(payload: {
+  id: 'privacy' | 'wallet' | 'notifications';
+  enabled: boolean;
+}): Promise<MessageResponse> {
   await setFeatureFlag(payload.id, payload.enabled);
 
   if (payload.id === 'privacy') {
@@ -425,14 +408,18 @@ async function handleSetFeatureFlag(
 
 async function handleContentScriptReady(
   payload: { url: string },
-  sender: chrome.runtime.MessageSender
+  sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
+  // Hook for content scripts to announce they’re ready. We currently don’t need the details,
+  // but keeping the parameters makes it easy to extend later without changing the wire format.
+  void payload;
+  void sender;
   return { success: true };
 }
 
 async function handlePrivacyMessageWrapper(
   type: string,
-  payload: unknown
+  payload: unknown,
 ): Promise<MessageResponse> {
   try {
     const result = await handlePrivacyMessage(type, payload);
@@ -447,7 +434,7 @@ async function handlePrivacyMessageWrapper(
 
 async function handleFingerprintMessageWrapper(
   type: string,
-  payload: unknown
+  payload: unknown,
 ): Promise<MessageResponse> {
   try {
     const result = await handleFingerprintMessage(type, payload);
@@ -462,7 +449,7 @@ async function handleFingerprintMessageWrapper(
 
 async function handleWalletMessageWrapper(
   type: WalletMessageType,
-  payload: unknown
+  payload: unknown,
 ): Promise<MessageResponse> {
   try {
     const result = await handleWalletMessage(type, payload);
@@ -478,7 +465,7 @@ async function handleWalletMessageWrapper(
 async function handleSecurityMessageWrapper(
   type: SecurityMessageType,
   payload: unknown,
-  senderTabId?: number
+  senderTabId?: number,
 ): Promise<MessageResponse> {
   try {
     const result = await handleSecurityMessage(type, payload, senderTabId);
@@ -503,9 +490,7 @@ async function handleGetFilterListHealth(): Promise<MessageResponse> {
   }
 }
 
-async function handleResetFilterList(
-  payload: { url: string }
-): Promise<MessageResponse> {
+async function handleResetFilterList(payload: { url: string }): Promise<MessageResponse> {
   try {
     await resetFilterList(payload.url);
     return { success: true };
@@ -529,9 +514,7 @@ async function handleGetRulesetStats(): Promise<MessageResponse> {
   }
 }
 
-async function handleEnableRuleset(
-  payload: { rulesetId: string }
-): Promise<MessageResponse> {
+async function handleEnableRuleset(payload: { rulesetId: string }): Promise<MessageResponse> {
   try {
     await enableRuleset(payload.rulesetId);
     return { success: true };
@@ -543,9 +526,7 @@ async function handleEnableRuleset(
   }
 }
 
-async function handleDisableRuleset(
-  payload: { rulesetId: string }
-): Promise<MessageResponse> {
+async function handleDisableRuleset(payload: { rulesetId: string }): Promise<MessageResponse> {
   try {
     await disableRuleset(payload.rulesetId);
     return { success: true };
@@ -557,9 +538,7 @@ async function handleDisableRuleset(
   }
 }
 
-async function handleToggleRuleset(
-  payload: { rulesetId: string }
-): Promise<MessageResponse> {
+async function handleToggleRuleset(payload: { rulesetId: string }): Promise<MessageResponse> {
   try {
     const enabled = await toggleRuleset(payload.rulesetId);
     return { success: true, data: { enabled } };
@@ -607,9 +586,14 @@ async function handleGetThreatIntelSources(): Promise<MessageResponse> {
   }
 }
 
-async function handleAddThreatIntelSource(
-  payload: { name: string; url: string; type: 'phishing' | 'malware' | 'scam' | 'combined'; format: 'text' | 'json' | 'csv'; refreshIntervalHours?: number; priority?: number }
-): Promise<MessageResponse> {
+async function handleAddThreatIntelSource(payload: {
+  name: string;
+  url: string;
+  type: 'phishing' | 'malware' | 'scam' | 'combined';
+  format: 'text' | 'json' | 'csv';
+  refreshIntervalHours?: number;
+  priority?: number;
+}): Promise<MessageResponse> {
   try {
     await addThreatIntelSource({
       name: payload.name,
@@ -629,9 +613,9 @@ async function handleAddThreatIntelSource(
   }
 }
 
-async function handleRemoveThreatIntelSource(
-  payload: { sourceId: string }
-): Promise<MessageResponse> {
+async function handleRemoveThreatIntelSource(payload: {
+  sourceId: string;
+}): Promise<MessageResponse> {
   try {
     await removeThreatIntelSource(payload.sourceId);
     return { success: true };
@@ -643,9 +627,10 @@ async function handleRemoveThreatIntelSource(
   }
 }
 
-async function handleToggleThreatIntelSource(
-  payload: { sourceId: string; enabled: boolean }
-): Promise<MessageResponse> {
+async function handleToggleThreatIntelSource(payload: {
+  sourceId: string;
+  enabled: boolean;
+}): Promise<MessageResponse> {
   try {
     await toggleThreatIntelSource(payload.sourceId, payload.enabled);
     return { success: true };
@@ -681,9 +666,7 @@ async function handleGetEthPrice(): Promise<MessageResponse> {
   }
 }
 
-async function handleGetTokenPrices(
-  payload: { mints: string[] }
-): Promise<MessageResponse> {
+async function handleGetTokenPrices(payload: { mints: string[] }): Promise<MessageResponse> {
   try {
     const prices = await getTokenPrices(payload.mints);
     const pricesObj: Record<string, number> = {};
@@ -702,12 +685,12 @@ async function handleGetTokenPrices(
 async function handleDAppMessageWrapper(
   type: string,
   payload: unknown,
-  sender: chrome.runtime.MessageSender
+  sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
   try {
     const result = await handleDAppMessage(type, payload, sender);
-    return { 
-      success: result.success, 
+    return {
+      success: result.success,
       data: result.data,
       error: result.error,
     };

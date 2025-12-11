@@ -20,10 +20,9 @@ describe('useDebounce', () => {
   });
 
   it('should debounce value changes', () => {
-    const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 'initial', delay: 500 } }
-    );
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 500 },
+    });
 
     expect(result.current).toBe('initial');
 
@@ -43,10 +42,9 @@ describe('useDebounce', () => {
   });
 
   it('should cancel previous timeout on rapid changes', () => {
-    const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 'initial', delay: 500 } }
-    );
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 500 },
+    });
 
     // Make rapid changes
     rerender({ value: 'change1', delay: 500 });
@@ -74,10 +72,9 @@ describe('useDebounce', () => {
   });
 
   it('should respect custom delay', () => {
-    const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 'initial', delay: 1000 } }
-    );
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 1000 },
+    });
 
     rerender({ value: 'updated', delay: 1000 });
 
@@ -95,10 +92,9 @@ describe('useDebounce', () => {
   });
 
   it('should handle zero delay', () => {
-    const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 'initial', delay: 0 } }
-    );
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 0 },
+    });
 
     rerender({ value: 'updated', delay: 0 });
 
@@ -113,39 +109,45 @@ describe('useDebounce', () => {
     // Number
     const { result: numberResult, rerender: rerenderNumber } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 42, delay: 100 } }
+      { initialProps: { value: 42, delay: 100 } },
     );
     rerenderNumber({ value: 100, delay: 100 });
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     expect(numberResult.current).toBe(100);
 
     // Object
     const { result: objectResult, rerender: rerenderObject } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: { a: 1 }, delay: 100 } }
+      { initialProps: { value: { a: 1 }, delay: 100 } },
     );
     rerenderObject({ value: { a: 2 } as any, delay: 100 });
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     expect(objectResult.current).toEqual({ a: 2 });
 
     // Boolean
     const { result: boolResult, rerender: rerenderBool } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: false, delay: 100 } }
+      { initialProps: { value: false, delay: 100 } },
     );
     rerenderBool({ value: true, delay: 100 });
-    act(() => { jest.advanceTimersByTime(100); });
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     expect(boolResult.current).toBe(true);
   });
 
   it('should cleanup timeout on unmount', () => {
     const { result, rerender, unmount } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 'initial', delay: 500 } }
+      { initialProps: { value: 'initial', delay: 500 } },
     );
 
     rerender({ value: 'updated', delay: 500 });
-    
+
     // Unmount before timeout completes
     unmount();
 
@@ -159,10 +161,9 @@ describe('useDebounce', () => {
   });
 
   it('should update immediately when delay changes to 0', () => {
-    const { result, rerender } = renderHook(
-      ({ value, delay }) => useDebounce(value, delay),
-      { initialProps: { value: 'initial', delay: 500 } }
-    );
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 500 },
+    });
 
     rerender({ value: 'updated', delay: 0 });
 
@@ -173,4 +174,3 @@ describe('useDebounce', () => {
     expect(result.current).toBe('updated');
   });
 });
-
