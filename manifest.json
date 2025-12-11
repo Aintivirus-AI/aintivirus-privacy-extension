@@ -1,8 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "Aintivirus Privacy",
-  "version": "0.1.0",
+  "name": "Aintivirus Privacy and Wallet",
+  "version": "0.2.0",
   "description": "Aintivirus security extension",
+
+  "__host_permissions_justification__": [
+    "The <all_urls> host permission is REQUIRED for this extension because:",
+    "1. dApp Provider Injection: Content script must inject window.ethereum/window.solana",
+    "   provider on ANY web page that may be a dApp - cannot predict which sites are dApps",
+    "2. Ad/Tracker Blocking: Privacy protection requires monitoring network requests on all sites",
+    "3. Security Scanning: Phishing detection must analyze page content on any site user visits",
+    "",
+    "SECURITY MITIGATIONS in place:",
+    "- Strict CSP prevents remote code execution",
+    "- All message passing validates sender/origin",
+    "- Content script has minimal privileges (only bridge, no wallet access)",
+    "- Sensitive operations (signing, mnemonic) only in background service worker",
+    "- No sensitive data in window.postMessage (only signed results)",
+    "",
+    "Alternative approaches considered but rejected:",
+    "- optional_host_permissions: Would require user to grant per-site, breaking dApp UX",
+    "- Narrower patterns: Cannot enumerate all possible dApp domains",
+    "",
+    "This field is for documentation only and is ignored by Chrome."
+  ],
+
   "permissions": [
     "storage",
     "activeTab",
@@ -13,18 +35,128 @@
     "tabs",
     "webNavigation",
     "alarms",
-    "notifications"
+    "notifications",
+    "sidePanel",
+    "browsingData"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "host_permissions": ["<all_urls>"],
   "declarative_net_request": {
-    "rule_resources": []
+    "rule_resources": [
+      {
+        "id": "ublock-filters",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/ublock-filters.json"
+      },
+      {
+        "id": "easylist",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/easylist.json"
+      },
+      {
+        "id": "easyprivacy",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/easyprivacy.json"
+      },
+      {
+        "id": "pgl",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/pgl.json"
+      },
+      {
+        "id": "ublock-badware",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/ublock-badware.json"
+      },
+      {
+        "id": "urlhaus-full",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/urlhaus-full.json"
+      },
+      {
+        "id": "adguard-mobile",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/adguard-mobile.json"
+      },
+      {
+        "id": "block-lan",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/block-lan.json"
+      },
+      {
+        "id": "dpollock-0",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/dpollock-0.json"
+      },
+      {
+        "id": "adguard-spyware-url",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/adguard-spyware-url.json"
+      },
+      {
+        "id": "annoyances-cookies",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-cookies.json"
+      },
+      {
+        "id": "annoyances-overlays",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-overlays.json"
+      },
+      {
+        "id": "annoyances-social",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-social.json"
+      },
+      {
+        "id": "annoyances-widgets",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-widgets.json"
+      },
+      {
+        "id": "annoyances-others",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-others.json"
+      },
+      {
+        "id": "annoyances-notifications",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-notifications.json"
+      },
+      {
+        "id": "ublock-experimental",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/ublock-experimental.json"
+      },
+      {
+        "id": "stevenblack-hosts",
+        "enabled": false,
+        "path": "aintivirusAdblocker/rulesets/main/stevenblack-hosts.json"
+      }
+    ]
   },
   "web_accessible_resources": [
     {
-      "resources": ["fingerprintInjected.js", "securityInjected.js"],
+      "resources": [
+        "fingerprintInjected.js",
+        "securityInjected.js",
+        "dappInpage.js",
+        "popup.html",
+        "icons/ainti_l1.png",
+        "empty.js",
+        "noop.js",
+        "noop-sentry.js",
+        "noop-bugsnag.js"
+      ],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "aintivirusAdblocker/web_accessible_resources/*",
+        "aintivirusAdblocker/js/scripting/*",
+        "aintivirusAdblocker/rulesets/scripting/*"
+      ],
+      "matches": ["<all_urls>"],
+      "use_dynamic_url": true
     }
   ],
   "background": {
@@ -39,19 +171,20 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/ainti_l1.png",
+      "48": "icons/ainti_l1.png",
+      "128": "icons/ainti_l1.png"
     },
     "default_title": "Aintivirus Privacy Extension"
   },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
   "options_page": "settings.html",
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/ainti_l1.png",
+    "48": "icons/ainti_l1.png",
+    "128": "icons/ainti_l1.png"
   }
 }
-

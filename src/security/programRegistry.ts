@@ -1,28 +1,7 @@
-/**
- * AINTIVIRUS Security Module - Program Registry
- * 
- * Maintains a registry of known Solana programs and their risk classifications.
- * Used to identify and warn about potentially risky program interactions.
- * 
- * IMPORTANT LIMITATIONS:
- * - This list is NOT comprehensive and cannot cover all programs
- * - A program not being in this list does NOT mean it is malicious
- * - Program verification is based on publicly available information
- * - Users should always verify program interactions independently
- * - This is informational only and does not guarantee safety
- */
+// Catalog of Solana program metadata/risk levels plus helpers to merge user overrides.
+import { ProgramInfo, ProgramRiskLevel } from './types';
+import { getCustomProgramSetting } from './storage';
 
-import { ProgramInfo, ProgramRiskLevel, CustomProgramSetting } from './types';
-import { getCustomProgramSetting, getAllCustomProgramSettings } from './storage';
-
-// ============================================
-// NATIVE SOLANA PROGRAMS
-// ============================================
-
-/**
- * Core Solana runtime programs
- * These are fundamental to Solana's operation
- */
 const NATIVE_PROGRAMS: ProgramInfo[] = [
   {
     programId: '11111111111111111111111111111111',
@@ -125,13 +104,6 @@ const NATIVE_PROGRAMS: ProgramInfo[] = [
   },
 ];
 
-// ============================================
-// SPL TOKEN PROGRAMS
-// ============================================
-
-/**
- * SPL Token programs for fungible and non-fungible tokens
- */
 const SPL_PROGRAMS: ProgramInfo[] = [
   {
     programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -203,18 +175,7 @@ const SPL_PROGRAMS: ProgramInfo[] = [
   },
 ];
 
-// ============================================
-// MAJOR DEFI PROTOCOLS
-// ============================================
-
-/**
- * Well-known DeFi protocols on Solana
- * 
- * NOTE: Inclusion here indicates the program is recognized, not endorsed.
- * DeFi protocols carry inherent risks regardless of verification status.
- */
 const DEFI_PROGRAMS: ProgramInfo[] = [
-  // Jupiter
   {
     programId: 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
     name: 'Jupiter Aggregator v6',
@@ -235,7 +196,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://jup.ag',
     lastUpdated: Date.now(),
   },
-  // Raydium
+
   {
     programId: '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',
     name: 'Raydium AMM',
@@ -256,7 +217,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://raydium.io',
     lastUpdated: Date.now(),
   },
-  // Orca
+
   {
     programId: '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP',
     name: 'Orca Swap',
@@ -277,7 +238,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://www.orca.so',
     lastUpdated: Date.now(),
   },
-  // Marinade
+
   {
     programId: 'MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD',
     name: 'Marinade Finance',
@@ -288,7 +249,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://marinade.finance',
     lastUpdated: Date.now(),
   },
-  // Jito
+
   {
     programId: 'Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb',
     name: 'Jito Staking',
@@ -299,7 +260,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://www.jito.network',
     lastUpdated: Date.now(),
   },
-  // Marginfi
+
   {
     programId: 'MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA',
     name: 'Marginfi',
@@ -310,7 +271,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://marginfi.com',
     lastUpdated: Date.now(),
   },
-  // Kamino
+
   {
     programId: 'KLend2g3cP87ber41GdtFjNNEaWnD8Lu3prRvBXfr5H',
     name: 'Kamino Lend',
@@ -321,7 +282,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://kamino.finance',
     lastUpdated: Date.now(),
   },
-  // Magic Eden
+
   {
     programId: 'M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K',
     name: 'Magic Eden v2',
@@ -332,7 +293,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://magiceden.io',
     lastUpdated: Date.now(),
   },
-  // Tensor
+
   {
     programId: 'TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN',
     name: 'Tensor Swap',
@@ -343,7 +304,7 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
     website: 'https://www.tensor.trade',
     lastUpdated: Date.now(),
   },
-  // Phantom
+
   {
     programId: 'DeJBGdMFa1uynnnKiwrVioatTuHmNLpyFKnmB5kaFdzQ',
     name: 'Phantom Swap',
@@ -356,41 +317,10 @@ const DEFI_PROGRAMS: ProgramInfo[] = [
   },
 ];
 
-// ============================================
-// KNOWN MALICIOUS PROGRAMS
-// ============================================
+const MALICIOUS_PROGRAMS: ProgramInfo[] = [];
 
-/**
- * Known malicious or scam programs
- * 
- * DISCLAIMER: This list is maintained based on community reports.
- * Absence from this list does NOT indicate safety.
- * Presence on this list indicates reported malicious behavior.
- */
-const MALICIOUS_PROGRAMS: ProgramInfo[] = [
-  // Add known malicious programs here as they are identified
-  // Example structure:
-  // {
-  //   programId: 'KNOWN_SCAM_PROGRAM_ID',
-  //   name: 'Known Scam',
-  //   description: 'Reported for draining wallets',
-  //   riskLevel: ProgramRiskLevel.MALICIOUS,
-  //   category: 'malicious',
-  //   isNative: false,
-  //   lastUpdated: Date.now(),
-  // },
-];
-
-// ============================================
-// PROGRAM REGISTRY
-// ============================================
-
-/**
- * Combined registry of all known programs
- */
 const PROGRAM_REGISTRY: Map<string, ProgramInfo> = new Map();
 
-// Initialize registry
 function initializeRegistry(): void {
   const allPrograms = [
     ...NATIVE_PROGRAMS,
@@ -398,30 +328,17 @@ function initializeRegistry(): void {
     ...DEFI_PROGRAMS,
     ...MALICIOUS_PROGRAMS,
   ];
-  
+
   for (const program of allPrograms) {
     PROGRAM_REGISTRY.set(program.programId, program);
   }
 }
 
-// Initialize on module load
 initializeRegistry();
 
-// ============================================
-// PUBLIC API
-// ============================================
-
-/**
- * Get information about a program by its ID
- * 
- * First checks user's custom settings, then the built-in registry.
- * Returns null if program is completely unknown.
- */
 export async function getProgramInfo(programId: string): Promise<ProgramInfo | null> {
-  // Check user's custom settings first
   const customSetting = await getCustomProgramSetting(programId);
   if (customSetting) {
-    // Merge custom settings with registry info if available
     const registryInfo = PROGRAM_REGISTRY.get(programId);
     if (registryInfo) {
       return {
@@ -430,7 +347,7 @@ export async function getProgramInfo(programId: string): Promise<ProgramInfo | n
         name: customSetting.label || registryInfo.name,
       };
     }
-    // Custom setting for unknown program
+
     return {
       programId,
       name: customSetting.label || 'Custom Program',
@@ -441,101 +358,63 @@ export async function getProgramInfo(programId: string): Promise<ProgramInfo | n
       lastUpdated: customSetting.addedAt,
     };
   }
-  
-  // Check built-in registry
+
   return PROGRAM_REGISTRY.get(programId) || null;
 }
 
-/**
- * Get the risk level for a program
- * Returns UNKNOWN for programs not in any list
- */
 export async function getProgramRiskLevel(programId: string): Promise<ProgramRiskLevel> {
   const info = await getProgramInfo(programId);
   return info?.riskLevel || ProgramRiskLevel.UNKNOWN;
 }
 
-/**
- * Check if a program is verified (known safe)
- */
 export async function isProgramVerified(programId: string): Promise<boolean> {
   const riskLevel = await getProgramRiskLevel(programId);
   return riskLevel === ProgramRiskLevel.VERIFIED;
 }
 
-/**
- * Check if a program is known to be malicious
- */
 export async function isProgramMalicious(programId: string): Promise<boolean> {
   const riskLevel = await getProgramRiskLevel(programId);
   return riskLevel === ProgramRiskLevel.MALICIOUS;
 }
 
-/**
- * Check if a program is flagged (user or community flagged)
- */
 export async function isProgramFlagged(programId: string): Promise<boolean> {
   const riskLevel = await getProgramRiskLevel(programId);
   return riskLevel === ProgramRiskLevel.FLAGGED;
 }
 
-/**
- * Get all programs of a specific risk level
- */
 export function getProgramsByRiskLevel(riskLevel: ProgramRiskLevel): ProgramInfo[] {
-  return Array.from(PROGRAM_REGISTRY.values()).filter(p => p.riskLevel === riskLevel);
+  return Array.from(PROGRAM_REGISTRY.values()).filter((p) => p.riskLevel === riskLevel);
 }
 
-/**
- * Get all programs in a category
- */
 export function getProgramsByCategory(category: string): ProgramInfo[] {
-  return Array.from(PROGRAM_REGISTRY.values()).filter(p => p.category === category);
+  return Array.from(PROGRAM_REGISTRY.values()).filter((p) => p.category === category);
 }
 
-/**
- * Get all native Solana programs
- */
 export function getNativePrograms(): ProgramInfo[] {
-  return Array.from(PROGRAM_REGISTRY.values()).filter(p => p.isNative);
+  return Array.from(PROGRAM_REGISTRY.values()).filter((p) => p.isNative);
 }
 
-/**
- * Get all verified DeFi programs
- */
 export function getVerifiedDefiPrograms(): ProgramInfo[] {
   return Array.from(PROGRAM_REGISTRY.values()).filter(
-    p => p.category === 'defi' && p.riskLevel === ProgramRiskLevel.VERIFIED
+    (p) => p.category === 'defi' && p.riskLevel === ProgramRiskLevel.VERIFIED,
   );
 }
 
-/**
- * Search programs by name or ID
- */
 export function searchPrograms(query: string): ProgramInfo[] {
   const lowerQuery = query.toLowerCase();
   return Array.from(PROGRAM_REGISTRY.values()).filter(
-    p => p.name.toLowerCase().includes(lowerQuery) || p.programId.includes(query)
+    (p) => p.name.toLowerCase().includes(lowerQuery) || p.programId.includes(query),
   );
 }
 
-/**
- * Get total count of known programs
- */
 export function getKnownProgramCount(): number {
   return PROGRAM_REGISTRY.size;
 }
 
-/**
- * Check if System Program
- */
 export function isSystemProgram(programId: string): boolean {
   return programId === '11111111111111111111111111111111';
 }
 
-/**
- * Check if SPL Token Program (either version)
- */
 export function isTokenProgram(programId: string): boolean {
   return (
     programId === 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' ||
@@ -543,30 +422,15 @@ export function isTokenProgram(programId: string): boolean {
   );
 }
 
-/**
- * Check if Associated Token Account Program
- */
 export function isAssociatedTokenProgram(programId: string): boolean {
   return programId === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
 }
 
-/**
- * Check if Compute Budget Program
- */
 export function isComputeBudgetProgram(programId: string): boolean {
   return programId === 'ComputeBudget111111111111111111111111111111';
 }
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-/**
- * Convert custom trust level to risk level
- */
-function customSettingToRiskLevel(
-  trustLevel: 'trusted' | 'neutral' | 'blocked'
-): ProgramRiskLevel {
+function customSettingToRiskLevel(trustLevel: 'trusted' | 'neutral' | 'blocked'): ProgramRiskLevel {
   switch (trustLevel) {
     case 'trusted':
       return ProgramRiskLevel.VERIFIED;
@@ -577,9 +441,6 @@ function customSettingToRiskLevel(
   }
 }
 
-/**
- * Get human-readable risk level description
- */
 export function getRiskLevelDescription(riskLevel: ProgramRiskLevel): string {
   switch (riskLevel) {
     case ProgramRiskLevel.VERIFIED:
@@ -595,9 +456,6 @@ export function getRiskLevelDescription(riskLevel: ProgramRiskLevel): string {
   }
 }
 
-/**
- * Get color code for risk level (for UI)
- */
 export function getRiskLevelColor(riskLevel: ProgramRiskLevel): string {
   switch (riskLevel) {
     case ProgramRiskLevel.VERIFIED:
@@ -612,5 +470,3 @@ export function getRiskLevelColor(riskLevel: ProgramRiskLevel): string {
       return 'default';
   }
 }
-
-

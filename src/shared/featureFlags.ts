@@ -8,24 +8,23 @@ export interface FeatureFlagMeta {
   icon: string;
 }
 
-// The toggleable features and their UI info
 export const FEATURE_FLAG_META: FeatureFlagMeta[] = [
   {
     id: 'privacy',
-    name: 'Privacy & Ad Blocking',
-    description: 'Block ads, trackers, and protect your privacy',
+    name: 'Privacy Features',
+    description: 'Cookie cleanup, header protection, and fingerprint blocking',
     icon: 'shield',
   },
   {
     id: 'wallet',
     name: 'Wallet Security',
-    description: 'Protect your crypto wallet from malicious sites',
+    description: 'Protect your crypto wallet from scams and phishing sites',
     icon: 'wallet',
   },
   {
     id: 'notifications',
     name: 'Notifications',
-    description: 'Show alerts when threats are detected',
+    description: 'Get alerts when we block something dangerous',
     icon: 'bell',
   },
 ];
@@ -59,13 +58,10 @@ export async function resetFeatureFlags(): Promise<void> {
   await storage.set('featureFlags', DEFAULT_FEATURE_FLAGS);
 }
 
-export function onFeatureFlagsChange(
-  callback: (flags: FeatureFlags) => void
-): () => void {
+export function onFeatureFlagsChange(callback: (flags: FeatureFlags) => void): () => void {
   return storage.onChange((changes) => {
     if (changes.featureFlags?.newValue) {
       callback(changes.featureFlags.newValue);
     }
   });
 }
-

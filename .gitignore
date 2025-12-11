@@ -2,5 +2,17 @@ dist/
 node_modules/
 *.log
 /.env
+.env.*
 .DS_Store
+
+# Test reports
+test-report.html
+test-report-all.html
+coverage/
+
+
+
+
+
+
 

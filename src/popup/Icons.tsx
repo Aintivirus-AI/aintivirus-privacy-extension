@@ -107,7 +107,6 @@ export const SettingsIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Send arrow (up-right)
 export const SendIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -125,7 +124,6 @@ export const SendIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Receive arrow (down-left)
 export const ReceiveIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -143,7 +141,6 @@ export const ReceiveIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// History/clock icon
 export const HistoryIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -162,7 +159,6 @@ export const HistoryIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Copy icon
 export const CopyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -180,7 +176,6 @@ export const CopyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Check icon
 export const CheckIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -197,7 +192,6 @@ export const CheckIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// X/Close icon
 export const CloseIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -215,7 +209,6 @@ export const CloseIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Bell/notifications icon
 export const BellIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -233,7 +226,6 @@ export const BellIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Eye icon - for privacy
 export const EyeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -251,7 +243,6 @@ export const EyeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Eye off icon - for privacy disabled
 export const EyeOffIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -271,7 +262,6 @@ export const EyeOffIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Cookie icon
 export const CookieIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -293,7 +283,6 @@ export const CookieIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Link icon - for referrer
 export const LinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -311,7 +300,6 @@ export const LinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Globe icon - for GPC
 export const GlobeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -330,7 +318,6 @@ export const GlobeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Search icon - for tracking params
 export const SearchIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -348,7 +335,6 @@ export const SearchIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Target icon - for fingerprint
 export const TargetIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -367,7 +353,6 @@ export const TargetIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Palette icon - for canvas
 export const PaletteIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -388,7 +373,6 @@ export const PaletteIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Monitor icon - for WebGL/screen
 export const MonitorIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -407,7 +391,6 @@ export const MonitorIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Volume icon - for audio
 export const VolumeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -426,7 +409,6 @@ export const VolumeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Ruler icon - for screen resolution
 export const RulerIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -447,7 +429,6 @@ export const RulerIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// External link icon
 export const ExternalLinkIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -466,7 +447,6 @@ export const ExternalLinkIcon: React.FC<IconProps> = ({ size = 24, className }) 
   </svg>
 );
 
-// Refresh icon
 export const RefreshIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -486,7 +466,6 @@ export const RefreshIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Plus icon
 export const PlusIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -504,7 +483,6 @@ export const PlusIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Trash icon
 export const TrashIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -523,7 +501,6 @@ export const TrashIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Info icon
 export const InfoIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -542,7 +519,6 @@ export const InfoIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Alert/warning icon
 export const AlertIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -561,7 +537,6 @@ export const AlertIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Book/docs icon
 export const BookIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -578,7 +553,6 @@ export const BookIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Bug icon
 export const BugIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -605,7 +579,6 @@ export const BugIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// GitHub icon
 export const GitHubIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -623,7 +596,6 @@ export const GitHubIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Bolt/lightning icon - for trusted/fast mode
 export const BoltIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -640,7 +612,6 @@ export const BoltIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Lock closed - for strict mode
 export const LockClosedIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -658,7 +629,6 @@ export const LockClosedIcon: React.FC<IconProps> = ({ size = 24, className }) =>
   </svg>
 );
 
-// Swap/transfer icon
 export const SwapIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -678,7 +648,6 @@ export const SwapIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Block/ban icon - for blocked trackers
 export const BlockIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -696,7 +665,6 @@ export const BlockIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Script icon - for scripts intercepted
 export const CodeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -714,7 +682,6 @@ export const CodeIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Activity icon - for this tab
 export const ActivityIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -731,7 +698,6 @@ export const ActivityIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
-// Key icon
 export const KeyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   <svg
     width={size}
@@ -750,3 +716,47 @@ export const KeyIcon: React.FC<IconProps> = ({ size = 24, className }) => (
   </svg>
 );
 
+export const ChevronIcon: React.FC<
+  IconProps & { direction?: 'up' | 'down' | 'left' | 'right' }
+> = ({ size = 24, className, direction = 'down' }) => {
+  const rotation = {
+    up: 180,
+    down: 0,
+    left: 90,
+    right: -90,
+  }[direction];
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={{ transform: `rotate(${rotation}deg)` }}
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+};
+
+export const EditIcon: React.FC<IconProps> = ({ size = 24, className }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);

@@ -3,10 +3,32 @@ const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+
+// Optional local env loading. In CI/build pipelines, these values should come from the environment.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+} catch {
+  // `dotenv` is optional; builds can inject environment variables directly.
+}
 
 module.exports = (env, argv) => {
   const isFirefox = env?.target === 'firefox';
   const isProduction = argv.mode === 'production';
+
+  // Only inject the specific env vars we intentionally depend on.
+  const INJECTED_ENV_KEYS = [
+    'AINTIVIRUS_HELIUS_API_KEY',
+    'AINTIVIRUS_JUPITER_API_KEY',
+    'AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT',
+    'AINTIVIRUS_JUPITER_REFERRAL_FEE_BPS',
+    'AINTIVIRUS_JUPITER_REFERRAL_ENABLED',
+  ];
+  const injectedEnv = INJECTED_ENV_KEYS.reduce((acc, key) => {
+    acc[`process.env.${key}`] = JSON.stringify(process.env[key] ?? '');
+    return acc;
+  }, {});
 
   return {
     entry: {
@@ -14,10 +36,10 @@ module.exports = (env, argv) => {
       content: './src/content/index.ts',
       popup: './src/popup/index.tsx',
       settings: './src/settings/index.tsx',
-      // Fingerprint protection script - injected into MAIN world
       fingerprintInjected: './src/fingerprinting/injectedScript.ts',
-      // Security monitoring script - injected into MAIN world for wallet interception
       securityInjected: './src/security/injected.ts',
+      dappInpage: './src/dapp/providers/inpage.ts',
+      approval: './src/approval/index.tsx',
     },
     output: {
       path: path.resolve(__dirname, 'dist'),
@@ -29,11 +51,11 @@ module.exports = (env, argv) => {
         {
           test: /\.tsx?$/,
           use: 'ts-loader',
-          exclude: /node_modules/,
+          exclude: [/node_modules/, /\.test\.ts$/, /\.test\.tsx$/],
         },
         {
           test: /\.css$/,
-          use: ['style-loader', 'css-loader'],
+          use: [MiniCssExtractPlugin.loader, 'css-loader'],
         },
       ],
     },
@@ -41,32 +63,45 @@ module.exports = (env, argv) => {
       extensions: ['.tsx', '.ts', '.js'],
       alias: {
         '@shared': path.resolve(__dirname, 'src/shared'),
+        '@wallet': path.resolve(__dirname, 'src/wallet'),
       },
       fallback: {
-        // Node.js polyfills for Solana/crypto libraries
         stream: require.resolve('stream-browserify'),
         buffer: require.resolve('buffer/'),
       },
     },
     plugins: [
-      // Provide Node.js globals for browser compatibility
+      new MiniCssExtractPlugin({
+        filename: '[name].css',
+      }),
       new webpack.ProvidePlugin({
         process: 'process/browser',
         Buffer: ['buffer', 'Buffer'],
       }),
-      // Define environment variables for conditional logging
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+        ...injectedEnv,
       }),
       new HtmlWebpackPlugin({
         template: './src/popup/popup.html',
         filename: 'popup.html',
         chunks: ['popup'],
+        inject: 'body',
+        scriptLoading: 'blocking',
       }),
       new HtmlWebpackPlugin({
         template: './src/settings/settings.html',
         filename: 'settings.html',
         chunks: ['settings'],
+        inject: 'body',
+        scriptLoading: 'blocking',
+      }),
+      new HtmlWebpackPlugin({
+        template: './src/approval/approval.html',
+        filename: 'approval.html',
+        chunks: ['approval'],
+        inject: 'body',
+        scriptLoading: 'blocking',
       }),
       new CopyWebpackPlugin({
         patterns: [
@@ -78,30 +113,44 @@ module.exports = (env, argv) => {
             from: 'public',
             to: '.',
           },
+          {
+            from: 'vendor/aintivirusAdblocker/rulesets',
+            to: 'aintivirusAdblocker/rulesets',
+          },
+          {
+            from: 'vendor/aintivirusAdblocker/web_accessible_resources',
+            to: 'aintivirusAdblocker/web_accessible_resources',
+          },
+          {
+            from: 'vendor/aintivirusAdblocker/js/scripting',
+            to: 'aintivirusAdblocker/js/scripting',
+          },
+          {
+            from: 'vendor/aintivirusAdblocker/LICENSE.txt',
+            to: 'aintivirusAdblocker/LICENSE.txt',
+          },
         ],
       }),
     ],
     devtool: isProduction ? false : 'cheap-module-source-map',
     optimization: {
       minimize: isProduction,
-      minimizer: isProduction ? [
-        new TerserPlugin({
-          terserOptions: {
-            compress: {
-              // SECURITY: Remove console.log/warn in production to prevent fingerprinting
-              // Keep console.error for critical errors
-              drop_console: false,
-              pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
-            },
-            mangle: true,
-            format: {
-              comments: false,
-            },
-          },
-          extractComments: false,
-        }),
-      ] : [],
+      minimizer: isProduction
+        ? [
+            new TerserPlugin({
+              terserOptions: {
+                compress: {
+                  drop_console: false,
+                },
+                mangle: true,
+                format: {
+                  comments: false,
+                },
+              },
+              extractComments: false,
+            }),
+          ]
+        : [],
     },
   };
 };
-

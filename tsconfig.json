@@ -16,12 +16,10 @@
     "rootDir": "./src",
     "baseUrl": "./src",
     "paths": {
-      "@shared/*": ["shared/*"]
+      "@shared/*": ["shared/*"],
+      "@wallet/*": ["wallet/*"]
     }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
-
-
-

@@ -1,43 +1,15 @@
-/**
- * AINTIVIRUS Privacy Engine
- * 
- * Main coordinator for the privacy and anti-tracking layer.
- * Initializes, coordinates, and exposes APIs for all privacy submodules.
- * 
- * Submodules:
- * - filterListManager: Fetches and caches filter lists
- * - ruleConverter: Converts filter rules to DNR format
- * - requestBlocker: Manages DNR blocking rules
- * - cookieManager: Auto-deletes cookies on tab close
- * - siteSettings: Per-site privacy configuration
- * - headerRules: Header minimization and GPC
- * - metrics: Logging and dashboard metrics
- */
-
 import { storage } from '@shared/storage';
+import { FilteringLevel } from '@shared/types';
 import { PrivacySettings, DEFAULT_PRIVACY_SETTINGS } from './types';
-import { 
-  initializeBlocker, 
-  disableBlocker, 
-  refreshBlockerRules,
-  getBlockerStatus,
-  addSiteException,
-  removeSiteException,
-  getActiveRuleCount,
-} from './requestBlocker';
-import { 
-  initializeCookieManager, 
-  shutdownCookieManager,
-  getCookieStats,
-} from './cookieManager';
-import { 
-  initializeHeaderRules, 
+import { initializeCookieManager, shutdownCookieManager, getCookieStats } from './cookieManager';
+import {
+  initializeHeaderRules,
   updateHeaderRules,
   removeHeaderRules,
   getHeaderRuleStatus,
 } from './headerRules';
-import { 
-  initializeMetrics, 
+import {
+  initializeMetrics,
   shutdownMetrics,
   getMetrics,
   getMetricsSummary,
@@ -46,168 +18,142 @@ import {
   logScriptIntercepted,
   logRequestModified,
 } from './metrics';
-import { 
-  getSiteMode, 
-  setSiteMode, 
-  getAllSiteSettings,
-  syncSiteExceptions,
-} from './siteSettings';
-import { 
-  getFilterListStats,
-  fetchAllFilterLists,
-  addFilterListUrl,
-  removeFilterListUrl,
-  needsFilterListRefresh,
-  fetchAllCosmeticRules,
-  getCosmeticRulesForDomain,
-  getCachedCosmeticRules,
-} from './filterListManager';
+export { updateActiveRuleCount } from './metrics';
+import {
+  initializeBlockCountTracker,
+  shutdownBlockCountTracker,
+  getTabBlockCount,
+  getTotalBlockCount,
+} from './blockCountTracker';
+import { getSiteMode, setSiteMode, getAllSiteSettings, syncSiteExceptions } from './siteSettings';
+import { getFilterListStats } from './filterListManager';
 
-/** Privacy engine state */
+import {
+  initializeAdblocker,
+  reconcileAdblockerState,
+  setAdBlockEnabled as setAdblockerEnabled,
+  isAdBlockEnabled as isAdblockerEnabled,
+  getAdblockerStats,
+  addToAllowlist,
+  removeFromAllowlist,
+  isDomainAllowlisted,
+  getAllowlist,
+  enableRulesets,
+  disableAllRulesets,
+  getEnabledRulesets,
+  setFilteringMode,
+  getFilteringMode,
+  setDefaultFilteringMode,
+  getDefaultFilteringMode,
+  setupInternalApiAllowlist,
+  MODE_NONE,
+  MODE_BASIC,
+  MODE_OPTIMAL,
+  MODE_COMPLETE,
+  DEFAULT_RULESETS,
+  ALL_RULESETS,
+} from '../aintivirusAdblocker';
+
 let isInitialized = false;
 let isEnabled = false;
 
-/**
- * Initialize the privacy engine
- * Called from background script on extension startup
- */
+async function updateActiveRules(): Promise<void> {
+  try {
+    const availableCount = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
+
+    const TOTAL_STATIC_RULE_BUDGET = 330000;
+    const activeRules = TOTAL_STATIC_RULE_BUDGET - availableCount;
+
+    updateActiveRuleCount(activeRules);
+  } catch (error) {
+    const enabledRulesets = await getEnabledRulesets();
+    updateActiveRuleCount(enabledRulesets.length * 10000);
+  }
+}
+
 export async function initializePrivacyEngine(): Promise<void> {
   if (isInitialized) {
-    console.log('[Privacy] Engine already initialized');
     return;
   }
-  
-  console.log('[Privacy] Initializing privacy engine...');
-  
+
   try {
-    // Initialize metrics first (for logging other modules)
     await initializeMetrics();
-    
-    // Check if privacy is enabled
+
+    initializeBlockCountTracker();
+
+    // Always set up internal API allowlist first (essential for wallet functionality)
+    // This must run regardless of ad blocker settings to allow Jupiter, CoinGecko, etc.
+    await setupInternalApiAllowlist();
+
     const settings = await getPrivacySettings();
     isEnabled = settings.enabled;
-    
-    if (isEnabled) {
-      await enablePrivacyProtection();
+    const adBlockerEnabled = settings.adBlockerEnabled ?? true;
+
+    if (adBlockerEnabled) {
+      await initializeAdblocker();
+    } else {
+      await disableAllRulesets();
     }
-    
-    // Set up storage listener for reactive updates
+
+    const enabledRulesets = await getEnabledRulesets();
+
+    await updateActiveRules();
+
+    if (isEnabled) {
+      await enablePrivacyProtectionFeatures();
+    }
+
     setupStorageListener();
-    
+
     isInitialized = true;
-    console.log('[Privacy] Privacy engine initialized (enabled:', isEnabled, ')');
-    
   } catch (error) {
-    console.error('[Privacy] Failed to initialize privacy engine:', error);
     throw error;
   }
 }
 
-/**
- * Shutdown the privacy engine
- */
 export async function shutdownPrivacyEngine(): Promise<void> {
-  console.log('[Privacy] Shutting down privacy engine...');
-  
   if (isEnabled) {
     await disablePrivacyProtection();
   }
-  
+
+  shutdownBlockCountTracker();
   await shutdownMetrics();
-  
+
   isInitialized = false;
   isEnabled = false;
-  
-  console.log('[Privacy] Privacy engine shutdown complete');
 }
 
-/**
- * Enable privacy protection
- */
-async function enablePrivacyProtection(): Promise<void> {
-  console.log('[Privacy] Enabling privacy protection...');
-  
+async function enablePrivacyProtectionFeatures(): Promise<void> {
   try {
-    // Initialize request blocker
-    await initializeBlocker();
-    
-    // Sync site exceptions
     await syncSiteExceptions();
-    
-    // Initialize cookie manager
+  } catch (error) {}
+
+  try {
     initializeCookieManager();
-    
-    // Initialize header rules
+  } catch (error) {}
+
+  try {
     await initializeHeaderRules();
-    
-    // Initialize cosmetic rules (element hiding)
-    await initializeCosmeticRules();
-    
-    // Update metrics
-    updateActiveRuleCount(getActiveRuleCount());
-    const filterStats = await getFilterListStats();
-    updateFilterListCount(filterStats.listCount);
-    
-    console.log('[Privacy] Privacy protection enabled');
-    
-  } catch (error) {
-    console.error('[Privacy] Failed to enable privacy protection:', error);
-    throw error;
-  }
+  } catch (error) {}
 }
 
-/**
- * Initialize cosmetic rules for element hiding
- */
-async function initializeCosmeticRules(): Promise<void> {
-  console.log('[Privacy] Initializing cosmetic rules...');
-  
-  try {
-    const rules = await fetchAllCosmeticRules();
-    console.log(`[Privacy] Loaded ${rules.generic.length} generic cosmetic selectors`);
-  } catch (error) {
-    console.warn('[Privacy] Failed to initialize cosmetic rules:', error);
-    // Non-fatal - continue without cosmetic filtering
-  }
-}
-
-/**
- * Disable privacy protection
- */
 async function disablePrivacyProtection(): Promise<void> {
-  console.log('[Privacy] Disabling privacy protection...');
-  
   try {
-    // Disable request blocker
-    await disableBlocker();
-    
-    // Shutdown cookie manager
     shutdownCookieManager();
-    
-    // Remove header rules
+
     await removeHeaderRules();
-    
-    // Update metrics
-    updateActiveRuleCount(0);
-    
-    console.log('[Privacy] Privacy protection disabled');
-    
   } catch (error) {
-    console.error('[Privacy] Failed to disable privacy protection:', error);
     throw error;
   }
 }
 
-/**
- * Toggle privacy protection on/off
- */
 export async function togglePrivacyProtection(enabled: boolean): Promise<void> {
   const settings = await getPrivacySettings();
   settings.enabled = enabled;
   await setPrivacySettings(settings);
-  
+
   if (enabled && !isEnabled) {
-    await enablePrivacyProtection();
+    await enablePrivacyProtectionFeatures();
     isEnabled = true;
   } else if (!enabled && isEnabled) {
     await disablePrivacyProtection();
@@ -215,27 +161,45 @@ export async function togglePrivacyProtection(enabled: boolean): Promise<void> {
   }
 }
 
-/**
- * Get privacy settings
- */
+export async function toggleAdBlocker(enabled: boolean): Promise<void> {
+  const settings = await getPrivacySettings();
+  settings.adBlockerEnabled = enabled;
+  await setPrivacySettings(settings);
+
+  await setAdblockerEnabled(enabled);
+
+  await updateActiveRules();
+
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id) {
+        chrome.tabs
+          .sendMessage(tab.id, {
+            type: 'AD_BLOCKER_TOGGLED',
+            payload: { enabled },
+          })
+          .catch(() => {});
+      }
+    }
+  } catch (error) {}
+}
+
+export async function getAdBlockerStatus(): Promise<boolean> {
+  return isAdblockerEnabled();
+}
+
 export async function getPrivacySettings(): Promise<PrivacySettings> {
   const settings = await storage.get('privacySettings');
   return settings || DEFAULT_PRIVACY_SETTINGS;
 }
 
-/**
- * Update privacy settings
- */
-export async function setPrivacySettings(
-  settings: Partial<PrivacySettings>
-): Promise<void> {
+export async function setPrivacySettings(settings: Partial<PrivacySettings>): Promise<void> {
   const current = await getPrivacySettings();
   const updated = { ...current, ...settings };
   await storage.set('privacySettings', updated);
-  
-  // If already enabled, refresh components as needed
+
   if (isEnabled) {
-    // Check if we need to update header rules
     if (
       settings.headerMinimization !== undefined ||
       settings.sendGPC !== undefined ||
@@ -246,21 +210,15 @@ export async function setPrivacySettings(
   }
 }
 
-/**
- * Set up listener for storage changes
- * Enables reactive updates when settings change
- */
 function setupStorageListener(): void {
   storage.onChange(async (changes) => {
-    // React to privacy settings changes
     if (changes.privacySettings?.newValue) {
       const newSettings = changes.privacySettings.newValue;
       const oldSettings = changes.privacySettings.oldValue;
-      
-      // Handle enable/disable toggle
+
       if (newSettings.enabled !== oldSettings?.enabled) {
         if (newSettings.enabled && !isEnabled) {
-          await enablePrivacyProtection();
+          await enablePrivacyProtectionFeatures();
           isEnabled = true;
         } else if (!newSettings.enabled && isEnabled) {
           await disablePrivacyProtection();
@@ -268,14 +226,12 @@ function setupStorageListener(): void {
         }
       }
     }
-    
-    // React to feature flag changes
+
     if (changes.featureFlags?.newValue) {
       const privacyEnabled = changes.featureFlags.newValue.privacy;
       const wasEnabled = changes.featureFlags.oldValue?.privacy;
-      
+
       if (privacyEnabled !== wasEnabled) {
-        // Sync privacy settings with feature flag
         const settings = await getPrivacySettings();
         if (settings.enabled !== privacyEnabled) {
           await togglePrivacyProtection(privacyEnabled);
@@ -285,175 +241,265 @@ function setupStorageListener(): void {
   });
 }
 
-/**
- * Refresh filter lists and update blocking rules
- */
 export async function refreshFilterLists(force = false): Promise<void> {
   if (!isEnabled) {
-    console.log('[Privacy] Cannot refresh - privacy not enabled');
     return;
   }
-  
-  await refreshBlockerRules(force);
-  
-  // Update metrics
-  updateActiveRuleCount(getActiveRuleCount());
-  const filterStats = await getFilterListStats();
-  updateFilterListCount(filterStats.listCount);
+
+  await reconcileAdblockerState();
+
+  const stats = await getAdblockerStats();
+  updateActiveRuleCount(stats.enabledRulesets.length);
 }
 
-/**
- * Check if filter lists should be refreshed and do so if needed
- */
 export async function checkAndRefreshFilterLists(): Promise<void> {
   if (!isEnabled) return;
-  
-  const needsRefresh = await needsFilterListRefresh();
-  if (needsRefresh) {
-    console.log('[Privacy] Filter lists need refresh');
-    await refreshFilterLists();
-  }
+  await reconcileAdblockerState();
 }
 
-/**
- * Get current privacy status
- */
 export async function getPrivacyStatus(): Promise<{
   isEnabled: boolean;
   isInitialized: boolean;
-  blockerStatus: Awaited<ReturnType<typeof getBlockerStatus>>;
+  adBlockerEnabled: boolean;
   headerStatus: Awaited<ReturnType<typeof getHeaderRuleStatus>>;
   cookieStats: Awaited<ReturnType<typeof getCookieStats>>;
   filterStats: Awaited<ReturnType<typeof getFilterListStats>>;
+  adblockerStats: Awaited<ReturnType<typeof getAdblockerStats>>;
   metrics: ReturnType<typeof getMetricsSummary>;
 }> {
   return {
     isEnabled,
     isInitialized,
-    blockerStatus: await getBlockerStatus(),
+    adBlockerEnabled: await isAdblockerEnabled(),
     headerStatus: await getHeaderRuleStatus(),
     cookieStats: await getCookieStats(),
     filterStats: await getFilterListStats(),
+    adblockerStats: await getAdblockerStats(),
     metrics: getMetricsSummary(),
   };
 }
 
-/**
- * Handle messages from popup/settings/content scripts
- */
-export async function handlePrivacyMessage(
-  type: string,
-  payload: unknown
-): Promise<unknown> {
+export const FILTERING_LEVEL_RULESETS: Record<FilteringLevel, readonly string[]> = {
+  off: [],
+  minimal: ['ublock-filters'],
+  basic: ['ublock-filters', 'easylist'],
+  optimal: DEFAULT_RULESETS,
+  complete: ALL_RULESETS,
+};
+
+export async function setFilteringLevel(level: FilteringLevel): Promise<void> {
+  const targetRulesets = FILTERING_LEVEL_RULESETS[level];
+
+  if (level === 'off') {
+    await disableAllRulesets();
+    await setAdblockerEnabled(false);
+  } else {
+    await setAdblockerEnabled(true);
+    await enableRulesets([...targetRulesets]);
+  }
+
+  await storage.set('filteringLevel', level);
+
+  await updateActiveRules();
+}
+
+export async function getFilteringLevel(): Promise<FilteringLevel> {
+  const level = await storage.get('filteringLevel');
+  return level || 'optimal';
+}
+
+export async function getRulesetStats(): Promise<{
+  enabledRulesets: string[];
+  availableRulesets: string[];
+  filteringLevel: FilteringLevel;
+  dynamicRuleCount: number;
+  availableStaticSlots: number;
+}> {
+  const adblockerStats = await getAdblockerStats();
+  const filteringLevel = await getFilteringLevel();
+
+  let availableSlots = 0;
+  try {
+    availableSlots = await chrome.declarativeNetRequest.getAvailableStaticRuleCount();
+  } catch {}
+
+  return {
+    enabledRulesets: adblockerStats.enabledRulesets,
+    availableRulesets: [...ALL_RULESETS],
+    filteringLevel,
+    dynamicRuleCount: adblockerStats.dynamicRuleCount,
+    availableStaticSlots: availableSlots,
+  };
+}
+
+export async function enableRuleset(rulesetId: string): Promise<void> {
+  const current = await getEnabledRulesets();
+  if (!current.includes(rulesetId)) {
+    await enableRulesets([...current, rulesetId]);
+    await updateActiveRules();
+  }
+}
+
+export async function disableRuleset(rulesetId: string): Promise<void> {
+  const current = await getEnabledRulesets();
+  const filtered = current.filter((id) => id !== rulesetId);
+  await enableRulesets(filtered);
+  await updateActiveRules();
+}
+
+export async function toggleRuleset(rulesetId: string): Promise<boolean> {
+  const current = await getEnabledRulesets();
+  const isCurrentlyEnabled = current.includes(rulesetId);
+
+  if (isCurrentlyEnabled) {
+    await disableRuleset(rulesetId);
+    return false;
+  } else {
+    await enableRuleset(rulesetId);
+    return true;
+  }
+}
+
+export async function isRulesetEnabled(rulesetId: string): Promise<boolean> {
+  const enabled = await getEnabledRulesets();
+  return enabled.includes(rulesetId);
+}
+
+export async function resetRulesets(): Promise<void> {
+  await setFilteringLevel('optimal');
+}
+
+export async function enableAllStaticRulesets(): Promise<void> {
+  await enableRulesets([...DEFAULT_RULESETS]);
+}
+
+export async function disableAllStaticRulesets(): Promise<void> {
+  await disableAllRulesets();
+}
+
+export async function handlePrivacyMessage(type: string, payload: unknown): Promise<unknown> {
   switch (type) {
     case 'GET_PRIVACY_SETTINGS':
       return getPrivacySettings();
-      
+
     case 'SET_PRIVACY_SETTINGS':
       await setPrivacySettings(payload as Partial<PrivacySettings>);
       return { success: true };
-      
+
+    case 'GET_AD_BLOCKER_STATUS':
+      return getAdBlockerStatus();
+
+    case 'SET_AD_BLOCKER_STATUS': {
+      const { enabled } = payload as { enabled: boolean };
+      await toggleAdBlocker(enabled);
+      return { success: true };
+    }
+
+    case 'GET_FILTERING_LEVEL':
+      return getFilteringLevel();
+
+    case 'SET_FILTERING_LEVEL': {
+      const { level } = payload as { level: FilteringLevel };
+      await setFilteringLevel(level);
+      return { success: true };
+    }
+
+    case 'GET_RULESET_STATS':
+      return getRulesetStats();
+
     case 'GET_SITE_PRIVACY_MODE':
       return getSiteMode((payload as { domain: string }).domain);
-      
+
     case 'SET_SITE_PRIVACY_MODE': {
-      const { domain, mode } = payload as { domain: string; mode: 'normal' | 'strict' | 'disabled' };
+      const { domain, mode } = payload as {
+        domain: string;
+        mode: 'normal' | 'strict' | 'disabled';
+      };
       await setSiteMode(domain, mode);
       return { success: true };
     }
-      
+
     case 'GET_PRIVACY_METRICS':
       return getMetrics();
-      
+
     case 'GET_PRIVACY_STATUS':
       return getPrivacyStatus();
-      
+
     case 'REFRESH_FILTER_LISTS':
       await refreshFilterLists(true);
       return { success: true };
-      
-    case 'ADD_FILTER_LIST': {
-      const { url } = payload as { url: string };
-      await addFilterListUrl(url);
-      if (isEnabled) {
-        await refreshFilterLists();
-      }
-      return { success: true };
-    }
-      
-    case 'REMOVE_FILTER_LIST': {
-      const { url } = payload as { url: string };
-      await removeFilterListUrl(url);
-      if (isEnabled) {
-        await refreshFilterLists();
-      }
-      return { success: true };
-    }
-      
+
     case 'GET_ALL_SITE_SETTINGS':
       return getAllSiteSettings();
-      
+
     case 'GET_FILTER_LIST_STATS':
       return getFilterListStats();
-      
+
     case 'GET_BLOCKED_REQUESTS':
       return getMetrics().recentBlocked;
-    
-    case 'GET_COSMETIC_RULES': {
+
+    case 'ADD_TO_ALLOWLIST': {
       const { domain } = payload as { domain: string };
-      const selectors = await getCosmeticRulesForDomain(domain);
-      return { selectors };
+      await addToAllowlist(domain);
+      return { success: true };
     }
-      
+
+    case 'REMOVE_FROM_ALLOWLIST': {
+      const { domain } = payload as { domain: string };
+      await removeFromAllowlist(domain);
+      return { success: true };
+    }
+
+    case 'IS_DOMAIN_ALLOWLISTED': {
+      const { domain } = payload as { domain: string };
+      return isDomainAllowlisted(domain);
+    }
+
+    case 'GET_ALLOWLIST':
+      return getAllowlist();
+
+    case 'GET_COSMETIC_RULES': {
+      return { selectors: [] };
+    }
+
     default:
       throw new Error(`Unknown privacy message type: ${type}`);
   }
 }
 
-// Re-export commonly used functions for convenience
-export { 
-  getSiteMode, 
-  setSiteMode,
-  getAllSiteSettings,
-} from './siteSettings';
+export { getSiteMode, setSiteMode, getAllSiteSettings } from './siteSettings';
 
-export { 
-  getMetrics, 
-  getMetricsSummary,
-  logScriptIntercepted,
-  logRequestModified,
-} from './metrics';
+export { getMetrics, getMetricsSummary, logScriptIntercepted, logRequestModified } from './metrics';
 
-export {
-  getFilterListStats,
-  addFilterListUrl,
-  removeFilterListUrl,
-  getCosmeticRulesForDomain,
-  getCachedCosmeticRules,
-} from './filterListManager';
+export { getTabBlockCount, getTotalBlockCount } from './blockCountTracker';
+
+export { getFilterListStats } from './filterListManager';
+
+export { getCookieStats, manualCleanupCookies } from './cookieManager';
+
+export { getHeaderRuleStatus, toggleHeaderFeature } from './headerRules';
+
+export { extractDomain, normalizeDomain, isSameDomain, matchesDomain } from './utils';
+
+export { getSiteFixForDomain, hasSiteFix } from './siteFixes';
 
 export {
-  getCookieStats,
-  manualCleanupCookies,
-} from './cookieManager';
+  MODE_NONE,
+  MODE_BASIC,
+  MODE_OPTIMAL,
+  MODE_COMPLETE,
+  ALL_RULESETS,
+  DEFAULT_RULESETS,
+  addToAllowlist,
+  removeFromAllowlist,
+  isDomainAllowlisted,
+  getAllowlist,
+} from '../aintivirusAdblocker';
 
-export {
-  getBlockerStatus,
-  getBlockedCount,
-} from './requestBlocker';
+export type { FilteringMode, RulesetId } from '../aintivirusAdblocker';
+export type { FilteringLevel } from '@shared/types';
 
-export {
-  getHeaderRuleStatus,
-  toggleHeaderFeature,
-} from './headerRules';
+export const ALL_ADBLOCKER_RULESETS = ALL_RULESETS;
+export type StaticRulesetId = string;
 
-export {
-  extractDomain,
-  normalizeDomain,
-  isSameDomain,
-  matchesDomain,
-} from './utils';
-
-// Export types
 export * from './types';
-

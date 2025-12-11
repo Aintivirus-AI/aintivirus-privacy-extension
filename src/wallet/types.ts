@@ -1,24 +1,24 @@
-/**
- * AINTIVIRUS Wallet Module - Type Definitions
- * 
- * SECURITY NOTE: This file defines the data structures for the wallet.
- * Sensitive types are clearly marked. Never log or expose sensitive data.
- */
-
 import { PublicKey } from '@solana/web3.js';
 
-// ============================================
-// NETWORK CONFIGURATION
-// ============================================
-
-/**
- * Supported Solana networks
- */
+// Shared wallet type definitions, enums, and constants used across Solana/EVM flows.
 export type SolanaNetwork = 'mainnet-beta' | 'devnet';
 
 /**
- * RPC endpoint configuration
+ * Build-time injected API key for Helius Solana RPC.
+ *
+ * - In development, you can provide it via a local `.env` file (not committed).
+ * - In CI/production builds, inject it as an environment variable.
  */
+const HELIUS_API_KEY = process.env.AINTIVIRUS_HELIUS_API_KEY;
+
+function getHeliusRpcUrl(network: SolanaNetwork): string | null {
+  if (!HELIUS_API_KEY) return null;
+
+  const base =
+    network === 'devnet' ? 'https://devnet.helius-rpc.com/' : 'https://mainnet.helius-rpc.com/';
+  return `${base}?api-key=${encodeURIComponent(HELIUS_API_KEY)}`;
+}
+
 export interface NetworkConfig {
   name: SolanaNetwork;
   rpcUrl: string;
@@ -26,234 +26,298 @@ export interface NetworkConfig {
   explorerUrl: string;
 }
 
-/**
- * Default RPC endpoints (public endpoints, no API keys)
- * SECURITY: These are public endpoints. For production, consider dedicated RPC.
- * 
- * Using multiple fallback endpoints because public Solana RPCs have rate limits.
- */
 export const NETWORK_CONFIGS: Record<SolanaNetwork, NetworkConfig> = {
   'mainnet-beta': {
     name: 'mainnet-beta',
-    rpcUrl: 'https://solana-mainnet.g.alchemy.com/v2/demo',
-    fallbackRpcUrls: [
-      'https://rpc.ankr.com/solana',
-      'https://solana.public-rpc.com',
-      'https://api.mainnet-beta.solana.com',
-    ],
+
+    rpcUrl: getHeliusRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
+    fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://solana-mainnet.rpc.extrnode.com'],
     explorerUrl: 'https://explorer.solana.com',
   },
-  'devnet': {
+  devnet: {
     name: 'devnet',
-    rpcUrl: 'https://rpc.ankr.com/solana_devnet',
-    fallbackRpcUrls: [
-      'https://api.devnet.solana.com',
-    ],
+
+    rpcUrl: getHeliusRpcUrl('devnet') ?? 'https://rpc.ankr.com/solana_devnet',
+    fallbackRpcUrls: ['https://rpc.ankr.com/solana_devnet'],
     explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
   },
 };
 
-// ============================================
-// WALLET STATE
-// ============================================
-
-/**
- * Wallet lock state
- */
 export type WalletLockState = 'locked' | 'unlocked' | 'uninitialized';
 
-/**
- * Public wallet state (safe to expose to UI)
- */
+export type ChainType = 'solana' | 'evm';
+
+export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base';
+
+export type NetworkEnvironment = 'mainnet' | 'testnet';
+
 export interface WalletState {
-  /** Current lock state */
   lockState: WalletLockState;
-  /** Public address (base58 encoded) - safe to display */
+
   publicAddress: string | null;
-  /** Currently selected network */
+
   network: SolanaNetwork;
+
+  activeWalletId: string | null;
+
+  activeWalletLabel: string | null;
+
+  activeAccountId: string | null;
+
+  activeAccountName: string | null;
+
+  walletCount: number;
+
+  accountCount: number;
+
+  activeChain: ChainType;
+
+  activeEVMChain: EVMChainId | null;
+
+  evmAddress: string | null;
+
+  networkEnvironment: NetworkEnvironment;
+
+  isWatchOnly: boolean;
 }
 
-/**
- * Wallet settings stored in chrome.storage
- */
+export const MAX_RECENT_RECIPIENTS = 10;
+
+export type RecentRecipientChainId = string;
+
+export interface RecentRecipient {
+  address: string;
+
+  label?: string;
+
+  lastUsedAt: number;
+
+  useCount: number;
+}
+
+export type RecentRecipientsMap = Record<RecentRecipientChainId, RecentRecipient[]>;
+
 export interface WalletSettings {
-  /** Selected network */
   network: SolanaNetwork;
-  /** Custom RPC URL override (optional) */
+
   customRpcUrl?: string;
-  /** Auto-lock timeout in minutes (0 = never) */
+
   autoLockMinutes: number;
-  /** Custom tokens added by user */
+
   customTokens?: CustomToken[];
+
+  hiddenTokens?: string[];
+
+  activeChain?: ChainType;
+
+  activeEVMChain?: EVMChainId | null;
+
+  networkEnvironment?: NetworkEnvironment;
+
+  customEVMTokens?: Partial<Record<EVMChainId, string[]>>;
+
+  recentRecipients?: RecentRecipientsMap;
 }
 
-/**
- * Default wallet settings
- */
 export const DEFAULT_WALLET_SETTINGS: WalletSettings = {
   network: 'mainnet-beta',
   autoLockMinutes: 15,
   customTokens: [],
+  activeChain: 'solana',
+  activeEVMChain: 'ethereum',
+  networkEnvironment: 'mainnet',
+  recentRecipients: {},
 };
 
-// ============================================
-// RPC HEALTH TRACKING
-// ============================================
-
-/**
- * Health data for a single RPC endpoint
- */
 export interface RpcEndpointHealth {
-  /** RPC endpoint URL */
   url: string;
-  /** Average latency in milliseconds (-1 if never measured) */
+
   latencyMs: number;
-  /** Timestamp of last successful call */
+
   lastSuccess: number;
-  /** Timestamp of last failed call (null if never failed) */
+
   lastFailure: number | null;
-  /** Number of consecutive or recent failures */
+
   failureCount: number;
-  /** Total successful calls */
+
   successCount: number;
 }
 
-/**
- * Default RPC health data
- */
 export const DEFAULT_RPC_HEALTH: Record<string, RpcEndpointHealth> = {};
 
-// ============================================
-// ENCRYPTED STORAGE
-// ============================================
-
-/**
- * Encrypted vault structure stored in chrome.storage
- * 
- * SECURITY: The vault contains the encrypted mnemonic/private key.
- * - salt: Used for PBKDF2 key derivation (not secret, but unique per wallet)
- * - iv: Initialization vector for AES-GCM (not secret, but unique per encryption)
- * - ciphertext: The encrypted mnemonic (SECRET - only decryptable with password)
- * - publicKey: Stored for quick access without decryption (not secret)
- */
 export interface EncryptedVault {
-  /** PBKDF2 salt (base64 encoded) */
   salt: string;
-  /** AES-GCM initialization vector (base64 encoded) */
+
   iv: string;
-  /** Encrypted mnemonic (base64 encoded) */
+
   ciphertext: string;
-  /** Public key for display without unlock (base58 encoded) */
+
   publicKey: string;
-  /** Vault version for future migrations */
+
   version: number;
-  /** Creation timestamp */
+
   createdAt: number;
 }
 
-/**
- * Current vault version
- */
 export const VAULT_VERSION = 1;
+export const MULTI_WALLET_VAULT_VERSION = 2;
 
-// ============================================
-// TRANSACTION TYPES
-// ============================================
+export const MAX_WALLETS = 100;
 
-/**
- * Unsigned transaction for signing
- * 
- * SECURITY: This represents a transaction before signing.
- * The signing operation requires the private key in memory.
- */
+export const MAX_WALLET_LABEL_LENGTH = 32;
+
+export interface WalletEntry {
+  id: string;
+
+  label: string;
+
+  publicKey: string;
+
+  evmAddress?: string;
+
+  createdAt: number;
+
+  derivationIndex: number;
+}
+
+export interface MultiWalletVault {
+  version: 2;
+
+  activeWalletId: string | null;
+
+  wallets: WalletEntry[];
+
+  masterSalt: string;
+
+  masterVerifier: string;
+
+  createdAt: number;
+}
+
+export interface EncryptedWalletData {
+  [walletId: string]: {
+    salt: string;
+
+    iv: string;
+
+    ciphertext: string;
+  };
+}
+
+export const DEFAULT_MULTI_WALLET_VAULT: Omit<MultiWalletVault, 'masterSalt' | 'masterVerifier'> = {
+  version: 2,
+  activeWalletId: null,
+  wallets: [],
+  createdAt: 0,
+};
+
+export const HD_WALLET_VAULT_VERSION = 3;
+
+export const MAX_ACCOUNTS_PER_WALLET = 20;
+
+export const MAX_ACCOUNT_NAME_LENGTH = 32;
+
+export type EVMDerivationPathType = 'standard' | 'ledger-live';
+
+export type SolanaDerivationPathType = 'standard' | 'legacy';
+
+export interface DerivedAccount {
+  id: string;
+
+  name: string;
+
+  index: number;
+
+  solanaAddress: string;
+
+  evmAddress: string;
+
+  createdAt: number;
+}
+
+export interface WatchOnlyAccount {
+  id: string;
+
+  name: string;
+
+  chainType: 'solana' | 'evm';
+
+  address: string;
+
+  createdAt: number;
+}
+
+export interface WalletEntryV3 {
+  id: string;
+
+  label: string;
+
+  accounts: DerivedAccount[];
+
+  evmPathType: EVMDerivationPathType;
+
+  solanaPathType: SolanaDerivationPathType;
+
+  nextAccountIndex: number;
+
+  createdAt: number;
+}
+
+export interface MultiWalletVaultV3 {
+  version: 3;
+
+  activeWalletId: string | null;
+
+  activeAccountId: string | null;
+
+  wallets: WalletEntryV3[];
+
+  watchOnlyAccounts: WatchOnlyAccount[];
+
+  masterSalt: string;
+
+  masterVerifier: string;
+
+  createdAt: number;
+}
+
 export interface UnsignedTransaction {
-  /** Serialized transaction (base64) */
   serializedTransaction: string;
-  /** Human-readable description */
+
   description: string;
-  /** Estimated fee in lamports */
+
   estimatedFee: number;
 }
 
-/**
- * Signed transaction ready for broadcast
- * 
- * SECURITY: Contains signed data but NOT the private key.
- * Safe to store temporarily for broadcast.
- */
 export interface SignedTransaction {
-  /** Signed serialized transaction (base64) */
   signedTransaction: string;
-  /** Transaction signature (base58) */
+
   signature: string;
 }
 
-// ============================================
-// BALANCE AND ACCOUNT INFO
-// ============================================
-
-/**
- * Account balance information
- */
 export interface WalletBalance {
-  /** Balance in lamports */
   lamports: number;
-  /** Balance in SOL (lamports / 1e9) */
+
   sol: number;
-  /** Last updated timestamp */
+
   lastUpdated: number;
 }
 
-// ============================================
-// DERIVATION CONSTANTS
-// ============================================
-
-/**
- * BIP-44 derivation path for Solana
- * m/44'/501'/0'/0'
- * 
- * - 44' = BIP-44 purpose
- * - 501' = Solana coin type
- * - 0' = Account index
- * - 0' = Change (external)
- */
 export const SOLANA_DERIVATION_PATH = "m/44'/501'/0'/0'";
 
-/**
- * Mnemonic word count (24 words = 256 bits of entropy)
- */
 export const MNEMONIC_WORD_COUNT = 24;
 
-// ============================================
-// CRYPTO CONSTANTS
-// ============================================
+export const PBKDF2_ITERATIONS_V1 = 100000;
+export const PBKDF2_ITERATIONS_V2 = 310000;
 
-/**
- * PBKDF2 iterations for password-based key derivation
- * 
- * SECURITY: 100,000 iterations provides reasonable protection against
- * brute-force attacks while keeping unlock times acceptable (~100-300ms).
- */
-export const PBKDF2_ITERATIONS = 100000;
+export const PBKDF2_ITERATIONS = PBKDF2_ITERATIONS_V2;
 
-/**
- * Salt length in bytes
- */
+export type KdfVersion = 1 | 2;
+
 export const SALT_LENGTH = 32;
 
-/**
- * AES-GCM IV length in bytes
- */
 export const IV_LENGTH = 12;
 
-// ============================================
-// ERROR TYPES
-// ============================================
-
-/**
- * Wallet-specific error codes
- */
 export enum WalletErrorCode {
   WALLET_NOT_INITIALIZED = 'WALLET_NOT_INITIALIZED',
   WALLET_ALREADY_EXISTS = 'WALLET_ALREADY_EXISTS',
@@ -265,7 +329,7 @@ export enum WalletErrorCode {
   RPC_ERROR = 'RPC_ERROR',
   SIGNING_FAILED = 'SIGNING_FAILED',
   NETWORK_ERROR = 'NETWORK_ERROR',
-  // Phase 6 additions
+
   INSUFFICIENT_FUNDS = 'INSUFFICIENT_FUNDS',
   INVALID_RECIPIENT = 'INVALID_RECIPIENT',
   TRANSACTION_FAILED = 'TRANSACTION_FAILED',
@@ -273,30 +337,33 @@ export enum WalletErrorCode {
   SIMULATION_FAILED = 'SIMULATION_FAILED',
   INVALID_AMOUNT = 'INVALID_AMOUNT',
   TOKEN_NOT_FOUND = 'TOKEN_NOT_FOUND',
+
+  MAX_WALLETS_REACHED = 'MAX_WALLETS_REACHED',
+  WALLET_NOT_FOUND = 'WALLET_NOT_FOUND',
+  INVALID_WALLET_LABEL = 'INVALID_WALLET_LABEL',
+  CANNOT_DELETE_LAST_WALLET = 'CANNOT_DELETE_LAST_WALLET',
+  MIGRATION_FAILED = 'MIGRATION_FAILED',
+  STORAGE_ERROR = 'STORAGE_ERROR',
+
+  ACCOUNT_NOT_FOUND = 'ACCOUNT_NOT_FOUND',
+  INVALID_ADDRESS = 'INVALID_ADDRESS',
+  ADDRESS_ALREADY_EXISTS = 'ADDRESS_ALREADY_EXISTS',
+  CANNOT_DELETE_LAST_ACCOUNT = 'CANNOT_DELETE_LAST_ACCOUNT',
+  MAX_ACCOUNTS_REACHED = 'MAX_ACCOUNTS_REACHED',
+  INVALID_ACCOUNT_NAME = 'INVALID_ACCOUNT_NAME',
 }
 
-/**
- * Wallet error with code for programmatic handling
- */
 export class WalletError extends Error {
   constructor(
     public readonly code: WalletErrorCode,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = 'WalletError';
   }
 }
 
-// ============================================
-// MESSAGE TYPES (for background script communication)
-// ============================================
-
-/**
- * Wallet message types for inter-component communication
- */
 export type WalletMessageType =
-  // Wallet lifecycle
   | 'WALLET_CREATE'
   | 'WALLET_IMPORT'
   | 'WALLET_UNLOCK'
@@ -304,38 +371,62 @@ export type WalletMessageType =
   | 'WALLET_EXISTS'
   | 'WALLET_GET_STATE'
   | 'WALLET_DELETE'
-  // Balance and account
+  | 'WALLET_LIST'
+  | 'WALLET_ADD'
+  | 'WALLET_IMPORT_ADD'
+  | 'WALLET_SWITCH'
+  | 'WALLET_RENAME'
+  | 'WALLET_DELETE_ONE'
+  | 'WALLET_EXPORT_ONE'
+  | 'WALLET_GET_ACTIVE'
   | 'WALLET_GET_BALANCE'
   | 'WALLET_GET_ADDRESS'
   | 'WALLET_GET_ADDRESS_QR'
-  // Network
   | 'WALLET_SET_NETWORK'
   | 'WALLET_GET_NETWORK'
   | 'WALLET_GET_NETWORK_STATUS'
-  // Transaction signing (no send)
   | 'WALLET_SIGN_TRANSACTION'
   | 'WALLET_SIGN_MESSAGE'
-  // Settings
   | 'WALLET_GET_SETTINGS'
   | 'WALLET_SET_SETTINGS'
-  // Phase 6: Transactions
   | 'WALLET_SEND_SOL'
+  | 'WALLET_SEND_SPL_TOKEN'
   | 'WALLET_ESTIMATE_FEE'
-  // Phase 6: History
   | 'WALLET_GET_HISTORY'
-  // Phase 6: Tokens
   | 'WALLET_GET_TOKENS'
   | 'WALLET_ADD_TOKEN'
   | 'WALLET_REMOVE_TOKEN'
-  // RPC Health & Configuration
+  | 'WALLET_GET_POPULAR_TOKENS'
+  | 'WALLET_GET_TOKEN_METADATA'
   | 'WALLET_GET_RPC_HEALTH'
   | 'WALLET_ADD_RPC'
   | 'WALLET_REMOVE_RPC'
-  | 'WALLET_TEST_RPC';
+  | 'WALLET_TEST_RPC'
+  | 'WALLET_SET_CHAIN'
+  | 'WALLET_SET_EVM_CHAIN'
+  | 'WALLET_GET_EVM_BALANCE'
+  | 'WALLET_SEND_ETH'
+  | 'WALLET_SEND_ERC20'
+  | 'WALLET_GET_EVM_TOKENS'
+  | 'WALLET_GET_EVM_HISTORY'
+  | 'WALLET_ESTIMATE_EVM_FEE'
+  | 'WALLET_GET_EVM_ADDRESS'
+  | 'EVM_GET_PENDING_TXS'
+  | 'EVM_SPEED_UP_TX'
+  | 'EVM_CANCEL_TX'
+  | 'EVM_GET_GAS_PRESETS'
+  | 'EVM_ESTIMATE_REPLACEMENT_FEE'
+  | 'WALLET_GET_ALLOWANCES'
+  | 'WALLET_ESTIMATE_REVOKE_FEE'
+  | 'WALLET_REVOKE_ALLOWANCE'
+  | 'WALLET_IMPORT_PRIVATE_KEY'
+  | 'WALLET_EXPORT_PRIVATE_KEY'
+  // Jupiter Swap
+  | 'WALLET_SWAP_QUOTE'
+  | 'WALLET_SWAP_EXECUTE'
+  | 'WALLET_SWAP_AVAILABLE'
+  | 'WALLET_SWAP_REFERRAL_STATUS';
 
-/**
- * Payload types for wallet messages
- */
 export interface WalletMessagePayloads {
   WALLET_CREATE: { password: string };
   WALLET_IMPORT: { mnemonic: string; password: string };
@@ -344,7 +435,17 @@ export interface WalletMessagePayloads {
   WALLET_EXISTS: undefined;
   WALLET_GET_STATE: undefined;
   WALLET_DELETE: { password: string };
-  WALLET_GET_BALANCE: undefined;
+
+  WALLET_LIST: undefined;
+  WALLET_ADD: { password?: string; label?: string };
+  WALLET_IMPORT_ADD: { mnemonic: string; password?: string; label?: string };
+  WALLET_SWITCH: { walletId: string; password?: string };
+  WALLET_RENAME: { walletId: string; label: string };
+  WALLET_DELETE_ONE: { walletId: string; password: string };
+  WALLET_EXPORT_ONE: { walletId: string; password: string };
+  WALLET_GET_ACTIVE: undefined;
+
+  WALLET_GET_BALANCE: { forceRefresh?: boolean };
   WALLET_GET_ADDRESS: undefined;
   WALLET_GET_ADDRESS_QR: { size?: number };
   WALLET_SET_NETWORK: { network: SolanaNetwork };
@@ -354,36 +455,111 @@ export interface WalletMessagePayloads {
   WALLET_SIGN_MESSAGE: { message: string };
   WALLET_GET_SETTINGS: undefined;
   WALLET_SET_SETTINGS: Partial<WalletSettings>;
-  // Phase 6: Transactions
+
   WALLET_SEND_SOL: SendTransactionParams;
+  WALLET_SEND_SPL_TOKEN: {
+    recipient: string;
+    amount: number;
+    mint: string;
+    decimals: number;
+    tokenAccount?: string;
+  };
   WALLET_ESTIMATE_FEE: { recipient: string; amountSol: number };
-  // Phase 6: History
-  WALLET_GET_HISTORY: { limit?: number; before?: string };
-  // Phase 6: Tokens
-  WALLET_GET_TOKENS: undefined;
-  WALLET_ADD_TOKEN: { mint: string; symbol?: string; name?: string };
+
+  WALLET_GET_HISTORY: { limit?: number; before?: string; forceRefresh?: boolean };
+
+  WALLET_GET_TOKENS: { forceRefresh?: boolean };
+  WALLET_ADD_TOKEN: { mint: string; symbol?: string; name?: string; logoUri?: string };
   WALLET_REMOVE_TOKEN: { mint: string };
-  // RPC Health & Configuration
+  WALLET_GET_POPULAR_TOKENS: { chainType?: 'solana' | 'evm' } | undefined;
+  WALLET_GET_TOKEN_METADATA: { mint: string };
+
   WALLET_GET_RPC_HEALTH: undefined;
   WALLET_ADD_RPC: { network: SolanaNetwork; url: string };
   WALLET_REMOVE_RPC: { network: SolanaNetwork; url: string };
   WALLET_TEST_RPC: { url: string };
+
+  WALLET_SET_CHAIN: { chain: ChainType; evmChainId?: EVMChainId | null };
+  WALLET_SET_EVM_CHAIN: { evmChainId: EVMChainId };
+  WALLET_GET_EVM_BALANCE: { evmChainId?: EVMChainId | null };
+  WALLET_SEND_ETH: EVMSendParams;
+  WALLET_SEND_ERC20: EVMTokenSendParams;
+  WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | null; forceRefresh?: boolean };
+  WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | null; limit?: number };
+  WALLET_ESTIMATE_EVM_FEE: {
+    evmChainId?: EVMChainId | null;
+    recipient: string;
+    amount: string;
+    tokenAddress?: string;
+  };
+  WALLET_GET_EVM_ADDRESS: undefined;
+
+  EVM_GET_PENDING_TXS: { evmChainId?: EVMChainId; address?: string };
+  EVM_SPEED_UP_TX: {
+    txHash: string;
+    bumpPercent?: number;
+    customMaxFeePerGas?: string;
+    customMaxPriorityFeePerGas?: string;
+  };
+  EVM_CANCEL_TX: { txHash: string; bumpPercent?: number };
+  EVM_GET_GAS_PRESETS: { evmChainId: EVMChainId; txHash: string };
+  EVM_ESTIMATE_REPLACEMENT_FEE: { txHash: string; bumpPercent?: number };
+
+  WALLET_GET_ALLOWANCES: { evmChainId: EVMChainId; forceRefresh?: boolean };
+  WALLET_ESTIMATE_REVOKE_FEE: {
+    evmChainId: EVMChainId;
+    tokenAddress: string;
+    spenderAddress: string;
+  };
+  WALLET_REVOKE_ALLOWANCE: { evmChainId: EVMChainId; tokenAddress: string; spenderAddress: string };
+
+  WALLET_IMPORT_PRIVATE_KEY: { privateKey: string; password?: string; label?: string };
+  WALLET_EXPORT_PRIVATE_KEY: { walletId: string; password: string; chain: 'solana' | 'evm' };
+  // Jupiter Swap
+  WALLET_SWAP_QUOTE: {
+    inputMint: string;
+    outputMint: string;
+    inputAmount: string;
+    inputDecimals: number;
+    outputDecimals: number;
+    slippageBps?: number;
+  };
+  WALLET_SWAP_EXECUTE: {
+    inputMint: string;
+    outputMint: string;
+    inputAmount: string;
+    inputDecimals: number;
+    slippageBps?: number;
+  };
+  WALLET_SWAP_AVAILABLE: undefined;
+  WALLET_SWAP_REFERRAL_STATUS: undefined;
 }
 
-/**
- * Response types for wallet messages
- */
 export interface WalletMessageResponses {
-  WALLET_CREATE: { mnemonic: string; publicAddress: string };
-  WALLET_IMPORT: { publicAddress: string };
+  WALLET_CREATE: { mnemonic: string; publicAddress: string; walletId: string };
+  WALLET_IMPORT: { publicAddress: string; walletId: string };
   WALLET_UNLOCK: { publicAddress: string };
   WALLET_LOCK: void;
   WALLET_EXISTS: boolean;
   WALLET_GET_STATE: WalletState;
   WALLET_DELETE: void;
+
+  WALLET_LIST: WalletEntry[];
+  WALLET_ADD: { mnemonic: string; publicAddress: string; walletId: string };
+  WALLET_IMPORT_ADD: { publicAddress: string; walletId: string };
+  WALLET_SWITCH: { publicAddress: string; walletId: string };
+  WALLET_RENAME: void;
+  WALLET_DELETE_ONE: void;
+  WALLET_EXPORT_ONE: { mnemonic: string };
+  WALLET_GET_ACTIVE: {
+    walletId: string | null;
+    publicAddress: string | null;
+    label: string | null;
+  };
+
   WALLET_GET_BALANCE: WalletBalance;
   WALLET_GET_ADDRESS: string;
-  WALLET_GET_ADDRESS_QR: string; // data URL
+  WALLET_GET_ADDRESS_QR: string;
   WALLET_SET_NETWORK: void;
   WALLET_GET_NETWORK: SolanaNetwork;
   WALLET_GET_NETWORK_STATUS: { connected: boolean; latency: number };
@@ -391,23 +567,49 @@ export interface WalletMessageResponses {
   WALLET_SIGN_MESSAGE: { signature: string };
   WALLET_GET_SETTINGS: WalletSettings;
   WALLET_SET_SETTINGS: void;
-  // Phase 6 additions
+
   WALLET_SEND_SOL: SendTransactionResult;
+  WALLET_SEND_SPL_TOKEN: SendTransactionResult;
   WALLET_ESTIMATE_FEE: FeeEstimate;
   WALLET_GET_HISTORY: TransactionHistoryResult;
   WALLET_GET_TOKENS: SPLTokenBalance[];
   WALLET_ADD_TOKEN: void;
   WALLET_REMOVE_TOKEN: void;
-  // RPC Health & Configuration
+
   WALLET_GET_RPC_HEALTH: RpcHealthSummary;
   WALLET_ADD_RPC: { success: boolean; error?: string };
   WALLET_REMOVE_RPC: void;
   WALLET_TEST_RPC: { success: boolean; latencyMs?: number; blockHeight?: number; error?: string };
+
+  WALLET_SET_CHAIN: void;
+  WALLET_SET_EVM_CHAIN: void;
+  WALLET_GET_EVM_BALANCE: EVMBalance;
+  WALLET_SEND_ETH: EVMTransactionResult;
+  WALLET_SEND_ERC20: EVMTransactionResult;
+  WALLET_GET_EVM_TOKENS: EVMTokenBalance[];
+  WALLET_GET_EVM_HISTORY: { transactions: any[]; hasMore: boolean };
+  WALLET_ESTIMATE_EVM_FEE: EVMFeeEstimate;
+  WALLET_GET_EVM_ADDRESS: string;
+
+  EVM_GET_PENDING_TXS: EVMPendingTxInfo[];
+  EVM_SPEED_UP_TX: EVMTransactionResult;
+  EVM_CANCEL_TX: EVMTransactionResult;
+  EVM_GET_GAS_PRESETS: EVMGasPresets;
+  EVM_ESTIMATE_REPLACEMENT_FEE: EVMReplacementFeeEstimate;
+
+  WALLET_GET_ALLOWANCES: EVMAllowanceDiscoveryResult;
+  WALLET_ESTIMATE_REVOKE_FEE: EVMRevokeFeeEstimate;
+  WALLET_REVOKE_ALLOWANCE: EVMTransactionResult;
+
+  WALLET_IMPORT_PRIVATE_KEY: { publicAddress: string; evmAddress: string; walletId: string };
+  WALLET_EXPORT_PRIVATE_KEY: { privateKey: string };
+  // Jupiter Swap
+  WALLET_SWAP_QUOTE: SwapQuoteResult;
+  WALLET_SWAP_EXECUTE: SwapExecuteResult;
+  WALLET_SWAP_AVAILABLE: boolean;
+  WALLET_SWAP_REFERRAL_STATUS: SwapReferralStatus;
 }
 
-/**
- * RPC health summary for UI display
- */
 export interface RpcHealthSummary {
   endpoints: (RpcEndpointHealth & { score: number; isCustom: boolean })[];
   bestEndpoint: string;
@@ -415,135 +617,156 @@ export interface RpcHealthSummary {
   unhealthyCount: number;
 }
 
-// ============================================
-// PHASE 6: TRANSACTION TYPES
-// ============================================
-
-/**
- * Direction of a transaction relative to the wallet
- */
-export type TransactionDirection = 'sent' | 'received' | 'unknown';
-
-/**
- * Status of a transaction
- */
-export type TransactionStatus = 'confirmed' | 'pending' | 'failed';
-
-/**
- * Parameters for sending SOL
- */
-export interface SendTransactionParams {
-  /** Recipient's public key (base58) */
-  recipient: string;
-  /** Amount to send in SOL */
-  amountSol: number;
-  /** Optional memo for the transaction */
-  memo?: string;
+// Jupiter Swap Types
+export interface SwapQuoteResult {
+  /** Input token mint address */
+  inputMint: string;
+  /** Output token mint address */
+  outputMint: string;
+  /** Input amount in smallest units */
+  inputAmount: string;
+  /** Output amount in smallest units */
+  outputAmount: string;
+  /** Formatted input amount for display */
+  inputAmountFormatted: string;
+  /** Formatted output amount for display */
+  outputAmountFormatted: string;
+  /** Minimum received amount considering slippage */
+  minimumReceivedFormatted: string;
+  /** Price impact percentage */
+  priceImpact: string;
+  /** Platform fee if referral is enabled */
+  platformFeeFormatted: string | null;
+  /** Route description (e.g., "Raydium → Orca") */
+  route: string;
+  /** Raw quote data for execution */
+  rawQuote: unknown;
 }
 
-/**
- * Result of sending a transaction
- */
-export interface SendTransactionResult {
-  /** Transaction signature (base58) */
+export interface SwapExecuteResult {
+  /** Transaction signature */
   signature: string;
   /** Explorer URL for the transaction */
   explorerUrl: string;
+  /** Input amount in smallest units */
+  inputAmount: string;
+  /** Output amount in smallest units */
+  outputAmount: string;
+  /** Input token mint */
+  inputMint: string;
+  /** Output token mint */
+  outputMint: string;
 }
 
-/**
- * Fee estimate for a transaction
- */
+export interface SwapReferralStatus {
+  /** Whether referral fees are enabled */
+  enabled: boolean;
+  /** Fee in basis points (e.g., 50 = 0.5%) */
+  feeBps: number;
+  /** Referral account public key if configured */
+  referralAccount: string | null;
+}
+
+export type TransactionDirection = 'sent' | 'received' | 'unknown';
+
+export type TransactionStatus = 'confirmed' | 'pending' | 'failed';
+
+export interface SendTransactionParams {
+  recipient: string;
+
+  amountSol: number;
+
+  memo?: string;
+}
+
+export interface SendTransactionResult {
+  signature: string;
+
+  explorerUrl: string;
+}
+
 export interface FeeEstimate {
-  /** Estimated fee in lamports */
   feeLamports: number;
-  /** Estimated fee in SOL */
+
   feeSol: number;
-  /** Priority fee (if applicable) */
+
   priorityFee: number;
 }
 
-/**
- * A single transaction history item
- */
 export interface TransactionHistoryItem {
-  /** Transaction signature (base58) */
   signature: string;
-  /** Block time (Unix timestamp in seconds) */
+
   timestamp: number | null;
-  /** Transaction direction relative to wallet */
+
   direction: TransactionDirection;
-  /** Amount transferred in lamports */
+
   amountLamports: number;
-  /** Amount transferred in SOL */
+
   amountSol: number;
-  /** Transaction status */
+
   status: TransactionStatus;
-  /** Fee paid in lamports */
+
   feeLamports: number;
-  /** Counterparty address (sender if received, recipient if sent) */
+
   counterparty: string | null;
-  /** Transaction type description */
+
   type: string;
-  /** Slot number */
+
   slot: number;
+
+  tokenInfo?: {
+    mint: string;
+
+    symbol?: string;
+
+    name?: string;
+
+    decimals: number;
+
+    amount: number;
+
+    logoUri?: string;
+  };
 }
 
-/**
- * Paginated transaction history result
- */
 export interface TransactionHistoryResult {
-  /** List of transactions */
   transactions: TransactionHistoryItem[];
-  /** Has more transactions available */
+
   hasMore: boolean;
-  /** Cursor for fetching next page (last signature) */
+
   cursor: string | null;
 }
 
-// ============================================
-// PHASE 6: SPL TOKEN TYPES
-// ============================================
-
-/**
- * SPL Token balance information
- */
 export interface SPLTokenBalance {
-  /** Token mint address (base58) */
   mint: string;
-  /** Token symbol (e.g., "USDC") */
+
   symbol: string;
-  /** Token name (e.g., "USD Coin") */
+
   name: string;
-  /** Token decimals */
+
   decimals: number;
-  /** Raw balance (in smallest units) */
+
   rawBalance: string;
-  /** UI balance (human-readable) */
+
   uiBalance: number;
-  /** Token account address */
+
   tokenAccount: string;
-  /** Logo URI (optional) */
+
   logoUri?: string;
 }
 
-/**
- * Custom token entry for manual addition
- */
 export interface CustomToken {
-  /** Token mint address (base58) */
   mint: string;
-  /** Custom symbol override */
+
   symbol?: string;
-  /** Custom name override */
+
   name?: string;
-  /** Added timestamp */
+
+  logoUri?: string;
+
   addedAt: number;
 }
 
-/**
- * Popular SPL tokens with metadata
- */
 export interface TokenMetadata {
   mint: string;
   symbol: string;
@@ -552,37 +775,38 @@ export interface TokenMetadata {
   logoUri?: string;
 }
 
-/**
- * Default token list for popular SPL tokens
- */
 export const DEFAULT_TOKEN_LIST: TokenMetadata[] = [
   {
     mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+    logoUri:
+      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
   },
   {
     mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
     symbol: 'USDT',
     name: 'Tether USD',
     decimals: 6,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg',
+    logoUri:
+      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg',
   },
   {
     mint: 'So11111111111111111111111111111111111111112',
     symbol: 'wSOL',
     name: 'Wrapped SOL',
     decimals: 9,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    logoUri:
+      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
   },
   {
     mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
     symbol: 'mSOL',
     name: 'Marinade staked SOL',
     decimals: 9,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png',
+    logoUri:
+      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png',
   },
   {
     mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
@@ -600,3 +824,241 @@ export const DEFAULT_TOKEN_LIST: TokenMetadata[] = [
   },
 ];
 
+export interface EVMSendParams {
+  recipient: string;
+
+  amount: string;
+
+  evmChainId?: EVMChainId | null;
+}
+
+export interface EVMTokenSendParams {
+  recipient: string;
+
+  tokenAddress: string;
+
+  amount: string;
+
+  decimals: number;
+
+  evmChainId?: EVMChainId;
+}
+
+export interface EVMBalance {
+  wei: string;
+
+  formatted: number;
+
+  symbol: string;
+
+  lastUpdated: number;
+}
+
+export interface EVMTokenBalance {
+  address: string;
+
+  symbol: string;
+
+  name: string;
+
+  decimals: number;
+
+  rawBalance: string;
+
+  uiBalance: number;
+
+  logoUri?: string;
+}
+
+export interface EVMFeeEstimate {
+  gasLimit: string;
+
+  gasPriceGwei: number;
+
+  totalFeeEth: number;
+
+  totalFeeWei: string;
+
+  l1DataFee?: string;
+
+  isEIP1559: boolean;
+}
+
+export interface EVMTransactionResult {
+  hash: string;
+
+  explorerUrl: string;
+
+  confirmed: boolean;
+
+  error?: string;
+}
+
+export interface ChainDisplayInfo {
+  type: ChainType;
+
+  evmChainId?: EVMChainId;
+
+  name: string;
+
+  symbol: string;
+
+  icon: string;
+
+  isTestnet: boolean;
+}
+
+export const SUPPORTED_CHAINS: ChainDisplayInfo[] = [
+  { type: 'solana', name: 'Solana', symbol: 'SOL', icon: 'solana', isTestnet: false },
+  {
+    type: 'evm',
+    evmChainId: 'ethereum',
+    name: 'Ethereum',
+    symbol: 'ETH',
+    icon: 'ethereum',
+    isTestnet: false,
+  },
+  {
+    type: 'evm',
+    evmChainId: 'polygon',
+    name: 'Polygon',
+    symbol: 'MATIC',
+    icon: 'polygon',
+    isTestnet: false,
+  },
+  {
+    type: 'evm',
+    evmChainId: 'arbitrum',
+    name: 'Arbitrum',
+    symbol: 'ETH',
+    icon: 'arbitrum',
+    isTestnet: false,
+  },
+  {
+    type: 'evm',
+    evmChainId: 'optimism',
+    name: 'Optimism',
+    symbol: 'ETH',
+    icon: 'optimism',
+    isTestnet: false,
+  },
+  { type: 'evm', evmChainId: 'base', name: 'Base', symbol: 'ETH', icon: 'base', isTestnet: false },
+];
+
+export const MULTI_CHAIN_VAULT_VERSION = 3;
+
+export type EVMPendingTxStatus = 'pending' | 'mined' | 'failed' | 'dropped' | 'replaced';
+
+export interface EVMPendingTxInfo {
+  hash: string;
+
+  nonce: number;
+
+  chainId: EVMChainId;
+
+  from: string;
+
+  to: string;
+
+  valueFormatted: string;
+
+  maxFeeGwei: number;
+
+  maxPriorityFeeGwei: number;
+
+  submittedAt: number;
+
+  status: EVMPendingTxStatus;
+
+  testnet: boolean;
+
+  explorerUrl: string;
+
+  replacedBy?: string;
+
+  errorReason?: string;
+}
+
+export interface EVMGasPresets {
+  slow: {
+    maxFeeGwei: number;
+    maxPriorityFeeGwei: number;
+    estimatedWaitTime: string;
+  };
+  market: {
+    maxFeeGwei: number;
+    maxPriorityFeeGwei: number;
+    estimatedWaitTime: string;
+  };
+  fast: {
+    maxFeeGwei: number;
+    maxPriorityFeeGwei: number;
+    estimatedWaitTime: string;
+  };
+  original: {
+    maxFeeGwei: number;
+    maxPriorityFeeGwei: number;
+  };
+}
+
+export interface EVMReplacementFeeEstimate {
+  maxFeeGwei: number;
+
+  maxPriorityFeeGwei: number;
+
+  minimumMaxFeeGwei: number;
+
+  networkMaxFeeGwei: number;
+
+  costDifferenceEth: number;
+
+  percentIncrease: number;
+
+  exceedsWarning: boolean;
+
+  warning?: string;
+}
+
+export interface EVMTokenAllowance {
+  tokenAddress: string;
+
+  tokenSymbol: string;
+
+  tokenName: string;
+
+  tokenDecimals: number;
+
+  tokenLogoUri?: string;
+
+  spenderAddress: string;
+
+  spenderLabel?: string;
+
+  spenderVerified?: boolean;
+
+  allowanceRaw: string;
+
+  allowanceFormatted: number;
+
+  isInfinite: boolean;
+
+  lastUpdated: number;
+}
+
+export interface EVMAllowanceDiscoveryResult {
+  allowances: EVMTokenAllowance[];
+
+  fromCache: boolean;
+
+  fetchedAt: number;
+}
+
+export interface EVMRevokeFeeEstimate {
+  gasLimit: string;
+
+  totalFeeWei: string;
+
+  totalFeeFormatted: number;
+}
+
+export type EVMAllowanceEntry = EVMTokenAllowance;
