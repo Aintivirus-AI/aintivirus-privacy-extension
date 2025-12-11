@@ -32,15 +32,23 @@ import { getTransactionExplorerUrl } from './rpc';
  * 3. Initialize token accounts for tokens you want to receive fees in
  */
 export const JUPITER_REFERRAL_CONFIG = {
-  // Your referral account public key from https://referral.jup.ag
-  REFERRAL_ACCOUNT: 'ckrKLAG2CBwcwy25GH17bCMZ43wjcUbmbJ36fRQdvRx',
+  // Your referral account public key from https://referral.jup.ag (injected at build time).
+  // If not provided, referral fees are disabled.
+  REFERRAL_ACCOUNT: process.env.AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT || '',
 
   // Fee in basis points (100 = 1%, 50 = 0.5%, 20 = 0.2%)
   // Jupiter allows up to 100 bps (1%) for referral fees
-  FEE_BPS: 50, // 0.5% referral fee
+  FEE_BPS: (() => {
+    const raw = process.env.AINTIVIRUS_JUPITER_REFERRAL_FEE_BPS;
+    const parsed = raw ? Number.parseInt(raw, 10) : 50;
+    // Clamp to Jupiter's documented max (100 bps) and avoid negative values.
+    return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 50;
+  })(),
 
   // Whether referral fees are enabled
-  ENABLED: true,
+  ENABLED:
+    (process.env.AINTIVIRUS_JUPITER_REFERRAL_ENABLED || '').toLowerCase() === 'true' &&
+    Boolean(process.env.AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT),
 };
 
 // Jupiter API endpoints (v1 with API key required)
@@ -49,8 +57,8 @@ const JUPITER_QUOTE_ENDPOINT = `${JUPITER_API_BASE}/quote`;
 const JUPITER_SWAP_ENDPOINT = `${JUPITER_API_BASE}/swap`;
 const JUPITER_SWAP_INSTRUCTIONS_ENDPOINT = `${JUPITER_API_BASE}/swap-instructions`;
 
-// Jupiter API Key - Free tier from https://station.jup.ag/
-const JUPITER_API_KEY = '4123d8f3-ab20-4ffe-a8f0-e6695a50d1a2';
+// Jupiter API Key - injected at build time (e.g. from CI or local `.env`).
+const JUPITER_API_KEY = process.env.AINTIVIRUS_JUPITER_API_KEY || '';
 
 // Common token mints for Solana
 export const COMMON_TOKEN_MINTS = {

@@ -3,6 +3,22 @@ import { PublicKey } from '@solana/web3.js';
 // Shared wallet type definitions, enums, and constants used across Solana/EVM flows.
 export type SolanaNetwork = 'mainnet-beta' | 'devnet';
 
+/**
+ * Build-time injected API key for Helius Solana RPC.
+ *
+ * - In development, you can provide it via a local `.env` file (not committed).
+ * - In CI/production builds, inject it as an environment variable.
+ */
+const HELIUS_API_KEY = process.env.AINTIVIRUS_HELIUS_API_KEY;
+
+function getHeliusRpcUrl(network: SolanaNetwork): string | null {
+  if (!HELIUS_API_KEY) return null;
+
+  const base =
+    network === 'devnet' ? 'https://devnet.helius-rpc.com/' : 'https://mainnet.helius-rpc.com/';
+  return `${base}?api-key=${encodeURIComponent(HELIUS_API_KEY)}`;
+}
+
 export interface NetworkConfig {
   name: SolanaNetwork;
   rpcUrl: string;
@@ -14,14 +30,14 @@ export const NETWORK_CONFIGS: Record<SolanaNetwork, NetworkConfig> = {
   'mainnet-beta': {
     name: 'mainnet-beta',
 
-    rpcUrl: 'https://mainnet.helius-rpc.com/?api-key=82ad212a-4162-464f-909f-d2c881da570c',
+    rpcUrl: getHeliusRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://solana-mainnet.rpc.extrnode.com'],
     explorerUrl: 'https://explorer.solana.com',
   },
   devnet: {
     name: 'devnet',
 
-    rpcUrl: 'https://devnet.helius-rpc.com/?api-key=82ad212a-4162-464f-909f-d2c881da570c',
+    rpcUrl: getHeliusRpcUrl('devnet') ?? 'https://rpc.ankr.com/solana_devnet',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana_devnet'],
     explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
   },

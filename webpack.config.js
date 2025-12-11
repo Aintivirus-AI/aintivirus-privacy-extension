@@ -5,9 +5,30 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
+// Optional local env loading. In CI/build pipelines, these values should come from the environment.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+} catch {
+  // `dotenv` is optional; builds can inject environment variables directly.
+}
+
 module.exports = (env, argv) => {
   const isFirefox = env?.target === 'firefox';
   const isProduction = argv.mode === 'production';
+
+  // Only inject the specific env vars we intentionally depend on.
+  const INJECTED_ENV_KEYS = [
+    'AINTIVIRUS_HELIUS_API_KEY',
+    'AINTIVIRUS_JUPITER_API_KEY',
+    'AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT',
+    'AINTIVIRUS_JUPITER_REFERRAL_FEE_BPS',
+    'AINTIVIRUS_JUPITER_REFERRAL_ENABLED',
+  ];
+  const injectedEnv = INJECTED_ENV_KEYS.reduce((acc, key) => {
+    acc[`process.env.${key}`] = JSON.stringify(process.env[key] ?? '');
+    return acc;
+  }, {});
 
   return {
     entry: {
@@ -59,6 +80,7 @@ module.exports = (env, argv) => {
       }),
       new webpack.DefinePlugin({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+        ...injectedEnv,
       }),
       new HtmlWebpackPlugin({
         template: './src/popup/popup.html',

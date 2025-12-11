@@ -74,6 +74,12 @@ npm run build:firefox
 
 ## Development
 
+### Build-time secrets
+
+- This project expects certain values to be **injected at build time** (CI env vars or a local `.env` file).
+- Do **not** commit real secrets. `.env` and `.env.*` are ignored by git.
+- See `env.example` for the expected variable names.
+
 ```bash
 npm run dev    # Watch mode with auto-rebuild
 npm run build  # Production build
