@@ -200,7 +200,7 @@ async function handleMessage(
         if (tabId === undefined || frameId === undefined) return { success: false };
         try {
           await chrome.scripting.executeScript({
-            files: ['/ubol/js/scripting/css-procedural-api.js'],
+            files: ['/aintivirusAdblocker/js/scripting/css-procedural-api.js'],
             target: { tabId, frameIds: [frameId] },
             injectImmediately: true,
           });
@@ -211,7 +211,7 @@ async function handleMessage(
       }
 
       default:
-        return { success: false, error: 'Unknown uBOL message type' };
+        return { success: false, error: 'Unknown Aintivirus Adblocker message type' };
     }
   }
 

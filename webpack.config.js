@@ -92,20 +92,20 @@ module.exports = (env, argv) => {
             to: '.',
           },
           {
-            from: 'vendor/ubol/rulesets',
-            to: 'ubol/rulesets',
+            from: 'vendor/aintivirusAdblocker/rulesets',
+            to: 'aintivirusAdblocker/rulesets',
           },
           {
-            from: 'vendor/ubol/web_accessible_resources',
-            to: 'ubol/web_accessible_resources',
+            from: 'vendor/aintivirusAdblocker/web_accessible_resources',
+            to: 'aintivirusAdblocker/web_accessible_resources',
           },
           {
-            from: 'vendor/ubol/js/scripting',
-            to: 'ubol/js/scripting',
+            from: 'vendor/aintivirusAdblocker/js/scripting',
+            to: 'aintivirusAdblocker/js/scripting',
           },
           {
-            from: 'vendor/ubol/LICENSE.txt',
-            to: 'ubol/LICENSE.txt',
+            from: 'vendor/aintivirusAdblocker/LICENSE.txt',
+            to: 'aintivirusAdblocker/LICENSE.txt',
           },
         ],
       }),

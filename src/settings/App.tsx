@@ -300,7 +300,7 @@ interface PrivacyStatus {
   headerStatus: HeaderRuleStatus;
   cookieStats: CookieStats;
   filterStats: any;
-  ubolStats: any;
+  adblockerStats: any;
   metrics: PrivacyMetrics;
 }
 
@@ -2678,7 +2678,7 @@ const App: React.FC = () => {
                 <div className="settings-subsection">
                   <h3>Static Block Lists</h3>
                   <p className="settings-subsection-desc">
-                    Pre-compiled ad and tracker blocking rules (based on EasyList, EasyPrivacy, and uBlock filters)
+                    Pre-compiled ad and tracker blocking rules (based on EasyList, EasyPrivacy, and Aintivirus Adblocker filters)
                   </p>
                   {!flags.privacy && (
                     <p className="settings-subsection-hint">

@@ -18,7 +18,7 @@ const FILTER_LISTS = {
       url: 'https://easylist.to/easylist/easylist.txt',
     },
     {
-      name: 'uBlock Filters',
+      name: 'Aintivirus Adblocker Filters',
       url: 'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt',
     },
   ],
@@ -28,7 +28,7 @@ const FILTER_LISTS = {
       url: 'https://easylist.to/easylist/easyprivacy.txt',
     },
     {
-      name: 'uBlock Privacy',
+      name: 'Aintivirus Adblocker Privacy',
       url: 'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/privacy.txt',
     },
   ],

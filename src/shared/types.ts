@@ -178,11 +178,11 @@ export type MessageType =
   | 'DAPP_PAGE_UNLOAD'
   | 'GET_TAB_ID'
   
-  | 'UBOL_GET_STATUS'
-  | 'UBOL_SET_ENABLED'
-  | 'UBOL_ADD_TO_ALLOWLIST'
-  | 'UBOL_REMOVE_FROM_ALLOWLIST'
-  | 'UBOL_CHECK_ALLOWLIST';
+  | 'ADBLOCKER_GET_STATUS'
+  | 'ADBLOCKER_SET_ENABLED'
+  | 'ADBLOCKER_ADD_TO_ALLOWLIST'
+  | 'ADBLOCKER_REMOVE_FROM_ALLOWLIST'
+  | 'ADBLOCKER_CHECK_ALLOWLIST';
 
 export interface BaseMessage<T extends MessageType, P = undefined> {
   type: T;
@@ -378,11 +378,11 @@ export type DappPageUnloadMessage = BaseMessage<'DAPP_PAGE_UNLOAD', {
 export type GetTabIdMessage = BaseMessage<'GET_TAB_ID'>;
 
 
-export type UbolGetStatusMessage = BaseMessage<'UBOL_GET_STATUS'>;
-export type UbolSetEnabledMessage = BaseMessage<'UBOL_SET_ENABLED', { enabled: boolean }>;
-export type UbolAddToAllowlistMessage = BaseMessage<'UBOL_ADD_TO_ALLOWLIST', { domain: string }>;
-export type UbolRemoveFromAllowlistMessage = BaseMessage<'UBOL_REMOVE_FROM_ALLOWLIST', { domain: string }>;
-export type UbolCheckAllowlistMessage = BaseMessage<'UBOL_CHECK_ALLOWLIST', { domain: string }>;
+export type AdblockerGetStatusMessage = BaseMessage<'ADBLOCKER_GET_STATUS'>;
+export type AdblockerSetEnabledMessage = BaseMessage<'ADBLOCKER_SET_ENABLED', { enabled: boolean }>;
+export type AdblockerAddToAllowlistMessage = BaseMessage<'ADBLOCKER_ADD_TO_ALLOWLIST', { domain: string }>;
+export type AdblockerRemoveFromAllowlistMessage = BaseMessage<'ADBLOCKER_REMOVE_FROM_ALLOWLIST', { domain: string }>;
+export type AdblockerCheckAllowlistMessage = BaseMessage<'ADBLOCKER_CHECK_ALLOWLIST', { domain: string }>;
 
 export type ExtensionMessage =
   | GetFeatureFlagsMessage
@@ -531,11 +531,11 @@ export type ExtensionMessage =
   | DappPageUnloadMessage
   | GetTabIdMessage
   
-  | UbolGetStatusMessage
-  | UbolSetEnabledMessage
-  | UbolAddToAllowlistMessage
-  | UbolRemoveFromAllowlistMessage
-  | UbolCheckAllowlistMessage;
+  | AdblockerGetStatusMessage
+  | AdblockerSetEnabledMessage
+  | AdblockerAddToAllowlistMessage
+  | AdblockerRemoveFromAllowlistMessage
+  | AdblockerCheckAllowlistMessage;
 
 export interface MessageResponse<T = unknown> {
   success: boolean;

@@ -43,11 +43,11 @@ import {
 
 
 import {
-  initializeUbol,
-  reconcileUbolState,
-  setAdBlockEnabled as ubolSetAdBlockEnabled,
-  isAdBlockEnabled as ubolIsAdBlockEnabled,
-  getUbolStats,
+  initializeAdblocker,
+  reconcileAdblockerState,
+  setAdBlockEnabled as setAdblockerEnabled,
+  isAdBlockEnabled as isAdblockerEnabled,
+  getAdblockerStats,
   addToAllowlist,
   removeFromAllowlist,
   isDomainAllowlisted,
@@ -66,7 +66,7 @@ import {
   MODE_COMPLETE,
   DEFAULT_RULESETS,
   ALL_RULESETS,
-} from '../ubol';
+} from '../aintivirusAdblocker';
 
 
 let isInitialized = false;
@@ -118,7 +118,7 @@ export async function initializePrivacyEngine(): Promise<void> {
     
     if (adBlockerEnabled) {
 
-      await initializeUbol();
+      await initializeAdblocker();
     } else {
 
       await disableAllRulesets();
@@ -227,7 +227,7 @@ export async function toggleAdBlocker(enabled: boolean): Promise<void> {
   await setPrivacySettings(settings);
   
   
-  await ubolSetAdBlockEnabled(enabled);
+  await setAdblockerEnabled(enabled);
   
   
   await updateActiveRules();
@@ -253,7 +253,7 @@ export async function toggleAdBlocker(enabled: boolean): Promise<void> {
 
 
 export async function getAdBlockerStatus(): Promise<boolean> {
-  return ubolIsAdBlockEnabled();
+  return isAdblockerEnabled();
 }
 
 
@@ -325,9 +325,9 @@ export async function refreshFilterLists(force = false): Promise<void> {
   }
   
   
-  await reconcileUbolState();
+  await reconcileAdblockerState();
   
-  const stats = await getUbolStats();
+  const stats = await getAdblockerStats();
   updateActiveRuleCount(stats.enabledRulesets.length);
 
 }
@@ -335,7 +335,7 @@ export async function refreshFilterLists(force = false): Promise<void> {
 
 export async function checkAndRefreshFilterLists(): Promise<void> {
   if (!isEnabled) return;
-  await reconcileUbolState();
+  await reconcileAdblockerState();
 }
 
 
@@ -346,17 +346,17 @@ export async function getPrivacyStatus(): Promise<{
   headerStatus: Awaited<ReturnType<typeof getHeaderRuleStatus>>;
   cookieStats: Awaited<ReturnType<typeof getCookieStats>>;
   filterStats: Awaited<ReturnType<typeof getFilterListStats>>;
-  ubolStats: Awaited<ReturnType<typeof getUbolStats>>;
+  adblockerStats: Awaited<ReturnType<typeof getAdblockerStats>>;
   metrics: ReturnType<typeof getMetricsSummary>;
 }> {
   return {
     isEnabled,
     isInitialized,
-    adBlockerEnabled: await ubolIsAdBlockEnabled(),
+    adBlockerEnabled: await isAdblockerEnabled(),
     headerStatus: await getHeaderRuleStatus(),
     cookieStats: await getCookieStats(),
     filterStats: await getFilterListStats(),
-    ubolStats: await getUbolStats(),
+    adblockerStats: await getAdblockerStats(),
     metrics: getMetricsSummary(),
   };
 }
@@ -377,9 +377,9 @@ export async function setFilteringLevel(level: FilteringLevel): Promise<void> {
   
   if (level === 'off') {
     await disableAllRulesets();
-    await ubolSetAdBlockEnabled(false);
+    await setAdblockerEnabled(false);
   } else {
-    await ubolSetAdBlockEnabled(true);
+    await setAdblockerEnabled(true);
     await enableRulesets([...targetRulesets]);
   }
   
@@ -405,7 +405,7 @@ export async function getRulesetStats(): Promise<{
   dynamicRuleCount: number;
   availableStaticSlots: number;
 }> {
-  const ubolStats = await getUbolStats();
+  const adblockerStats = await getAdblockerStats();
   const filteringLevel = await getFilteringLevel();
   
   let availableSlots = 0;
@@ -416,10 +416,10 @@ export async function getRulesetStats(): Promise<{
   }
   
   return {
-    enabledRulesets: ubolStats.enabledRulesets,
+    enabledRulesets: adblockerStats.enabledRulesets,
     availableRulesets: [...ALL_RULESETS],
     filteringLevel,
-    dynamicRuleCount: ubolStats.dynamicRuleCount,
+    dynamicRuleCount: adblockerStats.dynamicRuleCount,
     availableStaticSlots: availableSlots,
   };
 }
@@ -628,13 +628,13 @@ export {
   removeFromAllowlist,
   isDomainAllowlisted,
   getAllowlist,
-} from '../ubol';
+} from '../aintivirusAdblocker';
 
-export type { FilteringMode, RulesetId } from '../ubol';
+export type { FilteringMode, RulesetId } from '../aintivirusAdblocker';
 export type { FilteringLevel } from '@shared/types';
 
 
-export const ALL_UBOL_RULESETS = ALL_RULESETS;
+export const ALL_ADBLOCKER_RULESETS = ALL_RULESETS;
 export type StaticRulesetId = string;
 
 

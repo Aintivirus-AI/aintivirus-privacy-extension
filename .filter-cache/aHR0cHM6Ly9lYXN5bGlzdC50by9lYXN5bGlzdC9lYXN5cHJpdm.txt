@@ -1,9 +1,9 @@
 [Adblock Plus 1.1]
-! Version: 202512090540
+! Version: 202512111619
 ! Title: EasyPrivacy
-! Last modified: 09 Dec 2025 05:40 UTC
+! Last modified: 11 Dec 2025 16:19 UTC
 ! Expires: 4 days (update frequency)
-! Commit: 6aaa2a4d098119ac638e1f82ed9fc8563909a8f2
+! Commit: 3deb17764485d589926a9d6b030dca9c1d576169
 ! *** easylist:template_header.txt ***
 ! 
 ! Please report any unblocked adverts or problems
@@ -4231,7 +4231,6 @@ omni.soundestlink.com$image
 ||capturehighered.net^$third-party
 ||capturemedia.network^$third-party
 ||capturly.com^$third-party
-||carambo.la^$third-party
 ||caramel.press^$third-party
 ||cartstack.com^$third-party
 ||cashburners.com^$third-party
@@ -6266,7 +6265,6 @@ omni.soundestlink.com$image
 ||wiredminds.de^$third-party
 ||wirewuss.com^$third-party
 ||wisetrack.net^$third-party
-||wishabi.net^$third-party
 ||withcabin.com^$third-party
 ||withcubed.com^$third-party
 ||wizaly.com^$third-party
@@ -6647,6 +6645,7 @@ omni.soundestlink.com$image
 ||bewilderedblade.com^
 ||bhcumsc.com^
 ||bidpapers.com^
+||bigfishapparel.com^
 ||bigworldfashion.com^
 ||bikepaws.com^
 ||bikesboard.com^
@@ -6670,6 +6669,7 @@ omni.soundestlink.com$image
 ||blitzcampaigns.com^
 ||blockdial.com^
 ||blueeyedblow.com^
+||bluenest.net^
 ||bluevinebooks.com^
 ||blushingbeast.com^
 ||blushingbread.com^
@@ -9649,6 +9649,7 @@ $third-party,xmlhttprequest,domain=opensubtitles.org
 ||a.hcaptcha.com^
 ||a.mobify.com^
 ||a.vturb.net^
+||a.wishabi.com/track.gif?
 ||a2z.com/sping?
 ||aan.amazon.com^$third-party
 ||ab.dns-finder.com^
@@ -15052,6 +15053,7 @@ $third-party,xmlhttprequest,domain=opensubtitles.org
 ||messari.io/js/wutangtrack.js
 ||messenger.com/ajax/bnzai?
 ||metacrawler.com/pingback
+||metis.truecaller.com^
 ||metrics.audius.co^
 ||metrics.bangbros.com^
 ||metrics.camsoda.com^

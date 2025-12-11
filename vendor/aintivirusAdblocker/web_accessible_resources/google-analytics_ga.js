@@ -1,6 +1,7 @@
 /*******************************************************************************
 
-    uBlock Origin - a browser extension to block requests.
+    Aintivirus Adblocker - a browser extension to block requests.
+    Based on uBlock Origin by Raymond Hill
     Copyright (C) 2019-present Raymond Hill
 
     This program is free software: you can redistribute it and/or modify

@@ -145,7 +145,7 @@ async function getRulesetDetails(): Promise<Map<string, RulesetDetails>> {
     return rulesetDetailsCache;
   }
 
-  const entries = await fetchJSON<RulesetDetails[]>('/ubol/rulesets/ruleset-details.json');
+  const entries = await fetchJSON<RulesetDetails[]>('/aintivirusAdblocker/rulesets/ruleset-details.json');
   if (entries) {
     rulesetDetailsCache = new Map(entries.map(entry => [entry.id, entry]));
   } else {
@@ -159,7 +159,7 @@ async function getScriptletDetails(): Promise<Map<string, ScriptletDetails[strin
     return scriptletDetailsCache;
   }
 
-  const entries = await fetchJSON<[string, ScriptletDetails[string]][]>('/ubol/rulesets/scriptlet-details.json');
+  const entries = await fetchJSON<[string, ScriptletDetails[string]][]>('/aintivirusAdblocker/rulesets/scriptlet-details.json');
   if (entries) {
     scriptletDetailsCache = new Map(entries);
   } else {
@@ -173,7 +173,7 @@ async function getGenericDetails(): Promise<Map<string, GenericDetails[string]>>
     return genericDetailsCache;
   }
 
-  const entries = await fetchJSON<[string, GenericDetails[string]][]>('/ubol/rulesets/generic-details.json');
+  const entries = await fetchJSON<[string, GenericDetails[string]][]>('/aintivirusAdblocker/rulesets/generic-details.json');
   if (entries) {
     genericDetailsCache = new Map(entries);
   } else {
@@ -184,9 +184,9 @@ async function getGenericDetails(): Promise<Map<string, GenericDetails[string]>>
 
 async function getFilteringModeDetailsFromIndex(): Promise<FilteringModeDetails> {
   try {
-    const data = await chrome.storage.local.get('ubol_filteringModeDetails');
-    if (data.ubol_filteringModeDetails) {
-      const raw = data.ubol_filteringModeDetails;
+    const data = await chrome.storage.local.get('adblocker_filteringModeDetails');
+    if (data.adblocker_filteringModeDetails) {
+      const raw = data.adblocker_filteringModeDetails;
       return {
         none: new Set(raw.none || []),
         basic: new Set(raw.basic || []),
@@ -276,13 +276,13 @@ function registerGeneric(
     }
     const count = details.css?.generic || 0;
     if (count === 0) continue;
-    js.push(`/ubol/rulesets/scripting/generic/${details.id}.js`);
+    js.push(`/aintivirusAdblocker/rulesets/scripting/generic/${details.id}.js`);
   }
 
   if (js.length === 0) return;
 
-  js.unshift('/ubol/js/scripting/css-api.js', '/ubol/js/scripting/isolated-api.js');
-  js.push('/ubol/js/scripting/css-generic.js');
+  js.unshift('/aintivirusAdblocker/js/scripting/css-api.js', '/aintivirusAdblocker/js/scripting/isolated-api.js');
+  js.push('/aintivirusAdblocker/js/scripting/css-generic.js');
 
   const { none, basic, optimal, complete } = filteringModeDetails;
   const includedByMode = Array.from(complete);
@@ -296,7 +296,7 @@ function registerGeneric(
     ];
     if (matches.length === 0) return;
     
-    const id = 'ubol-css-generic-some';
+    const id = 'adblocker-css-generic-some';
     const registered = before.get(id);
     before.delete(id);
     
@@ -323,7 +323,7 @@ function registerGeneric(
     ...matchesFromHostnames(excludedByFilter),
   ];
   
-  const idAll = 'ubol-css-generic-all';
+  const idAll = 'adblocker-css-generic-all';
   const registeredAll = before.get(idAll);
   before.delete(idAll);
   
@@ -349,7 +349,7 @@ function registerGeneric(
   const matchesSome = matchesFromHostnames(subtractHostnameIters(includedByFilter, excludedByMode));
   if (matchesSome.length === 0) return;
   
-  const idSome = 'ubol-css-generic-some';
+  const idSome = 'adblocker-css-generic-some';
   const registeredSome = before.get(idSome);
   before.delete(idSome);
   
@@ -393,7 +393,7 @@ function registerGenericHigh(
     }
     const count = details.css?.generichigh || 0;
     if (count === 0) continue;
-    css.push(`/ubol/rulesets/scripting/generichigh/${details.id}.css`);
+    css.push(`/aintivirusAdblocker/rulesets/scripting/generichigh/${details.id}.css`);
   }
 
   if (css.length === 0) return;
@@ -414,7 +414,7 @@ function registerGenericHigh(
 
   if (matches.length === 0) return;
 
-  const id = 'ubol-css-generichigh';
+  const id = 'adblocker-css-generichigh';
   const registered = before.get(id);
   before.delete(id);
 
@@ -448,7 +448,7 @@ function registerSpecific(
   for (const details of rulesetsDetails) {
     const count = details.css?.specific || 0;
     if (count === 0) continue;
-    js.push(`/ubol/rulesets/scripting/specific/${details.id}.js`);
+    js.push(`/aintivirusAdblocker/rulesets/scripting/specific/${details.id}.js`);
   }
 
   if (js.length === 0) return;
@@ -462,8 +462,8 @@ function registerSpecific(
 
   normalizeMatches(matches);
 
-  js.unshift('/ubol/js/scripting/css-api.js', '/ubol/js/scripting/isolated-api.js');
-  js.push('/ubol/js/scripting/css-specific.js');
+  js.unshift('/aintivirusAdblocker/js/scripting/css-api.js', '/aintivirusAdblocker/js/scripting/isolated-api.js');
+  js.push('/aintivirusAdblocker/js/scripting/css-specific.js');
 
   const excludeMatches: string[] = [];
   if (!none.has('all-urls')) {
@@ -473,7 +473,7 @@ function registerSpecific(
     excludeMatches.push(...matchesFromHostnames(basic));
   }
 
-  const id = 'ubol-css-specific';
+  const id = 'adblocker-css-specific';
   const registered = before.get(id);
   before.delete(id);
 
@@ -507,7 +507,7 @@ function registerProcedural(
   for (const rulesetDetails of rulesetsDetails) {
     const count = rulesetDetails.css?.procedural || 0;
     if (count === 0) continue;
-    js.push(`/ubol/rulesets/scripting/procedural/${rulesetDetails.id}.js`);
+    js.push(`/aintivirusAdblocker/rulesets/scripting/procedural/${rulesetDetails.id}.js`);
   }
   if (js.length === 0) return;
 
@@ -520,8 +520,8 @@ function registerProcedural(
 
   normalizeMatches(matches);
 
-  js.unshift('/ubol/js/scripting/css-api.js', '/ubol/js/scripting/isolated-api.js', '/ubol/js/scripting/css-procedural-api.js');
-  js.push('/ubol/js/scripting/css-procedural.js');
+  js.unshift('/aintivirusAdblocker/js/scripting/css-api.js', '/aintivirusAdblocker/js/scripting/isolated-api.js', '/aintivirusAdblocker/js/scripting/css-procedural-api.js');
+  js.push('/aintivirusAdblocker/js/scripting/css-procedural.js');
 
   const excludeMatches: string[] = [];
   if (!none.has('all-urls') && !basic.has('all-urls')) {
@@ -532,7 +532,7 @@ function registerProcedural(
     excludeMatches.push(...toExclude);
   }
 
-  const id = 'ubol-css-procedural';
+  const id = 'adblocker-css-procedural';
   const registered = before.get(id);
   before.delete(id);
 
@@ -581,7 +581,7 @@ function registerScriptlets(
     if (!worlds) continue;
     
     for (const world of Object.keys(worlds)) {
-      const id = `ubol-scriptlet-${rulesetId}-${world.toLowerCase()}`;
+      const id = `adblocker-scriptlet-${rulesetId}-${world.toLowerCase()}`;
 
       const matches: string[] = [];
       const excludeMatches: string[] = [];
@@ -608,7 +608,7 @@ function registerScriptlets(
 
       const directive: chrome.scripting.RegisteredContentScript = {
         id,
-        js: [`/ubol/rulesets/scripting/scriptlet/${world.toLowerCase()}/${rulesetId}.js`],
+        js: [`/aintivirusAdblocker/rulesets/scripting/scriptlet/${world.toLowerCase()}/${rulesetId}.js`],
         matches,
         allFrames: true,
         matchOriginAsFallback: true,
@@ -657,7 +657,7 @@ export async function registerInjectables(): Promise<boolean> {
 
     const before = new Map(
       normalizeRegisteredContentScripts(registered)
-        .filter(r => r.id.startsWith('ubol-'))
+        .filter(r => r.id.startsWith('adblocker-'))
         .map(entry => [entry.id, entry])
     );
 
@@ -718,11 +718,11 @@ export async function unregisterAllInjectables(): Promise<void> {
 
   try {
     const registered = await chrome.scripting.getRegisteredContentScripts();
-    const ubolScripts = registered.filter(r => r.id.startsWith('ubol-'));
+    const adblockerScripts = registered.filter(r => r.id.startsWith('adblocker-'));
 
-    if (ubolScripts.length > 0) {
+    if (adblockerScripts.length > 0) {
       await chrome.scripting.unregisterContentScripts({
-        ids: ubolScripts.map(s => s.id),
+        ids: adblockerScripts.map(s => s.id),
       });
 
     }

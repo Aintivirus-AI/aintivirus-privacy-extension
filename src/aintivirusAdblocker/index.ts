@@ -12,10 +12,10 @@ export type FilteringMode = typeof MODE_NONE | typeof MODE_BASIC | typeof MODE_O
 
 
 const STORAGE_KEYS = {
-  RULESET_CONFIG: 'ubol_rulesetConfig',
-  FILTERING_MODE_DETAILS: 'ubol_filteringModeDetails',
-  ALLOWLIST: 'ubol_allowlist',
-  DEBUG: 'ubol_debug',
+  RULESET_CONFIG: 'adblocker_rulesetConfig',
+  FILTERING_MODE_DETAILS: 'adblocker_filteringModeDetails',
+  ALLOWLIST: 'adblocker_allowlist',
+  DEBUG: 'adblocker_debug',
 } as const;
 
 
@@ -115,13 +115,13 @@ let filteringModesCache: FilteringModeDetails | null = null;
 let debugEnabled = false;
 
 
-function ubolLog(...args: unknown[]): void {
+function adblockerLog(...args: unknown[]): void {
   if (debugEnabled) {
 
   }
 }
 
-function ubolDebug(...args: unknown[]): void {
+function adblockerDebug(...args: unknown[]): void {
   if (debugEnabled) {
 
   }
@@ -192,7 +192,7 @@ export async function saveRulesetConfig(config?: Partial<RulesetConfig>): Promis
   rulesetConfigCache = updated;
   await localWrite(STORAGE_KEYS.RULESET_CONFIG, updated);
   await sessionWrite(STORAGE_KEYS.RULESET_CONFIG, updated);
-  ubolLog('Config saved:', updated);
+  adblockerLog('Config saved:', updated);
 }
 
 
@@ -375,7 +375,7 @@ async function updateTrustedDirectiveRules(modes: FilteringModeDetails): Promise
         removeRuleIds,
         addRules,
       });
-      ubolLog('Updated trusted directive rules');
+      adblockerLog('Updated trusted directive rules');
     }
   } catch (error) {
 
@@ -421,7 +421,7 @@ export async function updateAllowlistRules(allowlist: string[]): Promise<void> {
       addRules,
     });
     
-    ubolLog('Allowlist rules updated:', allowlist);
+    adblockerLog('Allowlist rules updated:', allowlist);
   } catch (error) {
 
   }
@@ -484,7 +484,7 @@ export async function enableRulesets(rulesetIds: string[]): Promise<void> {
         enableRulesetIds: toEnable,
         disableRulesetIds: toDisable,
       });
-      ubolLog('Updated rulesets - enabled:', toEnable, 'disabled:', toDisable);
+      adblockerLog('Updated rulesets - enabled:', toEnable, 'disabled:', toDisable);
     }
 
     
@@ -498,15 +498,15 @@ export async function enableRulesets(rulesetIds: string[]): Promise<void> {
 export async function disableAllRulesets(): Promise<void> {
   try {
     const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
-    const ubolRulesets = currentlyEnabled.filter(id => 
+    const adblockerRulesets = currentlyEnabled.filter(id => 
       ALL_RULESETS.includes(id as RulesetId)
     );
 
-    if (ubolRulesets.length > 0) {
+    if (adblockerRulesets.length > 0) {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
-        disableRulesetIds: ubolRulesets,
+        disableRulesetIds: adblockerRulesets,
       });
-      ubolLog('Disabled all uBOL rulesets');
+      adblockerLog('Disabled all Aintivirus Adblocker rulesets');
     }
 
     await saveRulesetConfig({ enabledRulesets: [] });
@@ -523,7 +523,7 @@ export async function getEnabledRulesets(): Promise<string[]> {
 
 
 export async function setAdBlockEnabled(enabled: boolean): Promise<void> {
-  ubolLog('Setting ad blocking:', enabled ? 'enabled' : 'disabled');
+  adblockerLog('Setting ad blocking:', enabled ? 'enabled' : 'disabled');
   
   const config = await loadRulesetConfig();
   
@@ -560,7 +560,7 @@ export async function addToAllowlist(domain: string): Promise<void> {
     allowlist.push(domain);
     await localWrite(STORAGE_KEYS.ALLOWLIST, allowlist);
     await updateAllowlistRules(allowlist);
-    ubolLog('Added to allowlist:', domain);
+    adblockerLog('Added to allowlist:', domain);
   }
 }
 
@@ -572,7 +572,7 @@ export async function removeFromAllowlist(domain: string): Promise<void> {
     allowlist.splice(index, 1);
     await localWrite(STORAGE_KEYS.ALLOWLIST, allowlist);
     await updateAllowlistRules(allowlist);
-    ubolLog('Removed from allowlist:', domain);
+    adblockerLog('Removed from allowlist:', domain);
   }
 }
 
@@ -600,14 +600,14 @@ export async function getAllowlist(): Promise<string[]> {
 }
 
 
-export async function initializeUbol(): Promise<void> {
-  ubolLog('Initializing uBOL integration...');
+export async function initializeAdblocker(): Promise<void> {
+  adblockerLog('Initializing Aintivirus Adblocker integration...');
   
   
   const config = await loadRulesetConfig();
   debugEnabled = await localRead<boolean>(STORAGE_KEYS.DEBUG) || false;
   
-  ubolLog('Config loaded:', config);
+  adblockerLog('Config loaded:', config);
   
   if (config.enabled) {
     
@@ -627,15 +627,15 @@ export async function initializeUbol(): Promise<void> {
     
     await registerInjectables();
   } else {
-    ubolLog('Ad blocking is disabled, skipping initialization');
+    adblockerLog('Ad blocking is disabled, skipping initialization');
   }
   
-  ubolLog('uBOL initialization complete');
+  adblockerLog('Aintivirus Adblocker initialization complete');
 }
 
 
-export async function reconcileUbolState(): Promise<void> {
-  ubolLog('Reconciling uBOL state...');
+export async function reconcileAdblockerState(): Promise<void> {
+  adblockerLog('Reconciling Aintivirus Adblocker state...');
   
   const config = await loadRulesetConfig();
   
@@ -662,11 +662,11 @@ export async function reconcileUbolState(): Promise<void> {
     await unregisterAllInjectables();
   }
   
-  ubolLog('uBOL state reconciled');
+  adblockerLog('Aintivirus Adblocker state reconciled');
 }
 
 
-export async function getUbolStats(): Promise<{
+export async function getAdblockerStats(): Promise<{
   enabled: boolean;
   enabledRulesets: string[];
   allowlist: string[];
@@ -711,7 +711,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   
   if (changes[STORAGE_KEYS.ALLOWLIST]) {
     const newAllowlist = changes[STORAGE_KEYS.ALLOWLIST].newValue ?? [];
-    ubolLog('Detected allowlist change:', newAllowlist);
+    adblockerLog('Detected allowlist change:', newAllowlist);
     updateAllowlistRules(newAllowlist);
   }
 });
