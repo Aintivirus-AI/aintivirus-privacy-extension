@@ -90,6 +90,7 @@ import {
   SearchIcon,
 } from './Icons';
 import { getPasswordStrengthFeedback } from '../wallet/crypto';
+import { isValidSolanaAddress, isValidEVMAddress } from '../wallet/keychain';
 
 interface PrivacyStats {
   totalBlockedRequests: number;
@@ -3146,6 +3147,16 @@ const SendForm: React.FC<SendFormProps> = ({
 
     if (!recipient) {
       setError('Please enter a recipient address');
+      return;
+    }
+
+    // Validate address format before proceeding
+    const isValidAddress =
+      activeChain === 'solana' ? isValidSolanaAddress(recipient) : isValidEVMAddress(recipient);
+
+    if (!isValidAddress) {
+      const chainName = activeChain === 'solana' ? 'Solana' : getChainName();
+      setError(`Invalid ${chainName} address. Please check and try again.`);
       return;
     }
 
