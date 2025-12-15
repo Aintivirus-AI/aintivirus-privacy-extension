@@ -2970,12 +2970,19 @@ const SendForm: React.FC<SendFormProps> = ({
   };
 
   // Recent recipients hook for dropdown
-  const { addRecipient } = useRecentRecipients(
+  const { recipients, addRecipient } = useRecentRecipients(
     activeChain,
     'mainnet-beta', // TODO: Get actual network from wallet state
     activeEVMChain,
-    recipient, // Filter query
+    '', // Empty filter to get all recipients for checking
   );
+
+  // Check if recipient is a first-time address (security warning)
+  const isFirstTimeRecipient = useMemo(() => {
+    if (!recipient) return false;
+    const normalizedRecipient = recipient.toLowerCase();
+    return !recipients.some((r) => r.address.toLowerCase() === normalizedRecipient);
+  }, [recipient, recipients]);
 
   // Get native symbol for current chain
   const getNativeSymbol = () => {
@@ -3506,6 +3513,44 @@ const SendForm: React.FC<SendFormProps> = ({
           <span className="tx-review-label">To</span>
           <span className="tx-review-address">{truncateAddress(recipient, 8)}</span>
         </div>
+
+        {/* First-time recipient warning (security feature) */}
+        {isFirstTimeRecipient && (
+          <div
+            className="tx-review-warning"
+            style={{
+              background: 'var(--warning-bg)',
+              border: '1px solid var(--warning-border)',
+              borderRadius: '8px',
+              padding: '12px',
+              margin: '12px 0',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--warning)"
+              strokeWidth="2"
+              style={{ flexShrink: 0, marginTop: '1px' }}
+            >
+              <path d="M12 9v4M12 17h.01M21.73 18l-8-14a2 2 0 00-3.46 0l-8 14A2 2 0 004 21h16a2 2 0 001.73-3z" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '4px' }}>
+                First time sending to this address
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                Double-check the recipient address to prevent loss of funds. This is a common
+                clipboard hijacking attack vector.
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="tx-review-section">
           <span className="tx-review-label">Network Fee</span>
