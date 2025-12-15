@@ -3,6 +3,8 @@ import { SitePrivacyMode, TabDomainMapping } from './types';
 import { getSiteMode } from './siteSettings';
 import { logCookieCleanup } from './metrics';
 import { extractDomain, isSameDomain } from './utils';
+import { isProtectedSite } from './adguardEngine';
+import { isDomainAllowlisted } from '../aintivirusAdblocker';
 
 const tabDomains: TabDomainMapping = {};
 
@@ -71,6 +73,16 @@ async function handleTabRemoved(
   const settings = await storage.get('privacySettings');
   if (!settings?.cookieCleanup) return;
 
+  // Check if domain is protected (Google, GitHub, etc.) or user-allowlisted
+  if (isProtectedSite(tabInfo.domain)) {
+    return;
+  }
+
+  const isAllowlisted = await isDomainAllowlisted(tabInfo.domain);
+  if (isAllowlisted) {
+    return;
+  }
+
   const siteMode = await getSiteMode(tabInfo.domain);
 
   if (siteMode === 'disabled') return;
@@ -122,6 +134,16 @@ async function cleanupThirdPartyCookies(
   let totalDeleted = 0;
 
   for (const tpDomain of thirdPartyDomains) {
+    // Skip protected or allowlisted domains
+    if (isProtectedSite(tpDomain)) {
+      continue;
+    }
+    
+    const isAllowlisted = await isDomainAllowlisted(tpDomain);
+    if (isAllowlisted) {
+      continue;
+    }
+
     const deleted = await cleanupCookiesForDomain(tpDomain, 'third-party');
     totalDeleted += deleted;
   }
