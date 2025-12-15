@@ -2405,6 +2405,50 @@ const App: React.FC = () => {
                 ))}
               </div>
 
+              {/* Ad Blocker Control */}
+              <div className="settings-subsection" style={{ marginTop: 'var(--space-xl)' }}>
+                <h3>Ad Blocker</h3>
+                <p className="settings-subsection-desc">
+                  Control ad and tracker blocking across all websites
+                </p>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" above to use ad blocker features.
+                  </p>
+                )}
+
+                <div className="settings-group" role="list">
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <BlockIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Block Ads & Trackers</span>
+                        <span className="settings-item-desc">
+                          Hide annoying ads and stop companies from watching what you do online
+                        </span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={
+                          privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled
+                        }
+                        onChange={() =>
+                          handleAdBlockerToggle(
+                            !(privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled),
+                          )
+                        }
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div
                 style={{
                   marginTop: 'var(--space-xl)',
@@ -3334,47 +3378,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {}
-              <div className="settings-subsection">
-                <h3>Tracker Blocking</h3>
-                {!flags.privacy && (
-                  <p className="settings-subsection-hint">
-                    Enable "Privacy & Ad Blocking" in the General tab to activate these features.
-                  </p>
-                )}
-
-                <div className="settings-group" role="list">
-                  <div className="settings-item" role="listitem">
-                    <div className="settings-item-info">
-                      <div className="settings-item-icon">
-                        <BlockIcon size={20} />
-                      </div>
-                      <div className="settings-item-text">
-                        <span className="settings-item-name">Block Ads & Trackers</span>
-                        <span className="settings-item-desc">
-                          Hide annoying ads and stop companies from watching what you do online
-                        </span>
-                      </div>
-                    </div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={
-                          privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled
-                        }
-                        onChange={() =>
-                          handleAdBlockerToggle(
-                            !(privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled),
-                          )
-                        }
-                        disabled={!flags.privacy}
-                      />
-                      <span className="toggle-track" aria-hidden="true" />
-                    </label>
-                  </div>
-                </div>
-              </div>
 
               {}
               {rulesetStats && (
