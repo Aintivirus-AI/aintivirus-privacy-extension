@@ -154,11 +154,6 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'adblock-tester.com',
   'd3pkae9owd2lcf.cloudfront.net',
 
-  'sentry.io',
-  'browser.sentry-cdn.com',
-  'sentry-cdn.com',
-  'ingest.sentry.io',
-  'o0.ingest.sentry.io',
   'bugsnag.com',
   'd2wy8f7a9ursnm.cloudfront.net',
   'sessions.bugsnag.com',

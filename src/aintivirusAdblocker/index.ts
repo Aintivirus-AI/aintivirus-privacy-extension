@@ -23,8 +23,17 @@ const TRUSTED_DIRECTIVE_BASE_RULE_ID = 8000000;
 const TRUSTED_DIRECTIVE_PRIORITY = 2000000;
 const INTERNAL_API_RULE_BASE_ID = 9000000;
 
-// API domains that should never be blocked (for extension functionality)
+/**
+ * Domains that should NEVER be blocked by the ad blocker.
+ * These include:
+ * - Extension's own API dependencies (Jupiter, CoinGecko, etc.)
+ * - Critical infrastructure that websites depend on (error tracking, CDNs, auth services)
+ * - Payment processors and security services
+ * 
+ * Blocking these domains breaks core functionality on many legitimate websites.
+ */
 const INTERNAL_API_ALLOWLIST = [
+  // Extension wallet APIs (critical for extension functionality)
   'quote-api.jup.ag',
   'api.jup.ag',
   'tokens.jup.ag',
@@ -34,6 +43,39 @@ const INTERNAL_API_ALLOWLIST = [
   'mainnet.helius-rpc.com',
   'devnet.helius-rpc.com',
   'rpc.ankr.com',
+  
+  // Error tracking & monitoring (many sites break without these)
+  'sentry.io',
+  'bugsnag.com',
+  'rollbar.com',
+  'logrocket.com',
+  'datadog.com',
+  'newrelic.com',
+  
+  // CDNs (blocking these breaks most modern websites)
+  'cloudflare.com',
+  'cloudfront.net',
+  'akamaized.net',
+  'fastly.net',
+  'jsdelivr.net',
+  'unpkg.com',
+  
+  // Authentication & security services (critical for login flows)
+  'recaptcha.net',
+  'gstatic.com',
+  'googleusercontent.com',
+  'googleapis.com',
+  'auth0.com',
+  'okta.com',
+  'onelogin.com',
+  'duosecurity.com',
+  
+  // Payment processors (blocking these breaks e-commerce)
+  'stripe.com',
+  'paypal.com',
+  'braintreegateway.com',
+  'square.com',
+  'plaid.com',
 ];
 
 export const DEFAULT_RULESETS = [

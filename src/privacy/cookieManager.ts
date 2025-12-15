@@ -85,7 +85,20 @@ async function handleTabRemoved(
 
   const siteMode = await getSiteMode(tabInfo.domain);
 
-  if (siteMode === 'disabled') return;
+  if (siteMode === 'disabled') {
+    return;
+  }
+
+  // Also check if any third-party domains are authentication-related before cleanup
+  // This prevents breaking OAuth flows where the tab closes during redirect
+  const hasAuthDomains = Array.from(tabInfo.thirdPartyDomains).some(domain => 
+    isProtectedSite(domain)
+  );
+  
+  // If this was an authentication flow, skip cleanup entirely to preserve session
+  if (hasAuthDomains) {
+    return;
+  }
 
   if (siteMode === 'strict') {
     await cleanupCookiesForDomain(tabInfo.domain, 'all');
