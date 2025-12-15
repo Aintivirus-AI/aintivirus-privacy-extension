@@ -129,6 +129,10 @@ module.exports = (env, argv) => {
             from: 'vendor/aintivirusAdblocker/LICENSE.txt',
             to: 'aintivirusAdblocker/LICENSE.txt',
           },
+          {
+            from: 'rules',
+            to: 'rules',
+          },
         ],
       }),
     ],
