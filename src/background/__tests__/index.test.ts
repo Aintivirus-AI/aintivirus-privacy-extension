@@ -356,3 +356,4 @@ describe('Background Script', () => {
     });
   });
 });
+

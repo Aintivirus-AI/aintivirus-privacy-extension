@@ -4,19 +4,21 @@ import { PublicKey } from '@solana/web3.js';
 export type SolanaNetwork = 'mainnet-beta' | 'devnet';
 
 /**
- * Build-time injected API key for Helius Solana RPC.
+ * Build-time injected API key for Alchemy (supports both ETH and Solana).
  *
  * - In development, you can provide it via a local `.env` file (not committed).
  * - In CI/production builds, inject it as an environment variable.
  */
-const HELIUS_API_KEY = process.env.AINTIVIRUS_HELIUS_API_KEY;
+const ALCHEMY_API_KEY = process.env.AINTIVIRUS_ALCHEMY_API_KEY;
 
-function getHeliusRpcUrl(network: SolanaNetwork): string | null {
-  if (!HELIUS_API_KEY) return null;
+function getAlchemySolanaRpcUrl(network: SolanaNetwork): string | null {
+  if (!ALCHEMY_API_KEY) return null;
 
   const base =
-    network === 'devnet' ? 'https://devnet.helius-rpc.com/' : 'https://mainnet.helius-rpc.com/';
-  return `${base}?api-key=${encodeURIComponent(HELIUS_API_KEY)}`;
+    network === 'devnet'
+      ? 'https://solana-devnet.g.alchemy.com/v2/'
+      : 'https://solana-mainnet.g.alchemy.com/v2/';
+  return `${base}${ALCHEMY_API_KEY}`;
 }
 
 export interface NetworkConfig {
@@ -29,15 +31,15 @@ export interface NetworkConfig {
 export const NETWORK_CONFIGS: Record<SolanaNetwork, NetworkConfig> = {
   'mainnet-beta': {
     name: 'mainnet-beta',
-
-    rpcUrl: getHeliusRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
+    // Use Alchemy if available, otherwise fallback to public RPCs
+    rpcUrl: getAlchemySolanaRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://solana-mainnet.rpc.extrnode.com'],
     explorerUrl: 'https://explorer.solana.com',
   },
   devnet: {
     name: 'devnet',
-
-    rpcUrl: getHeliusRpcUrl('devnet') ?? 'https://rpc.ankr.com/solana_devnet',
+    // Use Alchemy if available, otherwise fallback to public RPCs
+    rpcUrl: getAlchemySolanaRpcUrl('devnet') ?? 'https://rpc.ankr.com/solana_devnet',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana_devnet'],
     explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
   },

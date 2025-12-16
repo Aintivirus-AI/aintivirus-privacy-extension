@@ -252,3 +252,4 @@ describe('Protected Domains', () => {
     expect(isScam).toBe(false);
   });
 });
+

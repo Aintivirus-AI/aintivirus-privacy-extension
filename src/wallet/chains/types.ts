@@ -151,6 +151,12 @@ export interface ChainTxHistoryItem {
   type: string;
 
   block: number;
+
+  explorerUrl?: string;
+
+  tokenAddress?: string;
+
+  logoUri?: string;
 }
 
 export interface ChainFeeEstimate {

@@ -122,6 +122,11 @@ async function fetchHistoryInternal(
   limit: number,
   before?: string,
 ): Promise<TransactionHistoryResult> {
+  // Note: Alchemy's Solana offering doesn't have enhanced transaction APIs like ETH
+  // We use standard RPC calls which work with Alchemy's RPC endpoint (configured in network settings)
+  // This provides the benefit of Alchemy's reliable infrastructure without needing special API methods
+  
+  // Use direct RPC calls for Solana transaction history
   try {
     const connection = await getCurrentConnection();
     const publicKey = new PublicKey(address);

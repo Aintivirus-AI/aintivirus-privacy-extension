@@ -34,6 +34,8 @@ interface EVMHistoryItem {
   fee?: number;
   status: 'confirmed' | 'pending' | 'failed';
   explorerUrl: string;
+  logoUri?: string;
+  tokenAddress?: string;
 }
 import { SUPPORTED_CHAINS } from '@shared/types';
 import { openExplorerUrl, getExplorerUrl } from '@shared/explorer';
@@ -413,6 +415,10 @@ const WalletTab: React.FC<WalletTabProps> = ({
   const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
   const [swapBalance, setSwapBalance] = useState<WalletBalance | null>(null);
 
+  // Prices shared across views
+  const [solPrice, setSolPrice] = useState<number | null>(null);
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
+
   const handleUnlock = async () => {
     if (!password) return;
     setUnlocking(true);
@@ -570,6 +576,10 @@ const WalletTab: React.FC<WalletTabProps> = ({
             activeWalletId={walletState.activeWalletId}
             activeWalletLabel={walletState.activeWalletLabel}
             walletCount={walletState.walletCount}
+            onPriceUpdate={(sol, eth) => {
+              setSolPrice(sol);
+              setEthPrice(eth);
+            }}
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
             evmAddress={walletState.evmAddress || null}
@@ -653,6 +663,8 @@ const WalletTab: React.FC<WalletTabProps> = ({
             activeEVMChain={walletState.activeEVMChain || null}
             onClose={() => setView('dashboard')}
             hideBalances={hideBalances}
+            solPrice={solPrice}
+            ethPrice={ethPrice}
           />
         )}
         {view === 'swap' && (
@@ -1140,6 +1152,7 @@ interface WalletDashboardProps {
   hideBalances: boolean;
   onToggleHideBalances: () => void;
   privacyEnabled: boolean;
+  onPriceUpdate?: (solPrice: number | null, ethPrice: number | null) => void;
 }
 
 // Chain icons with actual logos
@@ -1354,6 +1367,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   hideBalances,
   onToggleHideBalances,
   privacyEnabled,
+  onPriceUpdate,
 }) => {
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
@@ -1530,7 +1544,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         const [balanceRes, tokensRes, historyRes] = await Promise.all([
           sendToBackground({ type: 'WALLET_GET_BALANCE', payload: {} }),
           sendToBackground({ type: 'WALLET_GET_TOKENS', payload: {} }),
-          sendToBackground({ type: 'WALLET_GET_HISTORY', payload: { limit: 5, forceRefresh } }),
+          sendToBackground({ type: 'WALLET_GET_HISTORY', payload: { limit: 50, forceRefresh } }),
         ]);
 
         if (balanceRes.success && balanceRes.data) {
@@ -1543,13 +1557,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         if (historyRes.success && historyRes.data) {
           const result = historyRes.data as { transactions: TransactionHistoryItem[] };
           setHistory(result.transactions);
+          // Update ref to track the latest transaction
+          prevHistorySignatureRef.current = result.transactions[0]?.signature || null;
         }
         // Clear EVM data when on Solana
         setEvmHistory([]);
       } else if (evmAddress) {
-        // EVM: fetch balance and tokens in parallel
-        // Note: We don't fetch transaction history - users can view on block explorer
-        const [evmBalanceRes, evmTokensRes] = await Promise.all([
+        // EVM: fetch balance, tokens, and history in parallel
+        const [evmBalanceRes, evmTokensRes, evmHistoryRes] = await Promise.all([
           sendToBackground({
             type: 'WALLET_GET_EVM_BALANCE',
             payload: { evmChainId: activeEVMChain || 'ethereum' },
@@ -1557,6 +1572,10 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           sendToBackground({
             type: 'WALLET_GET_EVM_TOKENS',
             payload: { evmChainId: activeEVMChain || 'ethereum' },
+          }),
+          sendToBackground({
+            type: 'WALLET_GET_EVM_HISTORY',
+            payload: { evmChainId: activeEVMChain || 'ethereum', limit: 50 },
           }),
         ]);
 
@@ -1566,14 +1585,19 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         if (evmTokensRes.success && evmTokensRes.data) {
           setEvmTokens(evmTokensRes.data as EVMTokenBalance[]);
         }
+        if (evmHistoryRes.success && evmHistoryRes.data) {
+          const result = evmHistoryRes.data as { transactions: EVMHistoryItem[] };
+          setEvmHistory(result.transactions || []);
+        }
 
-        // Clear history arrays when on EVM
-        setEvmHistory([]);
+        // Clear Solana history when on EVM
         setHistory([]);
+        prevHistorySignatureRef.current = null; // Reset ref when switching to EVM
       } else {
         // No EVM address available (e.g., Solana-only private key import)
         setHistory([]);
         setEvmHistory([]);
+        prevHistorySignatureRef.current = null; // Reset ref
       }
 
       // Fetch security connections (light operation)
@@ -1627,7 +1651,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   );
 
   useEffect(() => {
-    fetchData();
+    fetchData(true); // Force refresh when component mounts or chain changes to get full history
   }, [fetchData]);
 
   // Real-time price updates every 5 seconds with flash animation
@@ -1681,6 +1705,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         prevEthPriceRef.current = newPrice;
         setEthPrice(newPrice);
         setEthChange24h(data.change24h);
+      }
+
+      // Notify parent component of price updates
+      if (onPriceUpdate) {
+        onPriceUpdate(
+          solPriceRes.success && solPriceRes.data ? (solPriceRes.data as any).price : null,
+          ethPriceRes.success && ethPriceRes.data ? (ethPriceRes.data as any).price : null
+        );
       }
     };
 
@@ -1758,9 +1790,20 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           if (newSignature && newSignature !== prevHistorySignatureRef.current) {
             hasNewTransactions = prevHistorySignatureRef.current !== null;
             prevHistorySignatureRef.current = newSignature;
+            
+            // Only update history if there are new transactions - fetch full history
+            if (hasNewTransactions) {
+              const fullHistoryRes = await sendToBackground({
+                type: 'WALLET_GET_HISTORY',
+                payload: { limit: 50, forceRefresh: true },
+              });
+              if (fullHistoryRes.success && fullHistoryRes.data) {
+                const fullResult = fullHistoryRes.data as { transactions: TransactionHistoryItem[] };
+                setHistory(fullResult.transactions);
+              }
+            }
           }
-
-          setHistory(result.transactions);
+          // Don't update history during auto-refresh if no new transactions
         }
 
         // If new transactions detected, force refresh balance and tokens immediately
@@ -1900,6 +1943,55 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     return date.toLocaleDateString();
+  };
+
+  // Helper to calculate USD value for Solana transactions
+  const getSolanaTransactionUsdValue = (tx: TransactionHistoryItem): number | null => {
+    if (tx.tokenInfo) {
+      // Token transfer - we don't have individual token prices readily available
+      // Return null to indicate we can't calculate the value
+      return null;
+    } else {
+      // Native SOL transfer
+      if (solPrice) {
+        return tx.amountSol * solPrice;
+      }
+    }
+    return null;
+  };
+
+  // Helper to calculate USD value for EVM transactions
+  const getEvmTransactionUsdValue = (tx: EVMHistoryItem): number | null => {
+    if (tx.tokenAddress) {
+      // Token transfer - we don't have individual token prices readily available
+      // Return null to indicate we can't calculate the value
+      return null;
+    } else {
+      // Native transfer
+      const chainPrice = activeChain === 'evm' && activeEVMChain ? 
+        (activeEVMChain === 'ethereum' ? ethPrice : 
+         activeEVMChain === 'polygon' ? ethPrice : // Using ETH price as proxy for now
+         ethPrice) : 
+        ethPrice;
+      
+      if (chainPrice) {
+        return tx.amount * chainPrice;
+      }
+    }
+    return null;
+  };
+
+  // Filter transactions: hide those under $1 (but only if we can calculate the value)
+  const filterLowValueTransactions = <T extends TransactionHistoryItem | EVMHistoryItem>(
+    transactions: T[],
+    getUsdValue: (tx: T) => number | null
+  ): T[] => {
+    return transactions.filter(tx => {
+      const usdValue = getUsdValue(tx);
+      // If we can't calculate USD value, show the transaction (to be safe)
+      // If we can calculate it, only show if >= $1
+      return usdValue === null || usdValue >= 1;
+    });
   };
 
   // Get current balance value based on chain
@@ -2098,7 +2190,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             history.length === 0 ? (
               <div className="empty-state">No transactions yet</div>
             ) : (
-              history.map((tx) => {
+              filterLowValueTransactions(history, getSolanaTransactionUsdValue).map((tx) => {
                 // Get token info from multiple sources: 1) loaded tokens, 2) transaction's stored info, 3) cached enriched metadata
                 const tokenMeta = tx.tokenInfo
                   ? tokens.find((t) => t.mint === tx.tokenInfo?.mint)
@@ -2199,33 +2291,97 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                 );
               })
             )
+          ) : evmHistory.length === 0 ? (
+            <div className="empty-state">No transactions yet</div>
           ) : (
-            <div className="empty-state">
-              <p
-                style={{
-                  color: 'var(--text-muted)',
-                  marginBottom: 'var(--space-md)',
-                  fontSize: '0.875rem',
-                }}
-              >
-                View your transaction history on{' '}
-                {activeEVMChain === 'ethereum'
-                  ? 'Etherscan'
-                  : SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain)?.name + 'scan' ||
-                    'Block Explorer'}
-              </p>
-              <div className="evm-explorer-link-wrapper">
-                <ExplorerLinkIcon
-                  type="address"
-                  id={evmAddress || ''}
-                  chain="evm"
-                  evmChainId={activeEVMChain || 'ethereum'}
-                  variant="button"
-                  label={`View on ${activeEVMChain === 'ethereum' ? 'Etherscan' : SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain)?.name + 'scan' || 'Explorer'}`}
-                  className="btn btn-secondary"
-                />
-              </div>
-            </div>
+            filterLowValueTransactions(evmHistory, getEvmTransactionUsdValue).map((tx) => {
+              const nativeSymbol = getNativeSymbol();
+              
+              // Get token logo: check if tx has logoUri, otherwise check from evmTokens
+              const tokenMeta = tx.tokenAddress
+                ? evmTokens.find((t) => t.address.toLowerCase() === tx.tokenAddress?.toLowerCase())
+                : null;
+              
+              // Native token logos by chain
+              const getNativeLogoUri = () => {
+                const chainLogos: Record<string, string> = {
+                  ethereum: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+                  polygon: 'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+                  arbitrum: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+                  optimism: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
+                  base: 'https://avatars.githubusercontent.com/u/108554348?s=280&v=4',
+                };
+                return chainLogos[activeEVMChain || 'ethereum'] || chainLogos.ethereum;
+              };
+              
+              const logoUri = tx.logoUri || tokenMeta?.logoUri || (!tx.tokenAddress ? getNativeLogoUri() : undefined);
+              
+              return (
+                <div
+                  key={tx.hash}
+                  className="tx-item tx-item-with-logo"
+                  onClick={() =>
+                    openExplorerUrl('tx', tx.hash, 'evm', activeEVMChain || 'ethereum', {
+                      testnet: false,
+                    })
+                  }
+                >
+                  <div className="tx-icon-wrapper">
+                    {logoUri ? (
+                      <div className="tx-token-logo">
+                        <img
+                          src={logoUri}
+                          alt=""
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.add(
+                              'visible',
+                            );
+                          }}
+                        />
+                        <div className={`tx-icon-fallback ${tx.direction}`}>
+                          {tx.direction === 'sent' ? (
+                            <SendIcon size={14} />
+                          ) : tx.direction === 'received' ? (
+                            <ReceiveIcon size={14} />
+                          ) : (
+                            <SwapIcon size={14} />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`tx-icon ${tx.direction}`}>
+                        {tx.direction === 'sent' ? (
+                          <SendIcon size={16} />
+                        ) : tx.direction === 'received' ? (
+                          <ReceiveIcon size={16} />
+                        ) : (
+                          <SwapIcon size={16} />
+                        )}
+                      </div>
+                    )}
+                    <div className={`tx-direction-badge ${tx.direction}`}>
+                      {tx.direction === 'sent' ? '↗' : tx.direction === 'received' ? '↙' : '⇄'}
+                    </div>
+                  </div>
+                  <div className="tx-details">
+                    <div className="tx-type">{tx.type}</div>
+                    <div className="tx-time">{formatTime(tx.timestamp)}</div>
+                  </div>
+                  <div className="tx-amount">
+                    <div className={`tx-value ${tx.direction}`}>
+                      {formatHiddenTxAmount(
+                        tx.amount,
+                        tx.direction === 'self' ? 'swap' : tx.direction,
+                        tx.symbol || nativeSymbol,
+                        (val) => val.toLocaleString(undefined, { maximumFractionDigits: 6 }),
+                        hideBalances,
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       )}
@@ -3873,6 +4029,8 @@ interface HistoryViewProps {
   activeEVMChain: EVMChainId | null;
   onClose: () => void;
   hideBalances: boolean;
+  solPrice: number | null;
+  ethPrice: number | null;
 }
 
 const HistoryView: React.FC<HistoryViewProps> = ({
@@ -3882,10 +4040,13 @@ const HistoryView: React.FC<HistoryViewProps> = ({
   activeEVMChain,
   onClose,
   hideBalances,
+  solPrice,
+  ethPrice,
 }) => {
   const [history, setHistory] = useState<TransactionHistoryItem[]>([]);
   const [evmHistory, setEvmHistory] = useState<EVMHistoryItem[]>([]);
   const [tokens, setTokens] = useState<SPLTokenBalance[]>([]);
+  const [evmTokens, setEvmTokens] = useState<EVMTokenBalance[]>([]);
   const [tokenMetadataCache, setTokenMetadataCache] = useState<
     Record<string, { symbol?: string; name?: string; logoUri?: string }>
   >({});
@@ -3958,7 +4119,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({
       const [historyRes, tokensRes] = await Promise.all([
         sendToBackground({
           type: 'WALLET_GET_HISTORY',
-          payload: { limit: 20 },
+          payload: { limit: 50 },
         }),
         sendToBackground({ type: 'WALLET_GET_TOKENS', payload: {} }),
       ]);
@@ -3972,9 +4133,26 @@ const HistoryView: React.FC<HistoryViewProps> = ({
         setTokens(tokensRes.data as SPLTokenBalance[]);
       }
     } else {
-      // For EVM chains, we don't fetch transaction history
-      // Users can view transactions on the block explorer
-      setEvmHistory([]);
+      // For EVM chains, fetch transaction history and tokens from Alchemy
+      const [evmHistoryRes, evmTokensRes] = await Promise.all([
+        sendToBackground({
+          type: 'WALLET_GET_EVM_HISTORY',
+          payload: { evmChainId: activeEVMChain || 'ethereum', limit: 50 },
+        }),
+        sendToBackground({
+          type: 'WALLET_GET_EVM_TOKENS',
+          payload: { evmChainId: activeEVMChain || 'ethereum' },
+        }),
+      ]);
+
+      if (evmHistoryRes.success && evmHistoryRes.data) {
+        const result = evmHistoryRes.data as { transactions: EVMHistoryItem[] };
+        setEvmHistory(result.transactions || []);
+      }
+
+      if (evmTokensRes.success && evmTokensRes.data) {
+        setEvmTokens(evmTokensRes.data as EVMTokenBalance[]);
+      }
     }
     setLoading(false);
   };
@@ -3986,7 +4164,52 @@ const HistoryView: React.FC<HistoryViewProps> = ({
 
   const formatTime = (timestamp: number | null) => {
     if (!timestamp) return 'Unknown';
-    return new Date(timestamp * 1000).toLocaleString();
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Helper to calculate USD value for Solana transactions
+  const getSolanaTransactionUsdValue = (tx: TransactionHistoryItem): number | null => {
+    if (tx.tokenInfo) {
+      return null;
+    } else {
+      if (solPrice) {
+        return tx.amountSol * solPrice;
+      }
+    }
+    return null;
+  };
+
+  // Helper to calculate USD value for EVM transactions
+  const getEvmTransactionUsdValue = (tx: EVMHistoryItem): number | null => {
+    if (tx.tokenAddress) {
+      return null;
+    } else {
+      const chainPrice = activeChain === 'evm' && activeEVMChain ? 
+        (activeEVMChain === 'ethereum' ? ethPrice : ethPrice) : 
+        ethPrice;
+      
+      if (chainPrice) {
+        return tx.amount * chainPrice;
+      }
+    }
+    return null;
+  };
+
+  // Filter transactions: hide those under $1
+  const filterLowValueTransactions = <T extends TransactionHistoryItem | EVMHistoryItem>(
+    transactions: T[],
+    getUsdValue: (tx: T) => number | null
+  ): T[] => {
+    return transactions.filter(tx => {
+      const usdValue = getUsdValue(tx);
+      return usdValue === null || usdValue >= 1;
+    });
   };
 
   const symbol = getSymbol();
@@ -4006,34 +4229,101 @@ const HistoryView: React.FC<HistoryViewProps> = ({
           <div className="spinner" />
         </div>
       ) : activeChain === 'evm' ? (
-        // EVM transaction history - view on block explorer
-        <div className="empty-state" style={{ padding: 'var(--space-xl)', textAlign: 'center' }}>
-          <p
-            style={{
-              marginBottom: 'var(--space-lg)',
-              color: 'var(--text-secondary)',
-              fontSize: '0.9375rem',
-              lineHeight: '1.5',
-            }}
-          >
-            View your complete transaction history on{' '}
-            {chainName === 'Ethereum' ? 'Etherscan' : chainName + 'scan'}
-          </p>
-          <ExplorerLinkIcon
-            type="address"
-            id={address}
-            chain="evm"
-            evmChainId={activeEVMChain || 'ethereum'}
-            variant="button"
-            label={`Open ${chainName === 'Ethereum' ? 'Etherscan' : chainName + 'scan'}`}
-            className="btn btn-primary"
-          />
-        </div>
+        // EVM transaction history
+        evmHistory.length === 0 ? (
+          <div className="empty-state">No transactions yet</div>
+        ) : (
+          <div className="tx-list">
+            {filterLowValueTransactions(evmHistory, getEvmTransactionUsdValue).map((tx) => {
+              // Get token logo: check if tx has logoUri, otherwise check from evmTokens
+              const tokenMeta = tx.tokenAddress
+                ? evmTokens.find((t) => t.address.toLowerCase() === tx.tokenAddress?.toLowerCase())
+                : null;
+              
+              // Native token logos by chain
+              const getNativeLogoUri = () => {
+                const chainLogos: Record<string, string> = {
+                  ethereum: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+                  polygon: 'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+                  arbitrum: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+                  optimism: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
+                  base: 'https://avatars.githubusercontent.com/u/108554348?s=280&v=4',
+                };
+                return chainLogos[activeEVMChain || 'ethereum'] || chainLogos.ethereum;
+              };
+              
+              const logoUri = tx.logoUri || tokenMeta?.logoUri || (!tx.tokenAddress ? getNativeLogoUri() : undefined);
+              
+              return (
+                <div
+                  key={tx.hash}
+                  className="tx-item tx-item-with-logo"
+                  onClick={() =>
+                    window.open(
+                      `https://${activeEVMChain === 'ethereum' ? '' : activeEVMChain + '.'}etherscan.io/tx/${tx.hash}`,
+                      '_blank',
+                    )
+                  }
+                >
+                  <div className="tx-icon-wrapper">
+                    {logoUri ? (
+                      <div className="tx-token-logo">
+                        <img
+                          src={logoUri}
+                          alt=""
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.add(
+                              'visible',
+                            );
+                          }}
+                        />
+                        <div className={`tx-icon-fallback ${tx.direction}`}>
+                          {tx.direction === 'sent' ? (
+                            <SendIcon size={14} />
+                          ) : tx.direction === 'received' ? (
+                            <ReceiveIcon size={14} />
+                          ) : (
+                            <SwapIcon size={14} />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`tx-icon ${tx.direction}`}>
+                        {tx.direction === 'sent' ? (
+                          <SendIcon size={16} />
+                        ) : tx.direction === 'received' ? (
+                          <ReceiveIcon size={16} />
+                        ) : (
+                          <SwapIcon size={16} />
+                        )}
+                      </div>
+                    )}
+                    <div className={`tx-direction-badge ${tx.direction}`}>
+                      {tx.direction === 'sent' ? '↗' : tx.direction === 'received' ? '↙' : '⇄'}
+                    </div>
+                  </div>
+                  <div className="tx-details">
+                    <div className="tx-type">{tx.type}</div>
+                    <div className="tx-time">{formatTime(tx.timestamp)}</div>
+                  </div>
+                  <div className="tx-amount">
+                    <div className={`tx-value ${tx.direction}`}>
+                      {tx.direction === 'sent' && '-'}
+                      {tx.direction === 'received' && '+'}
+                      {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} {tx.symbol || symbol}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       ) : history.length === 0 ? (
         <div className="empty-state">No transactions yet</div>
       ) : (
         <div className="tx-list" style={{ maxHeight: '450px', overflowY: 'auto' }}>
-          {history.map((tx) => {
+          {filterLowValueTransactions(history, getSolanaTransactionUsdValue).map((tx) => {
             // Look up token metadata from multiple sources: 1) loaded tokens, 2) transaction's stored info, 3) cached enriched metadata
             const tokenMeta = tx.tokenInfo ? getTokenMeta(tx.tokenInfo.mint) : null;
             const enrichedMeta = tx.tokenInfo?.mint ? tokenMetadataCache[tx.tokenInfo.mint] : null;

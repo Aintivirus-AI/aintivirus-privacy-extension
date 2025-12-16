@@ -39,6 +39,7 @@ import {
   type UnsignedEVMTransaction,
 } from './transactions';
 import { getPopularTokenBalances, getMultipleTokenBalances, toTokenBalance } from './tokens';
+import { getAlchemyEVMHistory, isAlchemyConfigured } from '../../alchemy';
 
 // EVM adapter implements ChainAdapter using the shared EVM utilities below.
 const historyCache = new Map<
@@ -377,6 +378,74 @@ export class EVMAdapter implements ChainAdapter {
       return { ...cached, cursor: null };
     }
 
+    // Use Alchemy if configured, otherwise fallback to Etherscan-like APIs
+    if (isAlchemyConfigured()) {
+      try {
+        const result = await getAlchemyEVMHistory(
+          this.evmChainId,
+          address,
+          testnet,
+          limit,
+          before,
+        );
+
+        const transactions: ChainTxHistoryItem[] = result.transactions.map((tx) => {
+          // Alchemy now returns value as Wei string (converted in alchemy.ts)
+          const value = BigInt(tx.value || '0');
+          const valueFormatted = Number(formatUnits(value, this.nativeDecimals));
+
+          // Use the direction from Alchemy (based on which query returned this tx)
+          // This is more reliable than comparing from/to addresses
+          const direction = tx.direction;
+          const isOutgoing = direction === 'sent';
+
+          // Check for self-transfer (same address sent to itself)
+          const isSelfTransfer = tx.from.toLowerCase() === address.toLowerCase() && 
+                                  tx.to?.toLowerCase() === address.toLowerCase();
+          const finalDirection: 'sent' | 'received' | 'self' | 'unknown' = isSelfTransfer ? 'self' : direction;
+
+          // Set descriptive type based on category and direction
+          let type: string;
+          if (tx.category === 'erc20') {
+            type = isOutgoing ? 'Sent Token' : 'Received Token';
+          } else if (tx.category === 'erc721' || tx.category === 'erc1155') {
+            type = isOutgoing ? 'Sent NFT' : 'Received NFT';
+          } else {
+            // Native currency (ETH, MATIC, etc.)
+            type = isOutgoing ? 'Sent' : 'Received';
+          }
+
+          return {
+            hash: tx.hash,
+            timestamp: tx.timestamp || null,
+            direction: finalDirection,
+            type,
+            amount: value,
+            amountFormatted: valueFormatted,
+            symbol: this.nativeSymbol,
+            counterparty: isOutgoing ? tx.to : tx.from,
+            fee: BigInt(0), // Alchemy doesn't provide fee in transfers API
+            status: 'confirmed' as const,
+            block: parseInt(tx.blockNum, 16),
+            explorerUrl: `${explorerBase}/tx/${tx.hash}`,
+            tokenAddress: tx.tokenAddress,
+          };
+        });
+
+        const hasMore = !!result.pageKey;
+        setCachedHistory(cacheKey, transactions, hasMore);
+
+        return {
+          transactions,
+          hasMore,
+          cursor: result.pageKey || null,
+        };
+      } catch {
+        // Fall through to Etherscan fallback
+      }
+    }
+
+    // Fallback to Etherscan-like APIs
     try {
       const apiUrl = this.getExplorerApiUrl(testnet);
       if (!apiUrl) {
@@ -402,7 +471,7 @@ export class EVMAdapter implements ChainAdapter {
         return { transactions: [], hasMore: false, cursor: null };
       }
 
-      const transactions: any[] = data.result.map((tx: any) => {
+      const transactions: ChainTxHistoryItem[] = data.result.map((tx: any) => {
         const isOutgoing = tx.from.toLowerCase() === address.toLowerCase();
         const value = BigInt(tx.value || '0');
         const valueFormatted = Number(formatUnits(value, this.nativeDecimals));
@@ -416,35 +485,40 @@ export class EVMAdapter implements ChainAdapter {
           direction = 'received';
         }
 
-        let type = 'Transfer';
+        // Determine type from method signature or default to direction-based type
+        let type: string;
         if (tx.input && tx.input !== '0x' && tx.input.length > 2) {
           const methodId = tx.input.slice(0, 10);
           type = this.decodeMethodType(methodId);
+        } else {
+          // Simple transfer with no contract data
+          type = isOutgoing ? 'Sent' : 'Received';
         }
+
+        const gasUsed = tx.gasUsed ? BigInt(tx.gasUsed) * BigInt(tx.gasPrice || '0') : BigInt(0);
 
         return {
           hash: tx.hash,
           timestamp: parseInt(tx.timeStamp, 10),
           direction,
           type,
-          amount: valueFormatted,
+          amount: value,
+          amountFormatted: valueFormatted,
           symbol: this.nativeSymbol,
           counterparty: isOutgoing ? tx.to : tx.from,
-          fee: tx.gasUsed
-            ? Number(formatUnits(BigInt(tx.gasUsed) * BigInt(tx.gasPrice || '0'), 18))
-            : 0,
+          fee: gasUsed,
           status:
             tx.txreceipt_status === '1'
               ? 'confirmed'
               : tx.txreceipt_status === '0'
                 ? 'failed'
                 : 'pending',
+          block: parseInt(tx.blockNumber || '0', 10),
           explorerUrl: `${explorerBase}/tx/${tx.hash}`,
         };
       });
 
       const hasMore = transactions.length >= limit;
-
       setCachedHistory(cacheKey, transactions, hasMore);
 
       return {
@@ -452,12 +526,11 @@ export class EVMAdapter implements ChainAdapter {
         hasMore,
         cursor: transactions.length > 0 ? transactions[transactions.length - 1].hash : null,
       };
-    } catch (error) {
+    } catch {
       const staleCache = getCachedHistory(cacheKey);
       if (staleCache) {
         return { ...staleCache, cursor: null };
       }
-
       return { transactions: [], hasMore: false, cursor: null };
     }
   }

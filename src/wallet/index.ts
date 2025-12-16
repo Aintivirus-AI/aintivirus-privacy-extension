@@ -1140,13 +1140,35 @@ async function handleGetEVMHistory(
   const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
   const testnet = settings.networkEnvironment === 'testnet';
 
-  const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
-  const result = await adapter.getTransactionHistory(evmAddress, payload?.limit || 20);
+  try {
+    const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
+    const result = await adapter.getTransactionHistory(evmAddress, payload?.limit || 20);
 
-  return {
-    transactions: result.transactions,
-    hasMore: result.hasMore,
-  };
+    // BigInt cannot be serialized through Chrome's message passing
+    // Convert to serializable format for the UI
+    const explorerBase = getEVMExplorerUrl(chainId, testnet);
+    const serializableTransactions = result.transactions.map((tx) => ({
+      hash: tx.hash,
+      timestamp: tx.timestamp,
+      direction: tx.direction,
+      type: tx.type,
+      amount: tx.amountFormatted,
+      symbol: tx.symbol,
+      counterparty: tx.counterparty,
+      fee: Number(tx.fee) / 1e18,
+      status: tx.status,
+      explorerUrl: tx.explorerUrl || `${explorerBase}/tx/${tx.hash}`,
+      tokenAddress: tx.tokenAddress,
+      logoUri: tx.logoUri,
+    }));
+
+    return {
+      transactions: serializableTransactions,
+      hasMore: result.hasMore,
+    };
+  } catch {
+    return { transactions: [], hasMore: false };
+  }
 }
 
 async function handleEstimateEVMFee(
@@ -1502,6 +1524,10 @@ export async function initializeWalletModule(): Promise<void> {
   await getWalletSettings();
 
   await initializeRpcHealth();
+  
+  // Debug Alchemy configuration
+  console.log('[Wallet Init] Checking Alchemy configuration...');
+  console.log('[Wallet Init] AINTIVIRUS_ALCHEMY_API_KEY:', process.env.AINTIVIRUS_ALCHEMY_API_KEY ? 'SET (length: ' + (process.env.AINTIVIRUS_ALCHEMY_API_KEY?.length || 0) + ')' : 'NOT SET');
 }
 
 export * from './types';
