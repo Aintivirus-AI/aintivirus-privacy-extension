@@ -2404,9 +2404,9 @@ img.tx-token-logo {
 
 .fee-display {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-lg);
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
   background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
   border: 1px solid var(--border-subtle);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -2420,14 +2420,6 @@ img.tx-token-logo {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.fee-label::before {
-  content: '⚡';
-  font-size: 0.875rem;
 }
 
 .fee-value {
@@ -2435,6 +2427,7 @@ img.tx-token-logo {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
+  word-break: break-all;
 }
 
 /* Receive View */
@@ -2593,9 +2586,9 @@ img.tx-token-logo {
 
 .tx-review-section {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-lg);
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-md);
@@ -2604,20 +2597,19 @@ img.tx-token-logo {
 
 .tx-review-section:hover {
   background: var(--bg-hover);
-  transform: translateX(2px);
 }
 
 .tx-review-section.tx-review-total {
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-hover) 100%);
-  padding: var(--space-xl);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: var(--space-lg);
   margin-top: var(--space-lg);
   margin-bottom: 0;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25);
-  border: none;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
 }
 
 .tx-review-section.tx-review-total:hover {
-  transform: none;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
 }
 
 .tx-review-label {
@@ -2629,7 +2621,9 @@ img.tx-token-logo {
 }
 
 .tx-review-total .tx-review-label {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.75rem;
 }
 
 .tx-review-value {
@@ -2637,10 +2631,11 @@ img.tx-token-logo {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
+  word-break: break-all;
 }
 
 .tx-review-total .tx-review-value {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: white;
 }
@@ -2649,21 +2644,56 @@ img.tx-token-logo {
 .tx-review-total-breakdown {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  width: 100%;
 }
 
 .tx-review-total-primary {
   font-family: var(--font-mono);
   font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 700;
+  color: white;
+  word-break: break-all;
 }
 
 .tx-review-total-fee {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.7);
+  word-break: break-all;
+}
+
+/* USD values in transaction review */
+.tx-review-usd {
   color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.875rem;
+}
+
+.tx-review-total .tx-review-usd {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+  font-size: 0.875rem;
+}
+
+/* Total display in send form */
+.total-display {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.total-display .fee-label {
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.total-display .fee-value {
+  font-weight: 700;
+  font-size: 1rem;
+  color: white;
 }
 
 .tx-review-address {
@@ -2676,6 +2706,7 @@ img.tx-token-logo {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  word-break: break-all;
 }
 
 .tx-review-error {

@@ -3024,8 +3024,12 @@ const SendForm: React.FC<SendFormProps> = ({
     largeTransferThreshold: number;
   }>({ warnOnLargeTransfers: true, largeTransferThreshold: 100 });
   const [tokenPrice, setTokenPrice] = useState<number | null>(null);
+  const [nativeTokenPrice, setNativeTokenPrice] = useState<number | null>(null); // For fee USD conversion
   const [amountMode, setAmountMode] = useState<'token' | 'usd'>('token');
   const [calculatingMax, setCalculatingMax] = useState(false);
+  const maxCalculatedRef = React.useRef(false); // Track when MAX was just clicked
+  const maxFeeUsedRef = React.useRef<number | null>(null); // Store fee used in MAX calculation
+  const maxAmountRef = React.useRef<string | null>(null); // Store the MAX amount calculated
 
   // Load security settings and token price on mount
   useEffect(() => {
@@ -3044,7 +3048,22 @@ const SendForm: React.FC<SendFormProps> = ({
           });
         }
 
-        // Load token price
+        // Always fetch native token price for fee USD conversion
+        if (activeChain === 'solana') {
+          const nativePriceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
+          if (nativePriceRes.success && nativePriceRes.data) {
+            const data = nativePriceRes.data as { price: number; change24h: number | null };
+            setNativeTokenPrice(data.price);
+          }
+        } else {
+          const nativePriceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
+          if (nativePriceRes.success && nativePriceRes.data) {
+            const data = nativePriceRes.data as { price: number; change24h: number | null };
+            setNativeTokenPrice(data.price);
+          }
+        }
+
+        // Load token price (for the token being sent)
         if (selectedToken?.chain === 'solana' && selectedToken.mint && activeChain === 'solana') {
           // For SPL tokens, fetch the specific token price
           const priceRes = await sendToBackground({
@@ -3058,14 +3077,8 @@ const SendForm: React.FC<SendFormProps> = ({
             }
           }
         } else if (selectedToken?.chain === 'evm' && activeChain === 'evm') {
-          // For ERC20 tokens, we don't have a price endpoint yet, so use ETH price as fallback
-          // TODO: Add ERC20 token price fetching
-          const priceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
-          if (priceRes.success && priceRes.data) {
-            const data = priceRes.data as { price: number; change24h: number | null };
-            // For now, we don't have individual token prices for ERC20, so set to null
-            setTokenPrice(null);
-          }
+          // For ERC20 tokens, we don't have a price endpoint yet, so set to null
+          setTokenPrice(null);
         } else if (activeChain === 'solana') {
           const priceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
           if (priceRes.success && priceRes.data) {
@@ -3177,6 +3190,12 @@ const SendForm: React.FC<SendFormProps> = ({
   }, [activeChain, activeEVMChain]);
 
   useEffect(() => {
+    // Skip estimation if MAX was just clicked (it already did accurate estimation)
+    if (maxCalculatedRef.current) {
+      maxCalculatedRef.current = false; // Reset flag
+      return;
+    }
+    
     if (recipient && amount && parseFloat(amount) > 0) {
       estimateFee();
     }
@@ -3255,39 +3274,50 @@ const SendForm: React.FC<SendFormProps> = ({
         if (isSendingEvmToken && selectedToken) {
           maxTokenAmount = selectedToken.uiBalance;
         } else if (evmBalance) {
-          // Try to get a fresh fee estimate if we have a recipient
-          let estimatedFee = evmFeeEstimate?.totalFeeEth;
+          // For ETH native currency, get a single fee estimate and add buffer
+          let estimatedFee = evmFeeEstimate?.totalFeeEth || 0.002;
 
-          if (!estimatedFee && recipient) {
+          if (recipient) {
             try {
-              const tempAmount = evmBalance.formatted * 0.5; // Use 50% of balance for estimate
+              // Estimate fee for a simple transfer (gas is fixed at 21000 for ETH transfers)
               const res = await sendToBackground({
                 type: 'WALLET_ESTIMATE_EVM_FEE',
                 payload: {
                   evmChainId: activeEVMChain,
                   recipient,
-                  amount: tempAmount.toString(),
+                  amount: '0.001', // Use small fixed amount - gas is same regardless
                 },
               });
+              
               if (res.success && res.data) {
                 const feeData = res.data as EVMFeeEstimate;
                 estimatedFee = feeData.totalFeeEth;
+                setEvmFeeEstimate(feeData);
               }
             } catch {
-              // Fallback to default if estimation fails
+              // Keep existing estimate or default
             }
           }
 
-          // Use estimated fee or fallback to conservative default
-          estimatedFee = estimatedFee || 0.002;
-          maxTokenAmount = Math.max(0, evmBalance.formatted - estimatedFee);
+          // Add safety buffer to account for gas price fluctuations
+          // Use 30% of fee OR minimum 0.00002 ETH, whichever is larger
+          // This ensures the amount will always be sendable even if gas goes up slightly
+          const safetyBuffer = Math.max(estimatedFee * 0.3, 0.00002);
+          maxTokenAmount = Math.max(0, evmBalance.formatted - estimatedFee - safetyBuffer);
+          
+          // Store the fee used for validation consistency
+          maxFeeUsedRef.current = estimatedFee;
         }
       }
 
-      // Convert to appropriate mode
+      // Set flag to prevent useEffect from re-estimating (we already did accurate estimation)
+      maxCalculatedRef.current = true;
+      
+      // Convert to appropriate mode and store for validation
+      let formattedAmount: string;
       if (amountMode === 'usd' && tokenPrice) {
         const maxUsd = maxTokenAmount * tokenPrice;
-        setAmount(maxUsd.toFixed(2));
+        formattedAmount = maxUsd.toFixed(2);
       } else {
         const decimals =
           isSendingToken && selectedToken
@@ -3295,8 +3325,12 @@ const SendForm: React.FC<SendFormProps> = ({
             : activeChain === 'solana'
               ? 9
               : 18;
-        setAmount(maxTokenAmount.toFixed(Math.min(decimals, 6)).replace(/\.?0+$/, ''));
+        formattedAmount = maxTokenAmount.toFixed(Math.min(decimals, 6)).replace(/\.?0+$/, '');
       }
+      
+      // Store the max amount for validation consistency
+      maxAmountRef.current = formattedAmount;
+      setAmount(formattedAmount);
 
       // Clear any previous error when using max
       setError('');
@@ -3355,6 +3389,8 @@ const SendForm: React.FC<SendFormProps> = ({
 
     // For native currency, account for fees and rent-exempt minimum (Solana only)
     let effectiveMax: number;
+    let evmFeeForValidation = evmFeeEstimate?.totalFeeEth;
+    
     if (isSendingToken) {
       effectiveMax = availableBalance;
     } else if (activeChain === 'solana') {
@@ -3362,9 +3398,20 @@ const SendForm: React.FC<SendFormProps> = ({
       const fee = feeEstimate?.feeSol || 0.000015;
       effectiveMax = Math.max(0, availableBalance - fee - SOLANA_RENT_EXEMPT_MIN - 0.000005);
     } else {
-      // EVM: just deduct fee
-      const fee = evmFeeEstimate?.totalFeeEth || 0.002;
-      effectiveMax = Math.max(0, availableBalance - fee);
+      // EVM: Use stored MAX fee if amount matches MAX, otherwise use current estimate
+      // This ensures consistency between MAX click and Send validation
+      let fee: number;
+      
+      // If user is sending the exact MAX amount we calculated, use the same fee
+      if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
+        fee = maxFeeUsedRef.current;
+      } else {
+        fee = evmFeeForValidation || 0.002;
+      }
+      
+      // Use same buffer formula as MAX calculation (30% or minimum 0.00002)
+      const safetyBuffer = Math.max(fee * 0.3, 0.00002);
+      effectiveMax = Math.max(0, availableBalance - fee - safetyBuffer);
     }
 
     if (tokenAmountToSend > availableBalance) {
@@ -3376,7 +3423,9 @@ const SendForm: React.FC<SendFormProps> = ({
     }
 
     // Warn if sending native currency and amount + fee (+ rent for Solana) exceeds balance
-    if (!isSendingToken && tokenAmountToSend > effectiveMax) {
+    // Use small epsilon for floating point comparison to avoid precision issues
+    const epsilon = 0.000001;
+    if (!isSendingToken && tokenAmountToSend > effectiveMax + epsilon) {
       if (activeChain === 'solana') {
         setError(
           `Amount plus network fee and rent reserve exceeds your balance. Click MAX to use the maximum sendable amount.`,
@@ -3712,6 +3761,11 @@ const SendForm: React.FC<SendFormProps> = ({
           <span className="tx-review-label">Network Fee</span>
           <span className="tx-review-value">
             ~{fee.toFixed(6)} {getNativeSymbol()}
+            {nativeTokenPrice && (
+              <span className="tx-review-usd">
+                {' '}(${(fee * nativeTokenPrice) < 0.01 ? '<0.01' : (fee * nativeTokenPrice).toFixed(2)})
+              </span>
+            )}
           </span>
         </div>
 
@@ -3726,8 +3780,18 @@ const SendForm: React.FC<SendFormProps> = ({
                   maximumFractionDigits: 6,
                 })}{' '}
                 {symbol}
+                {tokenPrice && (
+                  <span className="tx-review-usd"> (${(reviewTokenAmount * tokenPrice).toFixed(2)})</span>
+                )}
               </div>
-              <div className="tx-review-total-fee">+ {fee.toFixed(6)} SOL network fee</div>
+              <div className="tx-review-total-fee">
+                + {fee.toFixed(6)} {getNativeSymbol()} network fee
+                {nativeTokenPrice && (
+                  <span className="tx-review-usd">
+                    {' '}(${(fee * nativeTokenPrice) < 0.01 ? '<0.01' : (fee * nativeTokenPrice).toFixed(2)})
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             // For native currency, add them together
@@ -3738,6 +3802,11 @@ const SendForm: React.FC<SendFormProps> = ({
                 maximumFractionDigits: 6,
               })}{' '}
               {getNativeSymbol()}
+              {nativeTokenPrice && (
+                <span className="tx-review-usd">
+                  {' '}(${((reviewTokenAmount + fee) * nativeTokenPrice).toFixed(2)})
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -3794,15 +3863,44 @@ const SendForm: React.FC<SendFormProps> = ({
   // Get fee display based on chain (always in native currency)
   const getFeeDisplay = () => {
     if (activeChain === 'solana' && feeEstimate) {
-      return `~${feeEstimate.feeSol.toFixed(6)} SOL`;
+      const feeUsd = nativeTokenPrice ? feeEstimate.feeSol * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      return `~${feeEstimate.feeSol.toFixed(6)} SOL${usdPart}`;
     }
     if (activeChain === 'evm' && evmFeeEstimate) {
-      return `~${evmFeeEstimate.totalFeeEth.toFixed(6)} ${getNativeSymbol()}`;
+      const feeUsd = nativeTokenPrice ? evmFeeEstimate.totalFeeEth * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      return `~${evmFeeEstimate.totalFeeEth.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
     }
     return null;
   };
 
+  // Get total display (amount + fee) for native currency transfers
+  const getTotalDisplay = () => {
+    const tokenAmount = getTokenAmountToSend();
+    if (isNaN(tokenAmount) || tokenAmount <= 0) return null;
+    
+    // For token transfers, don't show combined total (different currencies)
+    if (isSendingToken) return null;
+    
+    let fee = 0;
+    if (activeChain === 'solana' && feeEstimate) {
+      fee = feeEstimate.feeSol;
+    } else if (activeChain === 'evm' && evmFeeEstimate) {
+      fee = evmFeeEstimate.totalFeeEth;
+    }
+    
+    if (fee === 0) return null;
+    
+    const total = tokenAmount + fee;
+    const totalUsd = nativeTokenPrice ? total * nativeTokenPrice : null;
+    const usdPart = totalUsd !== null ? ` ($${totalUsd.toFixed(2)})` : '';
+    
+    return `~${total.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
+  };
+
   const feeDisplay = getFeeDisplay();
+  const totalDisplay = getTotalDisplay();
 
   return (
     <div className="send-form">
@@ -3880,7 +3978,12 @@ const SendForm: React.FC<SendFormProps> = ({
             className={`form-input ${error && !amount ? 'error' : ''} ${amountMode === 'usd' ? 'has-prefix' : ''}`}
             placeholder="0.0"
             value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) => {
+              // Clear MAX refs when user manually changes amount
+              maxAmountRef.current = null;
+              maxFeeUsedRef.current = null;
+              setAmount(e.target.value.replace(/[^0-9.]/g, ''));
+            }}
           />
           {amountMode === 'token' && <span className="amount-suffix">{symbol}</span>}
           <button className="max-btn" onClick={handleMax} disabled={calculatingMax}>
@@ -3914,6 +4017,13 @@ const SendForm: React.FC<SendFormProps> = ({
         <div className="fee-display">
           <span className="fee-label">Network Fee</span>
           <span className="fee-value">{feeDisplay}</span>
+        </div>
+      )}
+
+      {totalDisplay && (
+        <div className="fee-display total-display">
+          <span className="fee-label">Total</span>
+          <span className="fee-value">{totalDisplay}</span>
         </div>
       )}
 
