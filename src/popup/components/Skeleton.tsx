@@ -270,7 +270,7 @@ export const SkeletonWalletView: React.FC<{ className?: string }> = ({ className
 
     {}
     <div className="skeleton-wallet-actions">
-      {[1, 2, 3, 4].map((i) => (
+      {[1, 2, 3].map((i) => (
         <div key={i} className="skeleton-action-btn">
           <Skeleton variant="circle" size={20} />
           <Skeleton variant="text" width={40} height={12} />
