@@ -15,6 +15,7 @@ import {
   toHexChainId,
   fromHexChainId,
 } from '../types';
+import { approveConnection } from '../../security/connectionMonitor';
 import {
   getPermission,
   setPermission,
@@ -205,14 +206,17 @@ async function handleDAppRequest(
   sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
   const { chainType, method, params, origin, tabId, favicon, title } = payload;
+  console.log('[DApp Handler] handleDAppRequest:', { chainType, method, origin, tabId });
 
   if (tabId) {
     await addConnectedTab(tabId, origin, chainType);
   }
 
   if (!requiresApproval(method, chainType)) {
-    return await handleReadOnlyMethod(chainType, method, params);
+    console.log('[DApp Handler] Handling as read-only method');
+    return await handleReadOnlyMethod(chainType, method, params, origin);
   }
+  console.log('[DApp Handler] Method requires approval');
 
   const hasExistingPermission = await hasPermission(origin, chainType);
   const autoApprove = await shouldAutoApprove(origin, chainType);
@@ -221,6 +225,16 @@ async function handleDAppRequest(
     if (hasExistingPermission && autoApprove) {
       await updateLastAccessed(origin, chainType);
       const permission = await getPermission(origin, chainType);
+
+      // Record in security module for auto-approved connections too
+      if (permission?.accounts[0]) {
+        try {
+          console.log('[DApp Handler] Recording auto-approved connection:', origin, permission.accounts[0]);
+          await approveConnection(origin, origin, permission.accounts[0], 'low', [], tabId);
+        } catch (err) {
+          console.error('[DApp Handler] Failed to record auto-approved connection:', err);
+        }
+      }
 
       if (chainType === 'evm') {
         return { success: true, data: permission?.accounts || [] };
@@ -267,23 +281,51 @@ async function handleReadOnlyMethod(
   chainType: DAppChainType,
   method: string,
   params: unknown,
+  origin: string,
 ): Promise<MessageResponse> {
   if (chainType === 'evm') {
-    return await handleEVMReadOnlyMethod(method, params);
+    return await handleEVMReadOnlyMethod(method, params, origin);
   } else {
     return await handleSolanaReadOnlyMethod(method, params);
   }
 }
 
-async function handleEVMReadOnlyMethod(method: string, params: unknown): Promise<MessageResponse> {
+async function handleEVMReadOnlyMethod(
+  method: string,
+  params: unknown,
+  origin: string,
+): Promise<MessageResponse> {
   try {
-    switch (method) {
-      case '_getProviderState':
-        return await handleGetProviderState({ chainType: 'evm', origin: '' });
-
-      default:
-        return { success: false, error: 'RPC forwarding not yet implemented' };
+    // Handle internal provider state request specially
+    if (method === '_getProviderState') {
+      return await handleGetProviderState({ chainType: 'evm', origin });
     }
+
+    // Get current chain configuration from wallet
+    const walletResponse = await chrome.runtime.sendMessage({
+      type: 'WALLET_GET_STATE',
+      payload: undefined,
+    });
+
+    if (!walletResponse.success) {
+      return { success: false, error: 'Failed to get wallet state' };
+    }
+
+    const walletState = walletResponse.data;
+    const chainId = walletState.activeEVMChain || 'ethereum';
+    const testnet = walletState.networkEnvironment === 'testnet';
+
+    // Forward RPC request to background for processing
+    const rpcResponse = await chrome.runtime.sendMessage({
+      type: 'EVM_RPC_REQUEST',
+      payload: { method, params, chainId, testnet },
+    });
+
+    if (!rpcResponse.success) {
+      return { success: false, error: rpcResponse.error || 'RPC request failed' };
+    }
+
+    return { success: true, data: rpcResponse.data };
   } catch (error) {
     return {
       success: false,
@@ -384,7 +426,7 @@ async function processConnectApproval(
   selectedAccounts: string[],
   remember: boolean,
 ): Promise<unknown> {
-  const { origin, chainType } = request;
+  const { origin, chainType, tabId } = request;
 
   if (selectedAccounts.length === 0) {
     throw new Error('No accounts selected');
@@ -398,8 +440,24 @@ async function processConnectApproval(
     remember,
   );
 
-  if (request.tabId) {
-    await addConnectedTab(request.tabId, origin, chainType);
+  if (tabId) {
+    await addConnectedTab(tabId, origin, chainType);
+  }
+
+  // Also record in security module so connections show in the Security tab
+  try {
+    console.log('[DApp Handler] Recording new connection approval:', origin, selectedAccounts[0]);
+    await approveConnection(
+      origin,
+      origin, // Use origin as URL since we may not have full URL
+      selectedAccounts[0],
+      'low',
+      [],
+      tabId,
+    );
+  } catch (err) {
+    // Don't fail the connection if security recording fails
+    console.error('[DApp Handler] Failed to record connection in security module:', err);
   }
 
   if (chainType === 'evm') {
@@ -449,6 +507,7 @@ async function processSignApproval(request: QueuedRequest): Promise<unknown> {
 
 async function processTransactionApproval(request: QueuedRequest): Promise<unknown> {
   const { chainType, params } = request;
+  console.log('[DApp Handler] processTransactionApproval:', { chainType, params });
 
   if (chainType === 'evm') {
     const txParams = (params as unknown[])[0] as {
@@ -457,9 +516,14 @@ async function processTransactionApproval(request: QueuedRequest): Promise<unkno
       value?: string;
       data?: string;
       gas?: string;
+      gasPrice?: string;
+      maxFeePerGas?: string;
+      maxPriorityFeePerGas?: string;
     };
+    console.log('[DApp Handler] Sending EVM transaction:', txParams);
 
     const result = await sendEVMTransaction(txParams);
+    console.log('[DApp Handler] EVM transaction result:', result);
     return result;
   } else {
     const { transaction, options } = params as {
@@ -555,12 +619,26 @@ async function sendEVMTransaction(txParams: {
   value?: string;
   data?: string;
   gas?: string;
+  gasPrice?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
 }): Promise<string> {
+  // For contract calls (with data), pass raw hex value to preserve precision
+  // For simple transfers, convert to decimal string
+  const hasData = txParams.data && txParams.data !== '0x';
+  
   const response = await chrome.runtime.sendMessage({
     type: 'WALLET_SEND_ETH',
     payload: {
       recipient: txParams.to || '',
       amount: txParams.value ? (parseInt(txParams.value, 16) / 1e18).toString() : '0',
+      // Pass raw hex value for contract calls to avoid precision loss
+      valueHex: hasData ? txParams.value : undefined,
+      data: txParams.data,
+      gas: txParams.gas,
+      gasPrice: txParams.gasPrice,
+      maxFeePerGas: txParams.maxFeePerGas,
+      maxPriorityFeePerGas: txParams.maxPriorityFeePerGas,
     },
   });
 

@@ -119,17 +119,17 @@ export const SOLANA_CHAINS: Record<'mainnet-beta' | 'devnet', SolanaChainConfig>
   'mainnet-beta': {
     name: 'mainnet-beta',
 
-    rpcUrl: process.env.AINTIVIRUS_HELIUS_API_KEY
-      ? `https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(process.env.AINTIVIRUS_HELIUS_API_KEY)}`
-      : 'https://api.mainnet-beta.solana.com',
-    fallbackRpcUrls: ['https://api.mainnet-beta.solana.com'],
+    rpcUrl: process.env.AINTIVIRUS_ALCHEMY_API_KEY
+      ? `https://solana-mainnet.g.alchemy.com/v2/${process.env.AINTIVIRUS_ALCHEMY_API_KEY}`
+      : 'https://rpc.ankr.com/solana',
+    fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://api.mainnet-beta.solana.com'],
     explorerUrl: 'https://explorer.solana.com',
   },
   devnet: {
     name: 'devnet',
 
-    rpcUrl: process.env.AINTIVIRUS_HELIUS_API_KEY
-      ? `https://devnet.helius-rpc.com/?api-key=${encodeURIComponent(process.env.AINTIVIRUS_HELIUS_API_KEY)}`
+    rpcUrl: process.env.AINTIVIRUS_ALCHEMY_API_KEY
+      ? `https://solana-devnet.g.alchemy.com/v2/${process.env.AINTIVIRUS_ALCHEMY_API_KEY}`
       : 'https://api.devnet.solana.com',
     fallbackRpcUrls: ['https://api.devnet.solana.com'],
     explorerUrl: 'https://explorer.solana.com/?cluster=devnet',

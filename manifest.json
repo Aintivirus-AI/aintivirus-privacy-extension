@@ -131,6 +131,11 @@
         "id": "stevenblack-hosts",
         "enabled": false,
         "path": "aintivirusAdblocker/rulesets/main/stevenblack-hosts.json"
+      },
+      {
+        "id": "aintivirus-custom",
+        "enabled": true,
+        "path": "rules/static_ruleset_custom.json"
       }
     ]
   },

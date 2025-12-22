@@ -252,8 +252,8 @@ function getFeeAccount(outputMint: string): string | undefined {
       outputMint,
     );
     return feeAccount.toBase58();
-  } catch (error) {
-    console.error('Failed to derive referral token account:', error);
+  } catch {
+    // Referral fee account derivation failed - this is non-critical, swap will proceed without referral
     return undefined;
   }
 }
@@ -460,15 +460,9 @@ export async function executeSwap(
       settings.customRpcUrl,
     );
 
-    // Confirm the transaction
-    const confirmResult = await confirmTransaction(signature);
-
-    // Get explorer URL
+    // Await confirmation (non-blocking - swap was already broadcast)
+    await confirmTransaction(signature);
     const explorerUrl = await getTransactionExplorerUrl(signature);
-
-    if (!confirmResult.confirmed) {
-      console.warn('Swap transaction may not have confirmed:', confirmResult.error);
-    }
 
     return {
       signature,

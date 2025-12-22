@@ -34,6 +34,23 @@ interface EVMHistoryItem {
   fee?: number;
   status: 'confirmed' | 'pending' | 'failed';
   explorerUrl: string;
+  logoUri?: string;
+  tokenAddress?: string;
+  /** Swap info when transaction is a token swap */
+  swapInfo?: {
+    fromToken: {
+      symbol: string;
+      amount: number;
+      address?: string;
+      logoUri?: string;
+    };
+    toToken: {
+      symbol: string;
+      amount: number;
+      address?: string;
+      logoUri?: string;
+    };
+  };
 }
 import { SUPPORTED_CHAINS } from '@shared/types';
 import { openExplorerUrl, getExplorerUrl } from '@shared/explorer';
@@ -41,6 +58,8 @@ import { ExplorerLinkIcon } from './components/ExplorerLinkIcon';
 import { RecentRecipientsDropdown } from './components/RecentRecipientsDropdown';
 import { TokenIcon } from './components/TokenIcon';
 import { TokenSearchDropdown } from './components/TokenSearchDropdown';
+import { SwapTokenSelector } from './components/SwapTokenSelector';
+import { type SwapToken, getPopularTokens } from '../wallet/swapTokens';
 import { useHideBalances, useSessionSetting, SESSION_KEYS } from './hooks/useSessionSetting';
 import { useRecentRecipients } from './hooks/useRecentRecipients';
 import { useDebounce } from './hooks/useDebounce';
@@ -68,7 +87,6 @@ import {
   SettingsIcon,
   SendIcon,
   ReceiveIcon,
-  HistoryIcon,
   CopyIcon,
   CheckIcon,
   CloseIcon,
@@ -90,6 +108,7 @@ import {
   SearchIcon,
 } from './Icons';
 import { getPasswordStrengthFeedback } from '../wallet/crypto';
+import { isValidSolanaAddress, isValidEVMAddress } from '../wallet/keychain';
 
 interface PrivacyStats {
   totalBlockedRequests: number;
@@ -103,7 +122,7 @@ interface PrivacyStats {
 }
 
 type MainTab = 'security' | 'wallet';
-type WalletView = 'dashboard' | 'send' | 'receive' | 'history' | 'manage' | 'add-wallet' | 'swap';
+type WalletView = 'dashboard' | 'send' | 'receive' | 'manage' | 'add-wallet' | 'swap';
 
 function truncateAddress(address: string, chars: number = 4): string {
   if (address.length <= chars * 2 + 3) return address;
@@ -410,7 +429,13 @@ const WalletTab: React.FC<WalletTabProps> = ({
 
   // State for passing to swap view
   const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
+  const [swapEvmTokens, setSwapEvmTokens] = useState<EVMTokenBalance[]>([]);
   const [swapBalance, setSwapBalance] = useState<WalletBalance | null>(null);
+  const [swapEvmBalance, setSwapEvmBalance] = useState<EVMBalance | null>(null);
+
+  // Prices shared across views
+  const [solPrice, setSolPrice] = useState<number | null>(null);
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
 
   const handleUnlock = async () => {
     if (!password) return;
@@ -569,6 +594,10 @@ const WalletTab: React.FC<WalletTabProps> = ({
             activeWalletId={walletState.activeWalletId}
             activeWalletLabel={walletState.activeWalletLabel}
             walletCount={walletState.walletCount}
+            onPriceUpdate={(sol, eth) => {
+              setSolPrice(sol);
+              setEthPrice(eth);
+            }}
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
             evmAddress={walletState.evmAddress || null}
@@ -581,10 +610,11 @@ const WalletTab: React.FC<WalletTabProps> = ({
               setView('send');
             }}
             onReceive={() => setView('receive')}
-            onHistory={() => setView('history')}
-            onSwap={(tokens, balance) => {
+            onSwap={(tokens, evmToks, balance, evmBal) => {
               setSwapTokens(tokens || []);
+              setSwapEvmTokens(evmToks || []);
               setSwapBalance(balance || null);
+              setSwapEvmBalance(evmBal || null);
               setView('swap');
             }}
             onLock={onStateChange}
@@ -640,20 +670,6 @@ const WalletTab: React.FC<WalletTabProps> = ({
             onClose={() => setView('dashboard')}
           />
         )}
-        {view === 'history' && (
-          <HistoryView
-            address={
-              walletState.activeChain === 'solana'
-                ? walletState.publicAddress!
-                : walletState.evmAddress || walletState.publicAddress!
-            }
-            network={walletState.network}
-            activeChain={walletState.activeChain || 'solana'}
-            activeEVMChain={walletState.activeEVMChain || null}
-            onClose={() => setView('dashboard')}
-            hideBalances={hideBalances}
-          />
-        )}
         {view === 'swap' && (
           <SwapView
             address={
@@ -665,7 +681,9 @@ const WalletTab: React.FC<WalletTabProps> = ({
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
             tokens={swapTokens}
+            evmTokens={swapEvmTokens}
             balance={swapBalance}
+            evmBalance={swapEvmBalance}
             onClose={() => setView('dashboard')}
           />
         )}
@@ -1130,8 +1148,7 @@ interface WalletDashboardProps {
   onSend: () => void;
   onSendToken: (token: SelectedTokenForSend) => void;
   onReceive: () => void;
-  onHistory: () => void;
-  onSwap: (tokens?: SPLTokenBalance[], balance?: WalletBalance | null) => void;
+  onSwap: (tokens?: SPLTokenBalance[], evmTokens?: EVMTokenBalance[], balance?: WalletBalance | null, evmBalance?: EVMBalance | null) => void;
   onLock: () => void;
   onManageWallets: () => void;
   onWalletSwitch: () => void;
@@ -1139,6 +1156,7 @@ interface WalletDashboardProps {
   hideBalances: boolean;
   onToggleHideBalances: () => void;
   privacyEnabled: boolean;
+  onPriceUpdate?: (solPrice: number | null, ethPrice: number | null) => void;
 }
 
 // Chain icons with actual logos
@@ -1344,7 +1362,6 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   onSend,
   onSendToken,
   onReceive,
-  onHistory,
   onSwap,
   onLock,
   onManageWallets,
@@ -1353,6 +1370,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   hideBalances,
   onToggleHideBalances,
   privacyEnabled,
+  onPriceUpdate,
 }) => {
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
@@ -1426,17 +1444,16 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   const filteredEVMTokens = useMemo((): EVMTokenWithMatch[] => {
     let filtered = filterEVMTokens(evmTokens, { query: debouncedSearchQuery });
     // Apply dust filter if enabled
-    // Note: We don't have price data for EVM tokens yet, so we filter based on balance
-    // This will hide tokens with very small balances (<0.001) or zero balances
     if (hideDustTokens) {
       filtered = filtered.filter((token) => {
-        // For now, hide tokens with balance less than 0.001 or zero balance
-        // TODO: Integrate price API for more accurate filtering
-        return token.uiBalance >= 0.001;
+        // Same logic as SOL: calculate value, hide if < $1
+        const price = evmTokenPrices[token.address.toLowerCase()];
+        const value = price ? token.uiBalance * price : 0;
+        return value >= 1;
       });
     }
     return filtered;
-  }, [evmTokens, debouncedSearchQuery, hideDustTokens]);
+  }, [evmTokens, debouncedSearchQuery, hideDustTokens, evmTokenPrices]);
 
   // Check if native tokens match search
   // NOTE: Native tokens (SOL/ETH) are NEVER hidden by dust filter - they're needed for gas fees
@@ -1503,15 +1520,21 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         }
       });
     } else if (activeChain === 'evm') {
-      // Add ETH native value
+      // Add ETH/native token value
       if (evmBalance && ethPrice !== null) {
         total += evmBalance.formatted * ethPrice;
       }
-      // EVM token values (prices not fetched separately yet)
+      // Add ERC-20 token values (use lowercase for price lookup)
+      evmTokens.forEach((token) => {
+        const price = evmTokenPrices[token.address.toLowerCase()];
+        if (price) {
+          total += token.uiBalance * price;
+        }
+      });
     }
 
     return total;
-  }, [activeChain, balance, solPrice, evmBalance, ethPrice, tokens, tokenPrices]);
+  }, [activeChain, balance, solPrice, evmBalance, ethPrice, tokens, tokenPrices, evmTokens, evmTokenPrices]);
 
   const fetchData = useCallback(
     async (forceRefresh: boolean = false) => {
@@ -1523,13 +1546,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
       // Store fetched tokens locally to use for price fetching
       // (avoids dependency on `tokens` state which causes infinite loops)
       let fetchedTokens: SPLTokenBalance[] = [];
+      let fetchedEvmTokens: EVMTokenBalance[] = [];
 
       if (activeChain === 'solana') {
         // Solana: fetch balance, tokens, and history in parallel
         const [balanceRes, tokensRes, historyRes] = await Promise.all([
           sendToBackground({ type: 'WALLET_GET_BALANCE', payload: {} }),
           sendToBackground({ type: 'WALLET_GET_TOKENS', payload: {} }),
-          sendToBackground({ type: 'WALLET_GET_HISTORY', payload: { limit: 5, forceRefresh } }),
+          sendToBackground({ type: 'WALLET_GET_HISTORY', payload: { limit: 50, forceRefresh } }),
         ]);
 
         if (balanceRes.success && balanceRes.data) {
@@ -1542,13 +1566,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         if (historyRes.success && historyRes.data) {
           const result = historyRes.data as { transactions: TransactionHistoryItem[] };
           setHistory(result.transactions);
+          // Update ref to track the latest transaction
+          prevHistorySignatureRef.current = result.transactions[0]?.signature || null;
         }
         // Clear EVM data when on Solana
         setEvmHistory([]);
       } else if (evmAddress) {
-        // EVM: fetch balance and tokens in parallel
-        // Note: We don't fetch transaction history - users can view on block explorer
-        const [evmBalanceRes, evmTokensRes] = await Promise.all([
+        // EVM: fetch balance, tokens, and history in parallel
+        const [evmBalanceRes, evmTokensRes, evmHistoryRes] = await Promise.all([
           sendToBackground({
             type: 'WALLET_GET_EVM_BALANCE',
             payload: { evmChainId: activeEVMChain || 'ethereum' },
@@ -1557,22 +1582,32 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             type: 'WALLET_GET_EVM_TOKENS',
             payload: { evmChainId: activeEVMChain || 'ethereum' },
           }),
+          sendToBackground({
+            type: 'WALLET_GET_EVM_HISTORY',
+            payload: { evmChainId: activeEVMChain || 'ethereum', limit: 50 },
+          }),
         ]);
 
         if (evmBalanceRes.success && evmBalanceRes.data) {
           setEvmBalance(evmBalanceRes.data as EVMBalance);
         }
         if (evmTokensRes.success && evmTokensRes.data) {
-          setEvmTokens(evmTokensRes.data as EVMTokenBalance[]);
+          fetchedEvmTokens = evmTokensRes.data as EVMTokenBalance[];
+          setEvmTokens(fetchedEvmTokens);
+        }
+        if (evmHistoryRes.success && evmHistoryRes.data) {
+          const result = evmHistoryRes.data as { transactions: EVMHistoryItem[] };
+          setEvmHistory(result.transactions || []);
         }
 
-        // Clear history arrays when on EVM
-        setEvmHistory([]);
+        // Clear Solana history when on EVM
         setHistory([]);
+        prevHistorySignatureRef.current = null; // Reset ref when switching to EVM
       } else {
         // No EVM address available (e.g., Solana-only private key import)
         setHistory([]);
         setEvmHistory([]);
+        prevHistorySignatureRef.current = null; // Reset ref
       }
 
       // Fetch security connections (light operation)
@@ -1598,15 +1633,29 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         // This is deferred to avoid blocking initial load
         if (fetchedTokens.length > 0) {
           setTimeout(async () => {
-            const mints = fetchedTokens.map((t: SPLTokenBalance) => t.mint);
-            const tokenPricesRes = await sendToBackground({
-              type: 'GET_TOKEN_PRICES',
-              payload: { mints },
-            });
-            if (tokenPricesRes.success && tokenPricesRes.data) {
-              setTokenPrices(tokenPricesRes.data as Record<string, number>);
+            try {
+              const mints = fetchedTokens.map((t: SPLTokenBalance) => t.mint);
+              const tokenPricesRes = await sendToBackground({
+                type: 'GET_TOKEN_PRICES',
+                payload: { mints },
+              });
+              // Always set prices (even if empty) to signal loading complete
+              const prices = (tokenPricesRes.success && tokenPricesRes.data) 
+                ? tokenPricesRes.data as Record<string, number>
+                : {};
+              // Use a marker value if empty so loading overlay knows we tried
+              if (Object.keys(prices).length === 0) {
+                (prices as Record<string, number>)['__loaded__'] = 1;
+              }
+              setTokenPrices(prices);
+            } catch {
+              // On error, still mark as loaded to prevent infinite loading
+              setTokenPrices({ '__loaded__': 1 });
             }
           }, 300);
+        } else {
+          // No tokens to fetch prices for, mark as loaded
+          setTokenPrices({ '__loaded__': 1 });
         }
       } else {
         // Fetch ETH price with 24h change
@@ -1615,6 +1664,41 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           const data = ethPriceRes.data as { price: number; change24h: number | null };
           setEthPrice(data.price);
           setEthChange24h(data.change24h);
+        }
+
+        // Fetch EVM token prices using the freshly fetched tokens (not state)
+        // This is deferred to avoid blocking initial load
+        if (fetchedEvmTokens.length > 0) {
+          setTimeout(async () => {
+            try {
+              // Normalize addresses to lowercase for consistent price lookup
+              const addresses = fetchedEvmTokens.map((t: EVMTokenBalance) => t.address.toLowerCase());
+              const evmTokenPricesRes = await sendToBackground({
+                type: 'GET_TOKEN_PRICES',
+                payload: { mints: addresses },
+              });
+              // Store prices with lowercase keys for consistent lookup
+              const normalizedPrices: Record<string, number> = {};
+              if (evmTokenPricesRes.success && evmTokenPricesRes.data) {
+                const prices = evmTokenPricesRes.data as Record<string, number>;
+                for (const [key, value] of Object.entries(prices)) {
+                  normalizedPrices[key.toLowerCase()] = value;
+                }
+              }
+              // Always set prices (even if empty) to signal loading complete
+              // Use a marker value if empty so loading overlay knows we tried
+              if (Object.keys(normalizedPrices).length === 0) {
+                normalizedPrices['__loaded__'] = 1;
+              }
+              setEvmTokenPrices(normalizedPrices);
+            } catch {
+              // On error, still mark as loaded to prevent infinite loading
+              setEvmTokenPrices({ '__loaded__': 1 });
+            }
+          }, 300);
+        } else {
+          // No tokens to fetch prices for, mark as loaded
+          setEvmTokenPrices({ '__loaded__': 1 });
         }
       }
 
@@ -1626,7 +1710,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   );
 
   useEffect(() => {
-    fetchData();
+    fetchData(true); // Force refresh when component mounts or chain changes to get full history
   }, [fetchData]);
 
   // Real-time price updates every 5 seconds with flash animation
@@ -1680,6 +1764,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         prevEthPriceRef.current = newPrice;
         setEthPrice(newPrice);
         setEthChange24h(data.change24h);
+      }
+
+      // Notify parent component of price updates
+      if (onPriceUpdate) {
+        onPriceUpdate(
+          solPriceRes.success && solPriceRes.data ? (solPriceRes.data as any).price : null,
+          ethPriceRes.success && ethPriceRes.data ? (ethPriceRes.data as any).price : null
+        );
       }
     };
 
@@ -1757,9 +1849,20 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           if (newSignature && newSignature !== prevHistorySignatureRef.current) {
             hasNewTransactions = prevHistorySignatureRef.current !== null;
             prevHistorySignatureRef.current = newSignature;
+            
+            // Only update history if there are new transactions - fetch full history
+            if (hasNewTransactions) {
+              const fullHistoryRes = await sendToBackground({
+                type: 'WALLET_GET_HISTORY',
+                payload: { limit: 50, forceRefresh: true },
+              });
+              if (fullHistoryRes.success && fullHistoryRes.data) {
+                const fullResult = fullHistoryRes.data as { transactions: TransactionHistoryItem[] };
+                setHistory(fullResult.transactions);
+              }
+            }
           }
-
-          setHistory(result.transactions);
+          // Don't update history during auto-refresh if no new transactions
         }
 
         // If new transactions detected, force refresh balance and tokens immediately
@@ -1901,6 +2004,55 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     return date.toLocaleDateString();
   };
 
+  // Helper to calculate USD value for Solana transactions
+  const getSolanaTransactionUsdValue = (tx: TransactionHistoryItem): number | null => {
+    if (tx.tokenInfo) {
+      // Token transfer - we don't have individual token prices readily available
+      // Return null to indicate we can't calculate the value
+      return null;
+    } else {
+      // Native SOL transfer
+      if (solPrice) {
+        return tx.amountSol * solPrice;
+      }
+    }
+    return null;
+  };
+
+  // Helper to calculate USD value for EVM transactions
+  const getEvmTransactionUsdValue = (tx: EVMHistoryItem): number | null => {
+    if (tx.tokenAddress) {
+      // Token transfer - we don't have individual token prices readily available
+      // Return null to indicate we can't calculate the value
+      return null;
+    } else {
+      // Native transfer
+      const chainPrice = activeChain === 'evm' && activeEVMChain ? 
+        (activeEVMChain === 'ethereum' ? ethPrice : 
+         activeEVMChain === 'polygon' ? ethPrice : // Using ETH price as proxy for now
+         ethPrice) : 
+        ethPrice;
+      
+      if (chainPrice) {
+        return tx.amount * chainPrice;
+      }
+    }
+    return null;
+  };
+
+  // Filter transactions: hide those under $1 (but only if we can calculate the value)
+  const filterLowValueTransactions = <T extends TransactionHistoryItem | EVMHistoryItem>(
+    transactions: T[],
+    getUsdValue: (tx: T) => number | null
+  ): T[] => {
+    return transactions.filter(tx => {
+      const usdValue = getUsdValue(tx);
+      // If we can't calculate USD value, show the transaction (to be safe)
+      // If we can calculate it, only show if >= $1
+      return usdValue === null || usdValue >= 1;
+    });
+  };
+
   // Get current balance value based on chain
   const getCurrentBalance = () => {
     if (activeChain === 'solana') {
@@ -1913,13 +2065,16 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   // loadingBalance tracks the full data fetch (balance, tokens, prices, history, connections)
   // We also verify the active chain's required display data is available
   // For Solana: also wait for token prices if there are tokens (needed for portfolio calculation)
+  // For EVM: also wait for token prices if there are tokens (needed for portfolio calculation)
   const isAllDataLoading =
     loadingBalance ||
     (activeChain === 'solana'
       ? balance === null ||
         solPrice === null ||
         (tokens.length > 0 && Object.keys(tokenPrices).length === 0)
-      : evmBalance === null || ethPrice === null);
+      : evmBalance === null ||
+        ethPrice === null ||
+        (evmTokens.length > 0 && Object.keys(evmTokenPrices).length === 0));
 
   return (
     <>
@@ -2054,13 +2209,9 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           <ReceiveIcon size={20} />
           <span className="action-label">Receive</span>
         </button>
-        <button className="wallet-action-btn" onClick={() => onSwap(tokens, balance)}>
+        <button className="wallet-action-btn" onClick={() => onSwap(tokens, evmTokens, balance, evmBalance)}>
           <SwapIcon size={20} />
           <span className="action-label">Swap</span>
-        </button>
-        <button className="wallet-action-btn" onClick={onHistory}>
-          <HistoryIcon size={20} />
-          <span className="action-label">History</span>
         </button>
       </div>
 
@@ -2097,7 +2248,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             history.length === 0 ? (
               <div className="empty-state">No transactions yet</div>
             ) : (
-              history.map((tx) => {
+              filterLowValueTransactions(history, getSolanaTransactionUsdValue).map((tx) => {
                 // Get token info from multiple sources: 1) loaded tokens, 2) transaction's stored info, 3) cached enriched metadata
                 const tokenMeta = tx.tokenInfo
                   ? tokens.find((t) => t.mint === tx.tokenInfo?.mint)
@@ -2130,7 +2281,32 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                     }
                   >
                     <div className="tx-icon-wrapper">
-                      {logoUri ? (
+                      {tx.swapInfo ? (
+                        // Swap transaction - show dual token logos
+                        <div className="tx-swap-logos">
+                          <img
+                            src={tx.swapInfo.fromToken.logoUri || 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'}
+                            alt={tx.swapInfo.fromToken.symbol}
+                            style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                          <div className="tx-swap-arrow">
+                            <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M5 12h14M13 6l6 6-6 6"/>
+                            </svg>
+                          </div>
+                          <img
+                            src={tx.swapInfo.toToken.logoUri || 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'}
+                            alt={tx.swapInfo.toToken.symbol}
+                            style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : logoUri ? (
                         <div className="tx-token-logo">
                           <img
                             src={logoUri}
@@ -2163,68 +2339,235 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                           )}
                         </div>
                       )}
-                      <div className={`tx-direction-badge ${tx.direction}`}>
-                        {tx.direction === 'sent' ? '↗' : tx.direction === 'received' ? '↙' : '⇄'}
-                      </div>
+                      {/* Hide badge for swaps since we show arrow between logos */}
+                      {!tx.swapInfo && (
+                        <div className={`tx-direction-badge ${tx.direction}`}>
+                          {tx.direction === 'sent' ? '↗' : tx.direction === 'received' ? '↙' : '⇄'}
+                        </div>
+                      )}
                     </div>
                     <div className="tx-details">
                       <div className="tx-type">
-                        {tx.tokenInfo
-                          ? `${tx.direction === 'sent' ? 'Sent' : 'Received'} ${tokenSymbol}`
-                          : tx.type}
+                        {tx.swapInfo
+                          ? `Swapped ${tx.swapInfo.fromToken.symbol} → ${tx.swapInfo.toToken.symbol}`
+                          : tx.tokenInfo
+                            ? `${tx.direction === 'sent' ? 'Sent' : 'Received'} ${tokenSymbol}`
+                            : tx.type}
                       </div>
-                      <div className="tx-time">{formatTime(tx.timestamp)}</div>
-                    </div>
-                    <div className="tx-amount">
-                      <div className={`tx-value ${tx.direction}`}>
-                        {tx.tokenInfo
-                          ? formatHiddenTxAmount(
-                              tx.tokenInfo.amount,
-                              tx.direction,
-                              tokenSymbol,
-                              (val) => val.toLocaleString(undefined, { maximumFractionDigits: 4 }),
-                              hideBalances,
-                            )
-                          : formatHiddenTxAmount(
-                              tx.amountSol,
-                              tx.direction,
-                              'SOL',
-                              formatSol,
-                              hideBalances,
-                            )}
+                      <div className="tx-time">
+                        {formatTime(tx.timestamp)}
+                        {tx.swapInfo && (
+                          <span className="tx-swap-amounts">
+                            {hideBalances
+                              ? '••••'
+                              : `${tx.swapInfo.fromToken.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} → ${tx.swapInfo.toToken.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}`}
+                          </span>
+                        )}
                       </div>
                     </div>
+                    {!tx.swapInfo && (
+                      <div className="tx-amount">
+                        <div className={`tx-value ${tx.direction}`}>
+                          {tx.tokenInfo
+                            ? formatHiddenTxAmount(
+                                tx.tokenInfo.amount,
+                                tx.direction,
+                                tokenSymbol,
+                                (val) => val.toLocaleString(undefined, { maximumFractionDigits: 4 }),
+                                hideBalances,
+                              )
+                            : formatHiddenTxAmount(
+                                tx.amountSol,
+                                tx.direction,
+                                'SOL',
+                                formatSol,
+                                hideBalances,
+                              )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })
             )
+          ) : evmHistory.length === 0 ? (
+            <div className="empty-state">No transactions yet</div>
           ) : (
-            <div className="empty-state">
-              <p
-                style={{
-                  color: 'var(--text-muted)',
-                  marginBottom: 'var(--space-md)',
-                  fontSize: '0.875rem',
-                }}
-              >
-                View your transaction history on{' '}
-                {activeEVMChain === 'ethereum'
-                  ? 'Etherscan'
-                  : SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain)?.name + 'scan' ||
-                    'Block Explorer'}
-              </p>
-              <div className="evm-explorer-link-wrapper">
-                <ExplorerLinkIcon
-                  type="address"
-                  id={evmAddress || ''}
-                  chain="evm"
-                  evmChainId={activeEVMChain || 'ethereum'}
-                  variant="button"
-                  label={`View on ${activeEVMChain === 'ethereum' ? 'Etherscan' : SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain)?.name + 'scan' || 'Explorer'}`}
-                  className="btn btn-secondary"
-                />
-              </div>
-            </div>
+            filterLowValueTransactions(evmHistory, getEvmTransactionUsdValue).map((tx) => {
+              const nativeSymbol = getNativeSymbol();
+              
+              // Get token logo: check if tx has logoUri, otherwise check from evmTokens
+              const tokenMeta = tx.tokenAddress
+                ? evmTokens.find((t) => t.address.toLowerCase() === tx.tokenAddress?.toLowerCase())
+                : null;
+              
+              // Get the token symbol - use tx.symbol, tokenMeta, or fallback to native
+              const displaySymbol = tx.symbol || tokenMeta?.symbol || nativeSymbol;
+              
+              // Native token logos by chain
+              const getNativeLogoUri = () => {
+                const chainLogos: Record<string, string> = {
+                  ethereum: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+                  polygon: 'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+                  arbitrum: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+                  optimism: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
+                  base: 'https://avatars.githubusercontent.com/u/108554348?s=280&v=4',
+                };
+                return chainLogos[activeEVMChain || 'ethereum'] || chainLogos.ethereum;
+              };
+              
+              // TrustWallet asset URL fallback for token logos (works for many popular tokens)
+              const getTrustWalletLogoUri = (tokenAddr: string) => {
+                const chainNames: Record<string, string> = {
+                  ethereum: 'ethereum',
+                  polygon: 'polygon', 
+                  arbitrum: 'arbitrum',
+                  optimism: 'optimism',
+                  base: 'base',
+                };
+                const chain = chainNames[activeEVMChain || 'ethereum'] || 'ethereum';
+                // Use checksummed address for TrustWallet (they store with checksum)
+                return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chain}/assets/${tokenAddr}/logo.png`;
+              };
+              
+              // For native transfers, use the chain logo; for token transfers, use multiple fallbacks
+              const isNativeTransfer = !tx.tokenAddress;
+              const logoUri = tx.logoUri || 
+                tokenMeta?.logoUri || 
+                (isNativeTransfer ? getNativeLogoUri() : undefined) ||
+                (tx.tokenAddress ? getTrustWalletLogoUri(tx.tokenAddress) : undefined);
+              
+              const isFailed = tx.status === 'failed';
+              const isPending = tx.status === 'pending';
+              
+              return (
+                <div
+                  key={tx.hash}
+                  className={`tx-item tx-item-with-logo${isFailed ? ' tx-failed' : ''}${isPending ? ' tx-pending' : ''}`}
+                  onClick={() =>
+                    openExplorerUrl('tx', tx.hash, 'evm', activeEVMChain || 'ethereum', {
+                      testnet: false,
+                    })
+                  }
+                >
+                  <div className="tx-icon-wrapper">
+                    {isFailed ? (
+                      <div className="tx-icon tx-status-failed">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                          <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                        </svg>
+                      </div>
+                    ) : tx.swapInfo ? (
+                      // Swap transaction - show dual token logos
+                      <div className="tx-swap-logos">
+                        <TokenIcon
+                          symbol={tx.swapInfo.fromToken.symbol}
+                          logoUri={tx.swapInfo.fromToken.logoUri || (tx.swapInfo.fromToken.symbol === nativeSymbol ? getNativeLogoUri() : undefined)}
+                          address={tx.swapInfo.fromToken.address}
+                          chain={activeEVMChain || 'ethereum'}
+                          size={22}
+                        />
+                        <div className="tx-swap-arrow">
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12h14M13 6l6 6-6 6"/>
+                          </svg>
+                        </div>
+                        <TokenIcon
+                          symbol={tx.swapInfo.toToken.symbol}
+                          logoUri={tx.swapInfo.toToken.logoUri || (tx.swapInfo.toToken.symbol === nativeSymbol ? getNativeLogoUri() : undefined)}
+                          address={tx.swapInfo.toToken.address}
+                          chain={activeEVMChain || 'ethereum'}
+                          size={22}
+                        />
+                      </div>
+                    ) : isNativeTransfer || logoUri ? (
+                      <div className="tx-token-logo">
+                        {isNativeTransfer ? (
+                          <img
+                            src={getNativeLogoUri()}
+                            alt=""
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.add(
+                                'visible',
+                              );
+                            }}
+                          />
+                        ) : (
+                          <TokenIcon
+                            symbol={displaySymbol}
+                            logoUri={logoUri}
+                            address={tx.tokenAddress}
+                            chain={activeEVMChain || 'ethereum'}
+                            size={28}
+                          />
+                        )}
+                        <div className={`tx-icon-fallback ${tx.direction}`}>
+                          {tx.direction === 'sent' ? (
+                            <SendIcon size={14} />
+                          ) : tx.direction === 'received' ? (
+                            <ReceiveIcon size={14} />
+                          ) : (
+                            <SwapIcon size={14} />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`tx-icon ${tx.direction}`}>
+                        {tx.direction === 'sent' ? (
+                          <SendIcon size={16} />
+                        ) : tx.direction === 'received' ? (
+                          <ReceiveIcon size={16} />
+                        ) : (
+                          <SwapIcon size={16} />
+                        )}
+                      </div>
+                    )}
+                    {/* Hide badge for swaps since we show arrow between logos */}
+                    {!tx.swapInfo && (
+                      <div className={`tx-direction-badge ${tx.direction}${isFailed ? ' failed' : ''}`}>
+                        {isFailed ? '✕' : tx.direction === 'sent' ? '↗' : tx.direction === 'received' ? '↙' : '⇄'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="tx-details">
+                    <div className="tx-type">
+                      {isFailed 
+                        ? 'Failed' 
+                        : tx.swapInfo
+                          ? `Swapped ${tx.swapInfo.fromToken.symbol} → ${tx.swapInfo.toToken.symbol}`
+                          : tx.tokenAddress
+                            ? `${tx.direction === 'sent' ? 'Sent' : 'Received'} ${displaySymbol.toUpperCase()}`
+                            : tx.type}
+                      {isPending && <span className="tx-pending-badge">Pending</span>}
+                    </div>
+                    <div className="tx-time">
+                      {formatTime(tx.timestamp)}
+                      {tx.swapInfo && !isFailed && (
+                        <span className="tx-swap-amounts">
+                          {hideBalances
+                            ? '••••'
+                            : `${tx.swapInfo.fromToken.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} → ${tx.swapInfo.toToken.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {!tx.swapInfo && (
+                    <div className="tx-amount">
+                      <div className={`tx-value ${isFailed ? 'failed' : tx.direction}`}>
+                        {formatHiddenTxAmount(
+                          tx.amount,
+                          tx.direction === 'self' ? 'swap' : tx.direction,
+                          displaySymbol,
+                          (val) => val.toLocaleString(undefined, { maximumFractionDigits: 6 }),
+                          hideBalances,
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       )}
@@ -2617,7 +2960,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                   {/* ERC20 Tokens - Only shown when EVM chain is active */}
                   {activeChain === 'evm' &&
                     filteredEVMTokens.map((token) => {
-                      const tokenPrice = evmTokenPrices[token.address];
+                      const tokenPrice = evmTokenPrices[token.address.toLowerCase()];
                       const tokenValue = tokenPrice ? token.uiBalance * tokenPrice : null;
                       const canDelete = token.uiBalance === 0;
                       const match = token.searchMatch;
@@ -2859,6 +3202,7 @@ const SendForm: React.FC<SendFormProps> = ({
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
   const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<string>(''); // Status message during send
   const [success, setSuccess] = useState<SendTransactionResult | null>(null);
   const [showReview, setShowReview] = useState(false);
   const [showLargeTransferWarning, setShowLargeTransferWarning] = useState(false);
@@ -2867,8 +3211,12 @@ const SendForm: React.FC<SendFormProps> = ({
     largeTransferThreshold: number;
   }>({ warnOnLargeTransfers: true, largeTransferThreshold: 100 });
   const [tokenPrice, setTokenPrice] = useState<number | null>(null);
+  const [nativeTokenPrice, setNativeTokenPrice] = useState<number | null>(null); // For fee USD conversion
   const [amountMode, setAmountMode] = useState<'token' | 'usd'>('token');
   const [calculatingMax, setCalculatingMax] = useState(false);
+  const maxCalculatedRef = React.useRef(false); // Track when MAX was just clicked
+  const maxFeeUsedRef = React.useRef<number | null>(null); // Store fee used in MAX calculation
+  const maxAmountRef = React.useRef<string | null>(null); // Store the MAX amount calculated
 
   // Load security settings and token price on mount
   useEffect(() => {
@@ -2887,7 +3235,22 @@ const SendForm: React.FC<SendFormProps> = ({
           });
         }
 
-        // Load token price
+        // Always fetch native token price for fee USD conversion
+        if (activeChain === 'solana') {
+          const nativePriceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
+          if (nativePriceRes.success && nativePriceRes.data) {
+            const data = nativePriceRes.data as { price: number; change24h: number | null };
+            setNativeTokenPrice(data.price);
+          }
+        } else {
+          const nativePriceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
+          if (nativePriceRes.success && nativePriceRes.data) {
+            const data = nativePriceRes.data as { price: number; change24h: number | null };
+            setNativeTokenPrice(data.price);
+          }
+        }
+
+        // Load token price (for the token being sent)
         if (selectedToken?.chain === 'solana' && selectedToken.mint && activeChain === 'solana') {
           // For SPL tokens, fetch the specific token price
           const priceRes = await sendToBackground({
@@ -2901,14 +3264,8 @@ const SendForm: React.FC<SendFormProps> = ({
             }
           }
         } else if (selectedToken?.chain === 'evm' && activeChain === 'evm') {
-          // For ERC20 tokens, we don't have a price endpoint yet, so use ETH price as fallback
-          // TODO: Add ERC20 token price fetching
-          const priceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
-          if (priceRes.success && priceRes.data) {
-            const data = priceRes.data as { price: number; change24h: number | null };
-            // For now, we don't have individual token prices for ERC20, so set to null
-            setTokenPrice(null);
-          }
+          // For ERC20 tokens, we don't have a price endpoint yet, so set to null
+          setTokenPrice(null);
         } else if (activeChain === 'solana') {
           const priceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
           if (priceRes.success && priceRes.data) {
@@ -2969,12 +3326,19 @@ const SendForm: React.FC<SendFormProps> = ({
   };
 
   // Recent recipients hook for dropdown
-  const { addRecipient } = useRecentRecipients(
+  const { recipients, addRecipient } = useRecentRecipients(
     activeChain,
     'mainnet-beta', // TODO: Get actual network from wallet state
     activeEVMChain,
-    recipient, // Filter query
+    '', // Empty filter to get all recipients for checking
   );
+
+  // Check if recipient is a first-time address (security warning)
+  const isFirstTimeRecipient = useMemo(() => {
+    if (!recipient) return false;
+    const normalizedRecipient = recipient.toLowerCase();
+    return !recipients.some((r) => r.address.toLowerCase() === normalizedRecipient);
+  }, [recipient, recipients]);
 
   // Get native symbol for current chain
   const getNativeSymbol = () => {
@@ -3013,6 +3377,12 @@ const SendForm: React.FC<SendFormProps> = ({
   }, [activeChain, activeEVMChain]);
 
   useEffect(() => {
+    // Skip estimation if MAX was just clicked (it already did accurate estimation)
+    if (maxCalculatedRef.current) {
+      maxCalculatedRef.current = false; // Reset flag
+      return;
+    }
+    
     if (recipient && amount && parseFloat(amount) > 0) {
       estimateFee();
     }
@@ -3091,39 +3461,50 @@ const SendForm: React.FC<SendFormProps> = ({
         if (isSendingEvmToken && selectedToken) {
           maxTokenAmount = selectedToken.uiBalance;
         } else if (evmBalance) {
-          // Try to get a fresh fee estimate if we have a recipient
-          let estimatedFee = evmFeeEstimate?.totalFeeEth;
+          // For ETH native currency, get a single fee estimate and add buffer
+          let estimatedFee = evmFeeEstimate?.totalFeeEth || 0.002;
 
-          if (!estimatedFee && recipient) {
+          if (recipient) {
             try {
-              const tempAmount = evmBalance.formatted * 0.5; // Use 50% of balance for estimate
+              // Estimate fee for a simple transfer (gas is fixed at 21000 for ETH transfers)
               const res = await sendToBackground({
                 type: 'WALLET_ESTIMATE_EVM_FEE',
                 payload: {
                   evmChainId: activeEVMChain,
                   recipient,
-                  amount: tempAmount.toString(),
+                  amount: '0.001', // Use small fixed amount - gas is same regardless
                 },
               });
+              
               if (res.success && res.data) {
                 const feeData = res.data as EVMFeeEstimate;
                 estimatedFee = feeData.totalFeeEth;
+                setEvmFeeEstimate(feeData);
               }
             } catch {
-              // Fallback to default if estimation fails
+              // Keep existing estimate or default
             }
           }
 
-          // Use estimated fee or fallback to conservative default
-          estimatedFee = estimatedFee || 0.002;
-          maxTokenAmount = Math.max(0, evmBalance.formatted - estimatedFee);
+          // Add safety buffer to account for gas price fluctuations
+          // Use 30% of fee OR minimum 0.00002 ETH, whichever is larger
+          // This ensures the amount will always be sendable even if gas goes up slightly
+          const safetyBuffer = Math.max(estimatedFee * 0.3, 0.00002);
+          maxTokenAmount = Math.max(0, evmBalance.formatted - estimatedFee - safetyBuffer);
+          
+          // Store the fee used for validation consistency
+          maxFeeUsedRef.current = estimatedFee;
         }
       }
 
-      // Convert to appropriate mode
+      // Set flag to prevent useEffect from re-estimating (we already did accurate estimation)
+      maxCalculatedRef.current = true;
+      
+      // Convert to appropriate mode and store for validation
+      let formattedAmount: string;
       if (amountMode === 'usd' && tokenPrice) {
         const maxUsd = maxTokenAmount * tokenPrice;
-        setAmount(maxUsd.toFixed(2));
+        formattedAmount = maxUsd.toFixed(2);
       } else {
         const decimals =
           isSendingToken && selectedToken
@@ -3131,8 +3512,12 @@ const SendForm: React.FC<SendFormProps> = ({
             : activeChain === 'solana'
               ? 9
               : 18;
-        setAmount(maxTokenAmount.toFixed(Math.min(decimals, 6)).replace(/\.?0+$/, ''));
+        formattedAmount = maxTokenAmount.toFixed(Math.min(decimals, 6)).replace(/\.?0+$/, '');
       }
+      
+      // Store the max amount for validation consistency
+      maxAmountRef.current = formattedAmount;
+      setAmount(formattedAmount);
 
       // Clear any previous error when using max
       setError('');
@@ -3146,6 +3531,16 @@ const SendForm: React.FC<SendFormProps> = ({
 
     if (!recipient) {
       setError('Please enter a recipient address');
+      return;
+    }
+
+    // Validate address format before proceeding
+    const isValidAddress =
+      activeChain === 'solana' ? isValidSolanaAddress(recipient) : isValidEVMAddress(recipient);
+
+    if (!isValidAddress) {
+      const chainName = activeChain === 'solana' ? 'Solana' : getChainName();
+      setError(`Invalid ${chainName} address. Please check and try again.`);
       return;
     }
 
@@ -3181,6 +3576,8 @@ const SendForm: React.FC<SendFormProps> = ({
 
     // For native currency, account for fees and rent-exempt minimum (Solana only)
     let effectiveMax: number;
+    let evmFeeForValidation = evmFeeEstimate?.totalFeeEth;
+    
     if (isSendingToken) {
       effectiveMax = availableBalance;
     } else if (activeChain === 'solana') {
@@ -3188,9 +3585,20 @@ const SendForm: React.FC<SendFormProps> = ({
       const fee = feeEstimate?.feeSol || 0.000015;
       effectiveMax = Math.max(0, availableBalance - fee - SOLANA_RENT_EXEMPT_MIN - 0.000005);
     } else {
-      // EVM: just deduct fee
-      const fee = evmFeeEstimate?.totalFeeEth || 0.002;
-      effectiveMax = Math.max(0, availableBalance - fee);
+      // EVM: Use stored MAX fee if amount matches MAX, otherwise use current estimate
+      // This ensures consistency between MAX click and Send validation
+      let fee: number;
+      
+      // If user is sending the exact MAX amount we calculated, use the same fee
+      if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
+        fee = maxFeeUsedRef.current;
+      } else {
+        fee = evmFeeForValidation || 0.002;
+      }
+      
+      // Use same buffer formula as MAX calculation (30% or minimum 0.00002)
+      const safetyBuffer = Math.max(fee * 0.3, 0.00002);
+      effectiveMax = Math.max(0, availableBalance - fee - safetyBuffer);
     }
 
     if (tokenAmountToSend > availableBalance) {
@@ -3202,7 +3610,9 @@ const SendForm: React.FC<SendFormProps> = ({
     }
 
     // Warn if sending native currency and amount + fee (+ rent for Solana) exceeds balance
-    if (!isSendingToken && tokenAmountToSend > effectiveMax) {
+    // Use small epsilon for floating point comparison to avoid precision issues
+    const epsilon = 0.000001;
+    if (!isSendingToken && tokenAmountToSend > effectiveMax + epsilon) {
       if (activeChain === 'solana') {
         setError(
           `Amount plus network fee and rent reserve exceeds your balance. Click MAX to use the maximum sendable amount.`,
@@ -3255,13 +3665,37 @@ const SendForm: React.FC<SendFormProps> = ({
   const confirmSend = async () => {
     setError('');
     setSending(true);
+    setSendStatus('Preparing transaction...');
+
+    // Status update intervals for user feedback (EVM takes longer)
+    const statusUpdates = activeChain === 'evm'
+      ? [
+          { delay: 1500, status: 'Signing transaction...' },
+          { delay: 3000, status: 'Broadcasting to network...' },
+          { delay: 5000, status: 'Waiting for confirmation...' },
+          { delay: 15000, status: 'Still confirming... (this may take a minute)' },
+          { delay: 30000, status: 'Almost there... (network is busy)' },
+        ]
+      : [
+          { delay: 1000, status: 'Signing transaction...' },
+          { delay: 2000, status: 'Broadcasting to Solana...' },
+          { delay: 3000, status: 'Waiting for confirmation...' },
+        ];
+
+    const timeouts: NodeJS.Timeout[] = [];
+    statusUpdates.forEach(({ delay, status }) => {
+      const timeout = setTimeout(() => setSendStatus(status), delay);
+      timeouts.push(timeout);
+    });
 
     try {
       // Check if wallet is still unlocked before sending
       const stateCheck = await sendToBackground({ type: 'WALLET_GET_STATE', payload: undefined });
       if (!stateCheck.success || !stateCheck.data) {
+        timeouts.forEach(clearTimeout);
         setError('Unable to verify wallet state. Please try again.');
         setSending(false);
+        setSendStatus('');
         return;
       }
 
@@ -3269,7 +3703,9 @@ const SendForm: React.FC<SendFormProps> = ({
       if (currentState.lockState !== 'unlocked') {
         // Wallet is locked - close the send form and trigger state refresh
         // This will show the locked screen instead of returning to the send form
+        timeouts.forEach(clearTimeout);
         setSending(false);
+        setSendStatus('');
         onClose();
         onWalletLocked();
         return;
@@ -3322,6 +3758,9 @@ const SendForm: React.FC<SendFormProps> = ({
         }
       }
 
+      // Clear status timeouts
+      timeouts.forEach(clearTimeout);
+
       if (res.success && res.data) {
         setSuccess(res.data as SendTransactionResult);
         setShowReview(false);
@@ -3334,9 +3773,12 @@ const SendForm: React.FC<SendFormProps> = ({
         setError(res.error || 'Transaction failed');
       }
     } catch {
+      // Clear status timeouts on error
+      timeouts.forEach(clearTimeout);
       setError('Transaction failed');
     } finally {
       setSending(false);
+      setSendStatus('');
     }
   };
 
@@ -3496,10 +3938,53 @@ const SendForm: React.FC<SendFormProps> = ({
           <span className="tx-review-address">{truncateAddress(recipient, 8)}</span>
         </div>
 
+        {/* First-time recipient warning (security feature) */}
+        {isFirstTimeRecipient && (
+          <div
+            className="tx-review-warning"
+            style={{
+              background: 'var(--warning-bg)',
+              border: '1px solid var(--warning-border)',
+              borderRadius: '8px',
+              padding: '12px',
+              margin: '12px 0',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--warning)"
+              strokeWidth="2"
+              style={{ flexShrink: 0, marginTop: '1px' }}
+            >
+              <path d="M12 9v4M12 17h.01M21.73 18l-8-14a2 2 0 00-3.46 0l-8 14A2 2 0 004 21h16a2 2 0 001.73-3z" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '4px' }}>
+                First time sending to this address
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                Double-check the recipient address to prevent loss of funds. This is a common
+                clipboard hijacking attack vector.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="tx-review-section">
           <span className="tx-review-label">Network Fee</span>
           <span className="tx-review-value">
             ~{fee.toFixed(6)} {getNativeSymbol()}
+            {nativeTokenPrice && (
+              <span className="tx-review-usd">
+                {' '}(${(fee * nativeTokenPrice) < 0.01 ? '<0.01' : (fee * nativeTokenPrice).toFixed(2)})
+              </span>
+            )}
           </span>
         </div>
 
@@ -3514,8 +3999,18 @@ const SendForm: React.FC<SendFormProps> = ({
                   maximumFractionDigits: 6,
                 })}{' '}
                 {symbol}
+                {tokenPrice && (
+                  <span className="tx-review-usd"> (${(reviewTokenAmount * tokenPrice).toFixed(2)})</span>
+                )}
               </div>
-              <div className="tx-review-total-fee">+ {fee.toFixed(6)} SOL network fee</div>
+              <div className="tx-review-total-fee">
+                + {fee.toFixed(6)} {getNativeSymbol()} network fee
+                {nativeTokenPrice && (
+                  <span className="tx-review-usd">
+                    {' '}(${(fee * nativeTokenPrice) < 0.01 ? '<0.01' : (fee * nativeTokenPrice).toFixed(2)})
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             // For native currency, add them together
@@ -3526,20 +4021,42 @@ const SendForm: React.FC<SendFormProps> = ({
                 maximumFractionDigits: 6,
               })}{' '}
               {getNativeSymbol()}
+              {nativeTokenPrice && (
+                <span className="tx-review-usd">
+                  {' '}(${((reviewTokenAmount + fee) * nativeTokenPrice).toFixed(2)})
+                </span>
+              )}
             </span>
           )}
         </div>
 
         {error && <div className="tx-review-error">{error}</div>}
 
-        <div className="tx-review-actions">
-          <button className="btn-secondary" onClick={() => setShowReview(false)} disabled={sending}>
-            Cancel
-          </button>
-          <button className="btn-primary" onClick={confirmSend} disabled={sending}>
-            {sending ? 'Sending...' : 'Confirm Send'}
-          </button>
-        </div>
+        {/* Processing Status */}
+        {sending && sendStatus && (
+          <div className="swap-processing-status" style={{ padding: 'var(--space-md)' }}>
+            <div className="swap-processing-animation">
+              <div className="swap-processing-spinner"></div>
+            </div>
+            <div className="swap-processing-text">{sendStatus}</div>
+            <div className="swap-processing-hint">
+              {activeChain === 'evm'
+                ? 'EVM transactions may take 15-60 seconds to confirm'
+                : 'Solana transactions typically confirm in a few seconds'}
+            </div>
+          </div>
+        )}
+
+        {!sending && (
+          <div className="tx-review-actions">
+            <button className="btn-secondary" onClick={() => setShowReview(false)} disabled={sending}>
+              Cancel
+            </button>
+            <button className="btn-primary" onClick={confirmSend} disabled={sending}>
+              Confirm Send
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -3582,15 +4099,44 @@ const SendForm: React.FC<SendFormProps> = ({
   // Get fee display based on chain (always in native currency)
   const getFeeDisplay = () => {
     if (activeChain === 'solana' && feeEstimate) {
-      return `~${feeEstimate.feeSol.toFixed(6)} SOL`;
+      const feeUsd = nativeTokenPrice ? feeEstimate.feeSol * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      return `~${feeEstimate.feeSol.toFixed(6)} SOL${usdPart}`;
     }
     if (activeChain === 'evm' && evmFeeEstimate) {
-      return `~${evmFeeEstimate.totalFeeEth.toFixed(6)} ${getNativeSymbol()}`;
+      const feeUsd = nativeTokenPrice ? evmFeeEstimate.totalFeeEth * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      return `~${evmFeeEstimate.totalFeeEth.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
     }
     return null;
   };
 
+  // Get total display (amount + fee) for native currency transfers
+  const getTotalDisplay = () => {
+    const tokenAmount = getTokenAmountToSend();
+    if (isNaN(tokenAmount) || tokenAmount <= 0) return null;
+    
+    // For token transfers, don't show combined total (different currencies)
+    if (isSendingToken) return null;
+    
+    let fee = 0;
+    if (activeChain === 'solana' && feeEstimate) {
+      fee = feeEstimate.feeSol;
+    } else if (activeChain === 'evm' && evmFeeEstimate) {
+      fee = evmFeeEstimate.totalFeeEth;
+    }
+    
+    if (fee === 0) return null;
+    
+    const total = tokenAmount + fee;
+    const totalUsd = nativeTokenPrice ? total * nativeTokenPrice : null;
+    const usdPart = totalUsd !== null ? ` ($${totalUsd.toFixed(2)})` : '';
+    
+    return `~${total.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
+  };
+
   const feeDisplay = getFeeDisplay();
+  const totalDisplay = getTotalDisplay();
 
   return (
     <div className="send-form">
@@ -3668,7 +4214,12 @@ const SendForm: React.FC<SendFormProps> = ({
             className={`form-input ${error && !amount ? 'error' : ''} ${amountMode === 'usd' ? 'has-prefix' : ''}`}
             placeholder="0.0"
             value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) => {
+              // Clear MAX refs when user manually changes amount
+              maxAmountRef.current = null;
+              maxFeeUsedRef.current = null;
+              setAmount(e.target.value.replace(/[^0-9.]/g, ''));
+            }}
           />
           {amountMode === 'token' && <span className="amount-suffix">{symbol}</span>}
           <button className="max-btn" onClick={handleMax} disabled={calculatingMax}>
@@ -3705,12 +4256,19 @@ const SendForm: React.FC<SendFormProps> = ({
         </div>
       )}
 
+      {totalDisplay && (
+        <div className="fee-display total-display">
+          <span className="fee-label">Total</span>
+          <span className="fee-value">{totalDisplay}</span>
+        </div>
+      )}
+
       <button
         className="btn btn-primary btn-block"
         onClick={handleSend}
         disabled={sending || !recipient || !amount}
       >
-        {sending ? 'Sending...' : 'Send'}
+        {sending ? (sendStatus || 'Sending...') : 'Send'}
       </button>
     </div>
   );
@@ -3810,335 +4368,47 @@ const ReceiveView: React.FC<ReceiveViewProps> = ({
   );
 };
 
-interface HistoryViewProps {
-  address: string;
-  network: string;
-  activeChain: ChainType;
-  activeEVMChain: EVMChainId | null;
-  onClose: () => void;
-  hideBalances: boolean;
-}
-
-const HistoryView: React.FC<HistoryViewProps> = ({
-  address,
-  network,
-  activeChain,
-  activeEVMChain,
-  onClose,
-  hideBalances,
-}) => {
-  const [history, setHistory] = useState<TransactionHistoryItem[]>([]);
-  const [evmHistory, setEvmHistory] = useState<EVMHistoryItem[]>([]);
-  const [tokens, setTokens] = useState<SPLTokenBalance[]>([]);
-  const [tokenMetadataCache, setTokenMetadataCache] = useState<
-    Record<string, { symbol?: string; name?: string; logoUri?: string }>
-  >({});
-  const [loading, setLoading] = useState(true);
-
-  // Get symbol for current chain
-  const getSymbol = () => {
-    if (activeChain === 'solana') return 'SOL';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
-    return chain?.symbol || 'ETH';
-  };
-
-  // Get chain name for display
-  const getChainName = () => {
-    if (activeChain === 'solana') return 'Solana';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
-    return chain?.name || 'Ethereum';
-  };
-
-  useEffect(() => {
-    fetchHistory();
-  }, [activeChain, activeEVMChain]);
-
-  // Enrich transaction token metadata for transactions missing symbol/name
-  useEffect(() => {
-    const enrichMissingTokenMetadata = async () => {
-      if (activeChain !== 'solana' || history.length === 0) return;
-
-      // Find transactions with tokenInfo but missing symbol
-      const missingMetadata = history
-        .filter((tx) => tx.tokenInfo && !tx.tokenInfo.symbol)
-        .map((tx) => tx.tokenInfo!.mint);
-
-      // Remove duplicates and already cached
-      const uniqueMints = Array.from(new Set(missingMetadata)).filter(
-        (mint) => !tokenMetadataCache[mint],
-      );
-
-      if (uniqueMints.length === 0) return;
-
-      // Fetch metadata for missing tokens (max 10 for full history view)
-      const mintsToFetch = uniqueMints.slice(0, 10);
-
-      for (const mint of mintsToFetch) {
-        try {
-          const res = await sendToBackground({
-            type: 'WALLET_GET_TOKEN_METADATA',
-            payload: { mint },
-          });
-
-          if (res.success && res.data) {
-            const metadata = res.data as { symbol: string; name: string; logoUri?: string };
-            setTokenMetadataCache((prev) => ({
-              ...prev,
-              [mint]: metadata,
-            }));
-          }
-        } catch (error) {}
-      }
-    };
-
-    enrichMissingTokenMetadata();
-  }, [history, activeChain, tokenMetadataCache]);
-
-  const fetchHistory = async () => {
-    setLoading(true);
-
-    if (activeChain === 'solana') {
-      // Fetch both history and tokens in parallel
-      const [historyRes, tokensRes] = await Promise.all([
-        sendToBackground({
-          type: 'WALLET_GET_HISTORY',
-          payload: { limit: 20 },
-        }),
-        sendToBackground({ type: 'WALLET_GET_TOKENS', payload: {} }),
-      ]);
-
-      if (historyRes.success && historyRes.data) {
-        const result = historyRes.data as { transactions: TransactionHistoryItem[] };
-        setHistory(result.transactions);
-      }
-
-      if (tokensRes.success && tokensRes.data) {
-        setTokens(tokensRes.data as SPLTokenBalance[]);
-      }
-    } else {
-      // For EVM chains, we don't fetch transaction history
-      // Users can view transactions on the block explorer
-      setEvmHistory([]);
-    }
-    setLoading(false);
-  };
-
-  // Helper to get token metadata from mint address
-  const getTokenMeta = (mint: string) => {
-    return tokens.find((t) => t.mint === mint);
-  };
-
-  const formatTime = (timestamp: number | null) => {
-    if (!timestamp) return 'Unknown';
-    return new Date(timestamp * 1000).toLocaleString();
-  };
-
-  const symbol = getSymbol();
-  const chainName = getChainName();
-
-  return (
-    <div className="send-form">
-      <div className="form-header">
-        <h3>Transaction History</h3>
-        <button className="close-btn" onClick={onClose}>
-          <CloseIcon size={14} />
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="empty-state">
-          <div className="spinner" />
-        </div>
-      ) : activeChain === 'evm' ? (
-        // EVM transaction history - view on block explorer
-        <div className="empty-state" style={{ padding: 'var(--space-xl)', textAlign: 'center' }}>
-          <p
-            style={{
-              marginBottom: 'var(--space-lg)',
-              color: 'var(--text-secondary)',
-              fontSize: '0.9375rem',
-              lineHeight: '1.5',
-            }}
-          >
-            View your complete transaction history on{' '}
-            {chainName === 'Ethereum' ? 'Etherscan' : chainName + 'scan'}
-          </p>
-          <ExplorerLinkIcon
-            type="address"
-            id={address}
-            chain="evm"
-            evmChainId={activeEVMChain || 'ethereum'}
-            variant="button"
-            label={`Open ${chainName === 'Ethereum' ? 'Etherscan' : chainName + 'scan'}`}
-            className="btn btn-primary"
-          />
-        </div>
-      ) : history.length === 0 ? (
-        <div className="empty-state">No transactions yet</div>
-      ) : (
-        <div className="tx-list" style={{ maxHeight: '450px', overflowY: 'auto' }}>
-          {history.map((tx) => {
-            // Look up token metadata from multiple sources: 1) loaded tokens, 2) transaction's stored info, 3) cached enriched metadata
-            const tokenMeta = tx.tokenInfo ? getTokenMeta(tx.tokenInfo.mint) : null;
-            const enrichedMeta = tx.tokenInfo?.mint ? tokenMetadataCache[tx.tokenInfo.mint] : null;
-            const tokenSymbol =
-              (
-                tokenMeta?.symbol ||
-                tx.tokenInfo?.symbol ||
-                enrichedMeta?.symbol ||
-                (tx.tokenInfo?.mint ? tx.tokenInfo.mint.slice(0, 4) + '...' : null)
-              )?.toUpperCase() || null;
-            const tokenLogoUri =
-              tokenMeta?.logoUri || tx.tokenInfo?.logoUri || enrichedMeta?.logoUri;
-            // For native SOL transactions, use SOL logo
-            const logoUri = tx.tokenInfo
-              ? tokenLogoUri
-              : 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
-
-            return (
-              <div
-                key={tx.signature}
-                className="tx-item tx-item-with-logo"
-                onClick={() =>
-                  openExplorerUrl('tx', tx.signature, activeChain, activeEVMChain || undefined, {
-                    testnet: network === 'devnet',
-                  })
-                }
-              >
-                <div className="tx-icon-wrapper">
-                  {logoUri ? (
-                    <div className="tx-token-logo">
-                      <img
-                        src={logoUri}
-                        alt=""
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).nextElementSibling?.classList.add(
-                            'visible',
-                          );
-                        }}
-                      />
-                      <div className={`tx-icon-fallback ${tx.direction}`}>
-                        {tx.direction === 'sent' ? (
-                          <SendIcon size={14} />
-                        ) : tx.direction === 'received' ? (
-                          <ReceiveIcon size={14} />
-                        ) : (
-                          <SwapIcon size={14} />
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={`tx-icon ${tx.direction}`}>
-                      {tx.direction === 'sent' ? (
-                        <SendIcon size={16} />
-                      ) : tx.direction === 'received' ? (
-                        <ReceiveIcon size={16} />
-                      ) : (
-                        <SwapIcon size={16} />
-                      )}
-                    </div>
-                  )}
-                  <div className={`tx-direction-badge ${tx.direction}`}>
-                    {tx.direction === 'sent' ? '↗' : tx.direction === 'received' ? '↙' : '⇄'}
-                  </div>
-                </div>
-                <div className="tx-details">
-                  <div className="tx-type">
-                    {tx.tokenInfo
-                      ? `${tx.direction === 'sent' ? 'Sent' : 'Received'} ${tokenSymbol}`
-                      : tx.type}
-                  </div>
-                  <div className="tx-time">{formatTime(tx.timestamp)}</div>
-                </div>
-                <div className="tx-amount">
-                  <div className={`tx-value ${tx.direction}`}>
-                    {tx.tokenInfo
-                      ? formatHiddenTxAmount(
-                          tx.tokenInfo.amount,
-                          tx.direction,
-                          tokenSymbol || 'Token',
-                          (val) => val.toLocaleString(undefined, { maximumFractionDigits: 4 }),
-                          hideBalances,
-                        )
-                      : formatHiddenTxAmount(
-                          tx.amountSol,
-                          tx.direction,
-                          symbol,
-                          formatSol,
-                          hideBalances,
-                        )}
-                  </div>
-                  <div className="tx-status">{tx.status}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // --- Swap View ---
 
-// Common Solana token info for swap UI
-const SWAP_TOKEN_LIST = [
+// Native token address used by ParaSwap for all EVM chains
+const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+
+// Default tokens for initial state (shown before dynamic list loads)
+const DEFAULT_SOLANA_TOKENS: SwapToken[] = [
   {
-    mint: 'So11111111111111111111111111111111111111112',
+    address: 'So11111111111111111111111111111111111111112',
     symbol: 'SOL',
     name: 'Solana',
     decimals: 9,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
   },
   {
-    mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
-  },
-  {
-    mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-    symbol: 'USDT',
-    name: 'Tether USD',
-    decimals: 6,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png',
-  },
-  {
-    mint: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
-    symbol: 'JUP',
-    name: 'Jupiter',
-    decimals: 6,
-    logoUri: 'https://static.jup.ag/jup/icon.png',
-  },
-  {
-    mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
-    symbol: 'BONK',
-    name: 'Bonk',
-    decimals: 5,
-    logoUri: 'https://arweave.net/hQiPZOsRZXGXBJd_82PhVdlM_hACsT_q6wqwf5cSY7I',
-  },
-  {
-    mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
-    symbol: 'WIF',
-    name: 'dogwifhat',
-    decimals: 6,
-    logoUri: 'https://bafkreibk3covs5ltyqxa272uodhculbr6kea6betiez62dpxfhqixvhyg4.ipfs.w3s.link/',
-  },
-  {
-    mint: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
-    symbol: 'RAY',
-    name: 'Raydium',
-    decimals: 6,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png',
+    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
   },
 ];
 
+const DEFAULT_EVM_TOKENS: SwapToken[] = [
+  {
+    address: NATIVE_TOKEN_ADDRESS,
+    symbol: 'ETH',
+    name: 'Ethereum',
+    decimals: 18,
+    logoUri: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  },
+  {
+    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6,
+    logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+  },
+];
+
+// Solana swap quote result (Jupiter)
 interface SwapQuoteResult {
   inputMint: string;
   outputMint: string;
@@ -4153,13 +4423,31 @@ interface SwapQuoteResult {
   rawQuote: unknown;
 }
 
+// EVM swap quote result (ParaSwap)
+interface EVMSwapQuoteResult {
+  chainId: EVMChainId;
+  srcToken: string;
+  destToken: string;
+  srcAmount: string;
+  destAmount: string;
+  srcAmountFormatted: string;
+  destAmountFormatted: string;
+  minimumReceivedFormatted: string;
+  exchangeRate: string;
+  gasCostUSD: string;
+  route: string;
+  rawQuote: unknown;
+}
+
 interface SwapViewProps {
   address: string;
   network: string;
   activeChain: ChainType;
   activeEVMChain: EVMChainId | null;
   tokens?: SPLTokenBalance[];
+  evmTokens?: EVMTokenBalance[];
   balance?: WalletBalance | null;
+  evmBalance?: EVMBalance | null;
   onClose: () => void;
   onSwapComplete?: () => void;
 }
@@ -4170,36 +4458,97 @@ const SwapView: React.FC<SwapViewProps> = ({
   activeChain,
   activeEVMChain,
   tokens = [],
+  evmTokens = [],
   balance,
+  evmBalance,
   onClose,
   onSwapComplete,
 }) => {
   const [copied, setCopied] = useState(false);
   const [useInAppSwap, setUseInAppSwap] = useState(true);
 
-  // In-app swap state
-  const [inputToken, setInputToken] = useState(SWAP_TOKEN_LIST[0]); // SOL
-  const [outputToken, setOutputToken] = useState(SWAP_TOKEN_LIST[1]); // USDC
+  // Get default tokens based on chain (for initial state)
+  const getDefaultTokens = useCallback(() => {
+    if (activeChain === 'solana') {
+      return DEFAULT_SOLANA_TOKENS;
+    }
+    return DEFAULT_EVM_TOKENS;
+  }, [activeChain]);
+
+  // In-app swap state - initialize with default tokens
+  const [inputToken, setInputToken] = useState<SwapToken | null>(() => getDefaultTokens()[0]);
+  const [outputToken, setOutputToken] = useState<SwapToken | null>(() => getDefaultTokens()[1]);
   const [inputAmount, setInputAmount] = useState('');
-  const [slippageBps, setSlippageBps] = useState(50); // 0.5%
+  const [slippageBps, setSlippageBps] = useState(activeChain === 'solana' ? 50 : 100); // 0.5% for Solana, 1% for EVM
   const [quote, setQuote] = useState<SwapQuoteResult | null>(null);
+  const [evmQuote, setEvmQuote] = useState<EVMSwapQuoteResult | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [swapStatus, setSwapStatus] = useState<string>(''); // Status message during swap
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState<{ signature: string; explorerUrl: string } | null>(null);
-  const [showTokenSelect, setShowTokenSelect] = useState<'input' | 'output' | null>(null);
+  const [success, setSuccess] = useState<{ signature?: string; hash?: string; explorerUrl: string } | null>(null);
   const [swapAvailable, setSwapAvailable] = useState(false);
   const [referralStatus, setReferralStatus] = useState<{ enabled: boolean; feeBps: number } | null>(
     null,
   );
+  const [tokensLoading, setTokensLoading] = useState(false);
+
+  // Load popular tokens when chain changes and set default selections
+  useEffect(() => {
+    let cancelled = false;
+    
+    const loadDefaultTokens = async () => {
+      setTokensLoading(true);
+      try {
+        const popularTokens = await getPopularTokens(
+          activeChain,
+          activeEVMChain || undefined,
+          10
+        );
+        
+        if (!cancelled && popularTokens.length >= 2) {
+          setInputToken(popularTokens[0]);
+          setOutputToken(popularTokens[1]);
+        } else if (!cancelled) {
+          // Fallback to hardcoded defaults
+          const defaults = getDefaultTokens();
+          setInputToken(defaults[0]);
+          setOutputToken(defaults[1]);
+        }
+      } catch (error) {
+        console.error('Failed to load popular tokens:', error);
+        if (!cancelled) {
+          const defaults = getDefaultTokens();
+          setInputToken(defaults[0]);
+          setOutputToken(defaults[1]);
+        }
+      } finally {
+        if (!cancelled) {
+          setTokensLoading(false);
+        }
+      }
+    };
+
+    loadDefaultTokens();
+    setInputAmount('');
+    setQuote(null);
+    setEvmQuote(null);
+    setError('');
+    setSuccess(null);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChain, activeEVMChain, getDefaultTokens]);
 
   // Debounce input amount for quote fetching
   const debouncedInputAmount = useDebounce(inputAmount, 500);
 
-  // Check if in-app swap is available (mainnet Solana only)
+  // Check if in-app swap is available
   useEffect(() => {
     const checkSwapAvailable = async () => {
       if (activeChain === 'solana' && network === 'mainnet-beta') {
+        // Solana mainnet - check Jupiter availability
         try {
           const response = await sendToBackground({
             type: 'WALLET_SWAP_AVAILABLE',
@@ -4218,18 +4567,32 @@ const SwapView: React.FC<SwapViewProps> = ({
         } catch {
           setSwapAvailable(false);
         }
+      } else if (activeChain === 'evm' && activeEVMChain) {
+        // EVM chain - check ParaSwap availability (mainnet only)
+        try {
+          const response = await sendToBackground({
+            type: 'EVM_SWAP_AVAILABLE',
+            payload: { evmChainId: activeEVMChain },
+          });
+          setSwapAvailable(response.success && response.data === true);
+          setReferralStatus(null); // ParaSwap doesn't have referral in our implementation
+        } catch {
+          setSwapAvailable(false);
+        }
       } else {
         setSwapAvailable(false);
       }
     };
     checkSwapAvailable();
-  }, [activeChain, network]);
+  }, [activeChain, activeEVMChain, network]);
 
   // Fetch quote when input changes
   useEffect(() => {
     const fetchQuote = async () => {
-      if (!debouncedInputAmount || parseFloat(debouncedInputAmount) <= 0 || !swapAvailable) {
+      // Require both tokens to be selected and valid input
+      if (!inputToken || !outputToken || !debouncedInputAmount || parseFloat(debouncedInputAmount) <= 0 || !swapAvailable) {
         setQuote(null);
+        setEvmQuote(null);
         return;
       }
 
@@ -4237,68 +4600,159 @@ const SwapView: React.FC<SwapViewProps> = ({
       setError('');
 
       try {
-        const response = await sendToBackground({
-          type: 'WALLET_SWAP_QUOTE',
-          payload: {
-            inputMint: inputToken.mint,
-            outputMint: outputToken.mint,
-            inputAmount: debouncedInputAmount,
-            inputDecimals: inputToken.decimals,
-            outputDecimals: outputToken.decimals,
-            slippageBps,
-          },
-        });
+        if (activeChain === 'solana') {
+          // Solana swap via Jupiter
+          const response = await sendToBackground({
+            type: 'WALLET_SWAP_QUOTE',
+            payload: {
+              inputMint: inputToken.address,
+              outputMint: outputToken.address,
+              inputAmount: debouncedInputAmount,
+              inputDecimals: inputToken.decimals,
+              outputDecimals: outputToken.decimals,
+              slippageBps,
+            },
+          });
 
-        if (response.success && response.data) {
-          setQuote(response.data as SwapQuoteResult);
-        } else {
-          setError(response.error || 'Failed to get quote');
-          setQuote(null);
+          if (response.success && response.data) {
+            setQuote(response.data as SwapQuoteResult);
+            setEvmQuote(null);
+          } else {
+            setError(response.error || 'Failed to get quote');
+            setQuote(null);
+          }
+        } else if (activeChain === 'evm' && activeEVMChain) {
+          // EVM swap via ParaSwap
+          const response = await sendToBackground({
+            type: 'EVM_SWAP_QUOTE',
+            payload: {
+              evmChainId: activeEVMChain,
+              srcToken: inputToken.address,
+              destToken: outputToken.address,
+              srcAmount: debouncedInputAmount,
+              srcDecimals: inputToken.decimals,
+              destDecimals: outputToken.decimals,
+              slippageBps,
+            },
+          });
+
+          if (response.success && response.data) {
+            setEvmQuote(response.data as EVMSwapQuoteResult);
+            setQuote(null);
+          } else {
+            setError(response.error || 'Failed to get quote');
+            setEvmQuote(null);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to get quote');
         setQuote(null);
+        setEvmQuote(null);
       } finally {
         setLoadingQuote(false);
       }
     };
 
     fetchQuote();
-  }, [debouncedInputAmount, inputToken, outputToken, slippageBps, swapAvailable]);
+  }, [debouncedInputAmount, inputToken, outputToken, slippageBps, swapAvailable, activeChain, activeEVMChain]);
 
-  // Execute swap
+  // Execute swap with status updates
   const handleSwap = async () => {
-    if (!quote || executing) return;
+    if (!inputToken || !outputToken) return;
+    if (activeChain === 'solana' && !quote) return;
+    if (activeChain === 'evm' && !evmQuote) return;
+    if (executing) return;
 
     setExecuting(true);
     setError('');
     setSuccess(null);
+    setSwapStatus('Building transaction...');
+
+    // Status update intervals for user feedback
+    const statusUpdates = activeChain === 'evm' 
+      ? [
+          { delay: 1500, status: 'Signing transaction...' },
+          { delay: 3000, status: 'Broadcasting to network...' },
+          { delay: 5000, status: 'Waiting for confirmation...' },
+          { delay: 15000, status: 'Still confirming... (this may take a minute)' },
+          { delay: 30000, status: 'Almost there... (network is busy)' },
+        ]
+      : [
+          { delay: 1000, status: 'Signing transaction...' },
+          { delay: 2000, status: 'Broadcasting to Solana...' },
+          { delay: 4000, status: 'Waiting for confirmation...' },
+        ];
+
+    const timeouts: NodeJS.Timeout[] = [];
+    statusUpdates.forEach(({ delay, status }) => {
+      const timeout = setTimeout(() => setSwapStatus(status), delay);
+      timeouts.push(timeout);
+    });
 
     try {
-      const response = await sendToBackground({
-        type: 'WALLET_SWAP_EXECUTE',
-        payload: {
-          inputMint: inputToken.mint,
-          outputMint: outputToken.mint,
-          inputAmount,
-          inputDecimals: inputToken.decimals,
-          slippageBps,
-        },
-      });
+      if (activeChain === 'solana') {
+        // Solana swap via Jupiter
+        const response = await sendToBackground({
+          type: 'WALLET_SWAP_EXECUTE',
+          payload: {
+            inputMint: inputToken.address,
+            outputMint: outputToken.address,
+            inputAmount,
+            inputDecimals: inputToken.decimals,
+            slippageBps,
+          },
+        });
 
-      if (response.success && response.data) {
-        const result = response.data as { signature: string; explorerUrl: string };
-        setSuccess(result);
-        setInputAmount('');
-        setQuote(null);
-        onSwapComplete?.();
-      } else {
-        setError(response.error || 'Swap failed');
+        // Clear status timeouts
+        timeouts.forEach(clearTimeout);
+
+        if (response.success && response.data) {
+          const result = response.data as { signature: string; explorerUrl: string };
+          setSuccess({ signature: result.signature, explorerUrl: result.explorerUrl });
+          setInputAmount('');
+          setQuote(null);
+          onSwapComplete?.();
+        } else {
+          setError(response.error || 'Swap failed');
+        }
+      } else if (activeChain === 'evm' && activeEVMChain) {
+        // EVM swap via ParaSwap
+        const response = await sendToBackground({
+          type: 'EVM_SWAP_EXECUTE',
+          payload: {
+            evmChainId: activeEVMChain,
+            srcToken: inputToken.address,
+            destToken: outputToken.address,
+            srcAmount: inputAmount,
+            srcDecimals: inputToken.decimals,
+            slippageBps,
+          },
+        });
+
+        // Clear status timeouts
+        timeouts.forEach(clearTimeout);
+
+        if (response.success && response.data) {
+          const result = response.data as { hash: string; explorerUrl: string; confirmed: boolean; error?: string };
+          if (result.error) {
+            setError(result.error);
+          } else {
+            setSuccess({ hash: result.hash, explorerUrl: result.explorerUrl });
+            setInputAmount('');
+            setEvmQuote(null);
+            onSwapComplete?.();
+          }
+        } else {
+          setError(response.error || 'Swap failed');
+        }
       }
     } catch (err) {
+      // Clear status timeouts on error
+      timeouts.forEach(clearTimeout);
       setError(err instanceof Error ? err.message : 'Swap failed');
     } finally {
       setExecuting(false);
+      setSwapStatus('');
     }
   };
 
@@ -4309,6 +4763,7 @@ const SwapView: React.FC<SwapViewProps> = ({
     setOutputToken(temp);
     setInputAmount('');
     setQuote(null);
+    setEvmQuote(null);
   };
 
   // Get chain name for display
@@ -4373,81 +4828,69 @@ const SwapView: React.FC<SwapViewProps> = ({
 
   // Get user's token balance for input token
   const getInputTokenBalance = () => {
-    if (inputToken.symbol === 'SOL') {
-      // SOL balance comes from main wallet balance
-      return balance?.lamports ? balance.lamports / 1e9 : 0;
+    if (!inputToken) return null;
+    if (activeChain === 'solana') {
+      if (inputToken.symbol === 'SOL') {
+        // SOL balance comes from main wallet balance
+        return balance?.lamports ? balance.lamports / 1e9 : 0;
+      }
+      const userToken = tokens.find((t) => t.mint === inputToken.address);
+      return userToken ? userToken.uiBalance : 0;
+    } else {
+      // EVM chain - check for native token or ERC20
+      if (inputToken.address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()) {
+        // Native token (ETH, MATIC, etc.) - use evmBalance
+        return evmBalance?.formatted ?? 0;
+      }
+      // For ERC20 tokens, look up in evmTokens array
+      const userToken = evmTokens.find(
+        (t) => t.address.toLowerCase() === inputToken.address.toLowerCase()
+      );
+      return userToken ? userToken.uiBalance : 0;
     }
-    const userToken = tokens.find((t) => t.mint === inputToken.mint);
-    return userToken ? userToken.uiBalance : 0;
   };
 
   const inputBalance = getInputTokenBalance();
 
-  // Render token selector
-  const renderTokenSelector = (type: 'input' | 'output') => {
-    const selectedToken = type === 'input' ? inputToken : outputToken;
-    const otherToken = type === 'input' ? outputToken : inputToken;
+  // Handle token selection from SwapTokenSelector
+  const handleInputTokenSelect = useCallback((token: SwapToken) => {
+    setInputToken(token);
+    setQuote(null);
+    setEvmQuote(null);
+  }, []);
 
-    return (
-      <div className="swap-token-selector">
-        <button className="swap-token-btn" onClick={() => setShowTokenSelect(type)}>
-          <img
-            src={selectedToken.logoUri}
-            alt={selectedToken.symbol}
-            className="swap-token-icon"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src =
-                'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
-            }}
-          />
-          <span className="swap-token-symbol">{selectedToken.symbol}</span>
-          <ChevronIcon size={14} direction="down" />
-        </button>
+  const handleOutputTokenSelect = useCallback((token: SwapToken) => {
+    setOutputToken(token);
+    setQuote(null);
+    setEvmQuote(null);
+  }, []);
 
-        {showTokenSelect === type && (
-          <div className="swap-token-dropdown">
-            <div className="swap-token-dropdown-header">
-              <span>Select Token</span>
-              <button onClick={() => setShowTokenSelect(null)}>
-                <CloseIcon size={14} />
-              </button>
-            </div>
-            <div className="swap-token-list">
-              {SWAP_TOKEN_LIST.filter((t) => t.mint !== otherToken.mint).map((token) => (
-                <button
-                  key={token.mint}
-                  className={`swap-token-option ${token.mint === selectedToken.mint ? 'selected' : ''}`}
-                  onClick={() => {
-                    if (type === 'input') setInputToken(token);
-                    else setOutputToken(token);
-                    setShowTokenSelect(null);
-                    setQuote(null);
-                  }}
-                >
-                  <img
-                    src={token.logoUri}
-                    alt={token.symbol}
-                    className="swap-token-icon"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
-                    }}
-                  />
-                  <div className="swap-token-info">
-                    <span className="swap-token-symbol">{token.symbol}</span>
-                    <span className="swap-token-name">{token.name}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+  // Get native balance for token selector
+  const nativeBalanceForSelector = useMemo(() => {
+    if (activeChain === 'solana') {
+      return balance?.sol || 0;
+    }
+    return evmBalance?.formatted || 0;
+  }, [activeChain, balance, evmBalance]);
 
-  // In-app swap UI for Solana mainnet
-  if (swapAvailable && useInAppSwap && activeChain === 'solana') {
+  // In-app swap UI (Solana via Jupiter, EVM via ParaSwap)
+  const hasQuote = activeChain === 'solana' ? quote : evmQuote;
+  const currentQuote = activeChain === 'solana' ? quote : evmQuote;
+  const outputAmountFormatted = activeChain === 'solana'
+    ? quote?.outputAmountFormatted
+    : evmQuote?.destAmountFormatted;
+  const minimumReceivedFormatted = activeChain === 'solana'
+    ? quote?.minimumReceivedFormatted
+    : evmQuote?.minimumReceivedFormatted;
+  const routeDisplay = activeChain === 'solana' ? quote?.route : evmQuote?.route;
+  const priceImpact = activeChain === 'solana' ? quote?.priceImpact : null; // ParaSwap doesn't return price impact
+  const poweredByName = activeChain === 'solana' ? 'Jupiter' : 'ParaSwap';
+  const poweredByLogo = activeChain === 'solana'
+    ? 'https://static.jup.ag/jup/icon.png'
+    : 'https://app.paraswap.io/paraswap.svg';
+  const externalSwapName = activeChain === 'solana' ? 'Jupiter' : 'ParaSwap';
+
+  if (swapAvailable && useInAppSwap) {
     return (
       <div className="swap-view">
         <div className="form-header">
@@ -4485,8 +4928,23 @@ const SwapView: React.FC<SwapViewProps> = ({
             </div>
           )}
 
+          {/* Swap Processing Status */}
+          {executing && swapStatus && (
+            <div className="swap-processing-status">
+              <div className="swap-processing-animation">
+                <div className="swap-processing-spinner"></div>
+              </div>
+              <div className="swap-processing-text">{swapStatus}</div>
+              <div className="swap-processing-hint">
+                {activeChain === 'evm' 
+                  ? 'EVM transactions may take 15-60 seconds to confirm'
+                  : 'Solana transactions typically confirm in a few seconds'}
+              </div>
+            </div>
+          )}
+
           {/* Swap Form */}
-          {!success && (
+          {!success && !executing && (
             <>
               {/* Input Token */}
               <div className="swap-input-group">
@@ -4498,11 +4956,21 @@ const SwapView: React.FC<SwapViewProps> = ({
                     placeholder="0.00"
                     value={inputAmount}
                     onChange={(e) => setInputAmount(e.target.value)}
-                    disabled={executing}
+                    disabled={executing || tokensLoading}
                   />
-                  {renderTokenSelector('input')}
+                  <SwapTokenSelector
+                    selectedToken={inputToken}
+                    onSelect={handleInputTokenSelect}
+                    chainType={activeChain}
+                    evmChainId={activeEVMChain || undefined}
+                    solanaTokens={tokens}
+                    evmTokens={evmTokens}
+                    nativeBalance={nativeBalanceForSelector}
+                    excludeToken={outputToken}
+                    disabled={executing || tokensLoading}
+                  />
                 </div>
-                {inputBalance !== null && (
+                {inputBalance !== null && inputToken && (
                   <div className="swap-balance">
                     Balance: {inputBalance.toFixed(4)} {inputToken.symbol}
                     <div className="swap-quick-btns">
@@ -4516,12 +4984,37 @@ const SwapView: React.FC<SwapViewProps> = ({
                       <button
                         className="swap-quick-btn"
                         onClick={() => {
-                          // Reserve SOL for transaction fees (0.01 SOL should be enough)
-                          if (inputToken.symbol === 'SOL') {
-                            const maxSwappable = Math.max(0, inputBalance - 0.01);
-                            setInputAmount(maxSwappable.toString());
+                          if (!inputToken) return;
+                          // Reserve native tokens for transaction fees
+                          if (activeChain === 'solana') {
+                            if (inputToken.symbol === 'SOL') {
+                              // Reserve 0.005 SOL for Solana tx fees, or 10% if balance is small
+                              const gasReserve = Math.min(0.005, inputBalance * 0.1);
+                              const maxSwappable = Math.max(0, inputBalance - gasReserve);
+                              setInputAmount(maxSwappable.toString());
+                            } else {
+                              setInputAmount(inputBalance.toString());
+                            }
                           } else {
-                            setInputAmount(inputBalance.toString());
+                            // EVM chains - reserve gas for native token swaps
+                            const isNativeToken = inputToken.address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
+                            if (isNativeToken) {
+                              // Reserve gas based on chain (L2s are cheaper)
+                              // Use smaller reserves and cap at 10% of balance for small amounts
+                              let gasReserve = 0.003; // Default for Ethereum mainnet (~$10 at $3k ETH)
+                              if (activeEVMChain === 'arbitrum' || activeEVMChain === 'optimism' || activeEVMChain === 'base') {
+                                gasReserve = 0.0005; // L2s are much cheaper (~$1.50)
+                              } else if (activeEVMChain === 'polygon') {
+                                gasReserve = 0.05; // MATIC is cheap
+                              }
+                              // Don't reserve more than 10% of balance for small amounts
+                              const effectiveReserve = Math.min(gasReserve, inputBalance * 0.1);
+                              const maxSwappable = Math.max(0, inputBalance - effectiveReserve);
+                              setInputAmount(maxSwappable.toString());
+                            } else {
+                              // ERC20 tokens - use full balance
+                              setInputAmount(inputBalance.toString());
+                            }
                           }
                         }}
                         disabled={executing}
@@ -4548,43 +5041,61 @@ const SwapView: React.FC<SwapViewProps> = ({
                     type="text"
                     className="swap-amount-input"
                     placeholder="0.00"
-                    value={loadingQuote ? 'Loading...' : quote?.outputAmountFormatted || ''}
+                    value={loadingQuote ? 'Loading...' : outputAmountFormatted || ''}
                     readOnly
                   />
-                  {renderTokenSelector('output')}
+                  <SwapTokenSelector
+                    selectedToken={outputToken}
+                    onSelect={handleOutputTokenSelect}
+                    chainType={activeChain}
+                    evmChainId={activeEVMChain || undefined}
+                    solanaTokens={tokens}
+                    evmTokens={evmTokens}
+                    nativeBalance={nativeBalanceForSelector}
+                    excludeToken={inputToken}
+                    disabled={executing || tokensLoading}
+                  />
                 </div>
               </div>
 
               {/* Quote Details */}
-              {quote && !loadingQuote && (
+              {hasQuote && !loadingQuote && inputToken && outputToken && (
                 <div className="swap-quote-details">
                   <div className="swap-quote-row">
                     <span>Rate</span>
                     <span>
                       1 {inputToken.symbol} ≈{' '}
-                      {(parseFloat(quote.outputAmountFormatted) / parseFloat(inputAmount)).toFixed(
-                        6,
-                      )}{' '}
+                      {outputAmountFormatted && inputAmount
+                        ? (parseFloat(outputAmountFormatted) / parseFloat(inputAmount)).toFixed(6)
+                        : '0'}{' '}
                       {outputToken.symbol}
                     </span>
                   </div>
                   <div className="swap-quote-row">
                     <span>Min. Received</span>
                     <span>
-                      {quote.minimumReceivedFormatted} {outputToken.symbol}
+                      {minimumReceivedFormatted} {outputToken.symbol}
                     </span>
                   </div>
-                  <div className="swap-quote-row">
-                    <span>Price Impact</span>
-                    <span className={parseFloat(quote.priceImpact) > 1 ? 'swap-warning' : ''}>
-                      {quote.priceImpact}
-                    </span>
-                  </div>
+                  {priceImpact && (
+                    <div className="swap-quote-row">
+                      <span>Price Impact</span>
+                      <span className={parseFloat(priceImpact) > 1 ? 'swap-warning' : ''}>
+                        {priceImpact}
+                      </span>
+                    </div>
+                  )}
+                  {evmQuote?.gasCostUSD && (
+                    <div className="swap-quote-row">
+                      <span>Est. Gas Cost</span>
+                      <span>${parseFloat(evmQuote.gasCostUSD).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="swap-quote-row">
                     <span>Route</span>
-                    <span className="swap-route">{quote.route}</span>
+                    <span className="swap-route">{routeDisplay || 'Direct'}</span>
                   </div>
-                  {quote.platformFeeFormatted && referralStatus?.enabled && (
+                  {quote?.platformFeeFormatted && referralStatus?.enabled && (
                     <div className="swap-quote-row">
                       <span>Platform Fee ({referralStatus.feeBps / 100}%)</span>
                       <span>
@@ -4619,29 +5130,36 @@ const SwapView: React.FC<SwapViewProps> = ({
                 className="btn btn-primary btn-block swap-execute-btn"
                 onClick={handleSwap}
                 disabled={
-                  !quote ||
+                  !inputToken ||
+                  !outputToken ||
+                  !hasQuote ||
                   executing ||
                   loadingQuote ||
+                  tokensLoading ||
                   !inputAmount ||
                   parseFloat(inputAmount) <= 0 ||
                   (inputBalance !== null && parseFloat(inputAmount) > inputBalance) ||
                   !swapAvailable
                 }
               >
-                {executing ? (
+                {tokensLoading ? (
+                  'Loading Tokens...'
+                ) : executing ? (
                   <>
                     <span className="spinner small" />
-                    Swapping...
+                    {swapStatus || 'Swapping...'}
                   </>
                 ) : loadingQuote ? (
                   'Getting Quote...'
                 ) : !swapAvailable ? (
                   'Swap Not Available'
+                ) : !inputToken || !outputToken ? (
+                  'Select Tokens'
                 ) : !inputAmount || parseFloat(inputAmount) <= 0 ? (
                   'Enter Amount'
                 ) : inputBalance !== null && parseFloat(inputAmount) > inputBalance ? (
                   'Insufficient Balance'
-                ) : !quote ? (
+                ) : !hasQuote ? (
                   'Unable to Quote'
                 ) : (
                   <>
@@ -4655,19 +5173,23 @@ const SwapView: React.FC<SwapViewProps> = ({
               <div className="swap-external-option">
                 <button className="swap-external-btn" onClick={() => setUseInAppSwap(false)}>
                   <ExternalLinkIcon size={14} />
-                  Use Jupiter Website Instead
+                  Use {externalSwapName} Website Instead
                 </button>
               </div>
 
-              {/* Powered by Jupiter */}
+              {/* Powered by */}
               <div className="swap-powered-by">
                 <span>Powered by</span>
                 <img
-                  src="https://static.jup.ag/jup/icon.png"
-                  alt="Jupiter"
+                  src={poweredByLogo}
+                  alt={poweredByName}
                   className="swap-jupiter-logo"
+                  onError={(e) => {
+                    // Fallback if ParaSwap logo fails to load
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
                 />
-                <span>Jupiter</span>
+                <span>{poweredByName}</span>
               </div>
             </>
           )}
@@ -4742,7 +5264,7 @@ const SwapView: React.FC<SwapViewProps> = ({
         </p>
 
         {/* Option to use in-app swap if available */}
-        {swapAvailable && activeChain === 'solana' && (
+        {swapAvailable && (
           <div className="swap-inapp-option">
             <button className="swap-inapp-btn" onClick={() => setUseInAppSwap(true)}>
               <SwapIcon size={14} />
@@ -5599,7 +6121,9 @@ const App: React.FC = () => {
 
   // State for passing to swap view
   const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
+  const [swapEvmTokens, setSwapEvmTokens] = useState<EVMTokenBalance[]>([]);
   const [swapBalance, setSwapBalance] = useState<WalletBalance | null>(null);
+  const [swapEvmBalance, setSwapEvmBalance] = useState<EVMBalance | null>(null);
 
   // Track network connectivity
   useEffect(() => {

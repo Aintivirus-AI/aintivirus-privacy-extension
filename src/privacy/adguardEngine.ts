@@ -1,27 +1,119 @@
 import type { CachedCosmeticRules } from './types';
 
 export const PROTECTED_SITES = [
+  // Social Media
   'twitter.com',
   'x.com',
   'youtube.com',
-  'github.com',
-  'google.com',
-  'google.co.uk',
-  'google.ca',
-  'google.com.au',
-  'mail.google.com',
-  'drive.google.com',
-  'docs.google.com',
   'linkedin.com',
   'facebook.com',
   'instagram.com',
   'reddit.com',
+  'tiktok.com',
+  
+  // Development & Productivity Tools
+  'github.com',
+  'gitlab.com',
+  'bitbucket.org',
+  'stackoverflow.com',
+  'stackexchange.com',
+  'cursor.sh',
+  'cursor.com',
+  'notion.so',
+  'notion.com',
+  'slack.com',
+  'trello.com',
+  'asana.com',
+  'figma.com',
+  'vercel.com',
+  'netlify.com',
+  'heroku.com',
+  
+  // Error Tracking (NEVER block - breaks authentication flows)
+  'sentry.io',
+  'bugsnag.com',
+  'rollbar.com',
+  
+  // Google Services & Domains
+  'google.com',
+  'google.co.uk',
+  'google.ca',
+  'google.com.au',
+  'google.de',
+  'google.fr',
+  'google.it',
+  'google.es',
+  'google.nl',
+  'google.be',
+  'google.ch',
+  'google.at',
+  'google.pl',
+  'google.ru',
+  'google.co.in',
+  'google.co.jp',
+  'google.co.kr',
+  'google.com.br',
+  'google.com.mx',
+  'google.com.ar',
+  'google.com.sg',
+  'google.com.hk',
+  'google.com.tw',
+  'accounts.google.com',
+  'myaccount.google.com',
+  'login.google.com',
+  'mail.google.com',
+  'drive.google.com',
+  'docs.google.com',
+  'sheets.google.com',
+  'slides.google.com',
+  'calendar.google.com',
+  'meet.google.com',
+  'gstatic.com',
+  'googleusercontent.com',
+  'googleapis.com',
+  
+  // Microsoft Services
+  'microsoft.com',
+  'live.com',
+  'outlook.com',
+  'office.com',
+  'office365.com',
+  'microsoftonline.com',
+  'login.microsoftonline.com',
+  'account.microsoft.com',
+  'onedrive.live.com',
+  'teams.microsoft.com',
+  
+  // Apple Services
+  'apple.com',
+  'icloud.com',
+  'appleid.apple.com',
+  
+  // E-commerce
   'amazon.com',
   'amazon.co.uk',
+  'amazon.ca',
+  'amazon.de',
+  'amazon.fr',
   'ebay.com',
+  'paypal.com',
+  'stripe.com',
+  
+  // Entertainment
   'netflix.com',
+  'hulu.com',
+  'disneyplus.com',
+  'spotify.com',
   'twitch.tv',
   'discord.com',
+  
+  // Banking & Finance (commonly used for OAuth)
+  'plaid.com',
+  
+  // Other OAuth/Auth Providers
+  'auth0.com',
+  'okta.com',
+  'onelogin.com',
 ];
 
 export function isProtectedSite(domain: string): boolean {

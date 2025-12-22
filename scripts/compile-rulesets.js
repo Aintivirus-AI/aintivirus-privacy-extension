@@ -333,6 +333,132 @@ function generateCustomRuleset() {
     'trackersimulator.org',
     'eviltracker.net',
     'do-not-tracker.org',
+    // TurtleCute adblock test domains
+    'analyticsengine.s3.amazonaws.com',
+    'analytics.s3.amazonaws.com',
+    'an.facebook.com',
+    'ads-api.twitter.com',
+    'ads-api.tiktok.com',
+    'ads-sg.tiktok.com',
+    'business-api.tiktok.com',
+    'ads.tiktok.com',
+    'log.byteoversea.com',
+    'udcm.yahoo.com',
+    'analytics.query.yahoo.com',
+    'log.fc.yahoo.com',
+    'gemini.yahoo.com',
+    'adtech.yahooinc.com',
+    'adfstat.yandex.ru',
+    'appmetrica.yandex.ru',
+    'metrika.yandex.ru',
+    // Unity Ads
+    'auction.unityads.unity3d.com',
+    'webview.unityads.unity3d.com',
+    'config.unityads.unity3d.com',
+    'adserver.unityads.unity3d.com',
+    // Realme telemetry
+    'iot-eu-logser.realme.com',
+    'iot-logser.realme.com',
+    'bdapi-ads.realmemobile.com',
+    'bdapi-in-ads.realmemobile.com',
+    // Xiaomi telemetry
+    'data.mistat.xiaomi.com',
+    'data.mistat.india.xiaomi.com',
+    'data.mistat.rus.xiaomi.com',
+    'tracking.rus.miui.com',
+    // Oppo ads
+    'adsfs.oppomobile.com',
+    'adx.ads.oppomobile.com',
+    'ck.ads.oppomobile.com',
+    'data.ads.oppomobile.com',
+    // Huawei
+    'grs.hicloud.com',
+    // Apple ads/analytics
+    'iadsdk.apple.com',
+    'api-adservices.apple.com',
+    'books-analytics-events.apple.com',
+    'weather-analytics-events.apple.com',
+    'notes-analytics-events.apple.com',
+    'xp.apple.com',
+    // Social media ads/tracking
+    'graph.facebook.com',
+    'tr.facebook.com',
+    'graph.instagram.com',
+    'i.instagram.com',
+    'ads.snapchat.com',
+    'ads-api.x.com',
+    'ads.x.com',
+    'snap.licdn.com',
+    'd.reddit.com',
+    'pixel.quora.com',
+    'ads.vk.com',
+    // Huawei
+    'ads.huawei.com',
+    // LG
+    'ngfts.lge.com',
+    // Microsoft telemetry
+    'settings-win.data.microsoft.com',
+    'vortex-win.data.microsoft.com',
+    'watson.telemetry.microsoft.com',
+    // Amazon ads/metrics
+    'device-metrics-us.amazon.com',
+    'device-metrics-us-2.amazon.com',
+    'mads-eu.amazon.com',
+    // Roku
+    'ads.roku.com',
+    // Consent/cookie management (often used for tracking)
+    'cdn.cookielaw.org',
+    'geolocation.onetrust.com',
+    'consent.cookiebot.com',
+    'consentcdn.cookiebot.com',
+    'cookiebot.com',
+    'consent.trustarc.com',
+    'sdk.privacy-center.org',
+    'cdn.privacy-mgmt.com',
+    'app.usercentrics.eu',
+    // A/B testing & personalization
+    'cdn.optimizely.com',
+    'api.optimizely.com',
+    'cdn.dynamicyield.com',
+    // Chat widgets (tracking)
+    'widget.intercom.io',
+    'js.driftt.com',
+    // Video ads
+    'dai.google.com',
+    'g.jwpsrv.com',
+    'ssl.p.jwpcdn.com',
+    // AppLovin
+    'applovin.com',
+    'd.applovin.com',
+    'rt.applovin.com',
+    'ms.applovin.com',
+    // Mobile ad networks
+    'liftoff.io',
+    'api.fyber.com',
+    'inmobi.com',
+    'ironsource.mobi',
+    'pangleglobal.com',
+    // Microsoft ads
+    'bingads.microsoft.com',
+    'ads.microsoft.com',
+    // Unity ads (main domain)
+    'unityads.unity3d.com',
+    // YouTube/Google tracking
+    's.youtube.com',
+    'redirector.googlevideo.com',
+    'youtubei.googleapis.com',
+    'tagmanager.google.com',
+    // Ad tech & fingerprinting
+    'quantcast.com',
+    'fingerprintjs.com',
+    'thetradedesk.com',
+    'smartclip.com',
+    // Affiliate/attribution
+    'bnc.lt',
+    '2giga.link',
+    'greatis.com',
+    'impact.com',
+    'api.impact.com',
   ];
 
   for (const domain of trackerDomains) {
@@ -346,6 +472,39 @@ function generateCustomRuleset() {
       },
     });
   }
+
+  // Script blocking rules for TurtleCute adblock test
+  rules.push({
+    id: id++,
+    priority: 1,
+    action: { type: 'block' },
+    condition: {
+      urlFilter: '/pagead.js',
+      resourceTypes: ['script'],
+    },
+  });
+
+  rules.push({
+    id: id++,
+    priority: 1,
+    action: { type: 'block' },
+    condition: {
+      urlFilter: '/widget/ads.',
+      resourceTypes: ['script', 'xmlhttprequest', 'image', 'sub_frame', 'other'],
+    },
+  });
+
+  // VK retargeting pixel (path-based)
+  rules.push({
+    id: id++,
+    priority: 1,
+    action: { type: 'block' },
+    condition: {
+      urlFilter: '||vk.com/rtrg',
+      resourceTypes: ALL_RESOURCE_TYPES,
+    },
+  });
+
   return rules;
 }
 

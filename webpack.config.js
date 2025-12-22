@@ -19,7 +19,7 @@ module.exports = (env, argv) => {
 
   // Only inject the specific env vars we intentionally depend on.
   const INJECTED_ENV_KEYS = [
-    'AINTIVIRUS_HELIUS_API_KEY',
+    'AINTIVIRUS_ALCHEMY_API_KEY',
     'AINTIVIRUS_JUPITER_API_KEY',
     'AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT',
     'AINTIVIRUS_JUPITER_REFERRAL_FEE_BPS',
@@ -128,6 +128,10 @@ module.exports = (env, argv) => {
           {
             from: 'vendor/aintivirusAdblocker/LICENSE.txt',
             to: 'aintivirusAdblocker/LICENSE.txt',
+          },
+          {
+            from: 'rules',
+            to: 'rules',
           },
         ],
       }),

@@ -662,9 +662,10 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   // Helper function to mask API keys in URLs
   const maskApiKey = (url: string): string => {
     try {
+      let maskedUrl = url;
       const urlObj = new URL(url);
 
-      // Check for various API key parameter names
+      // Check for query parameter API keys
       const apiKeyParams = ['api-key', 'apikey', 'apiKey'];
 
       for (const param of apiKeyParams) {
@@ -678,14 +679,42 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
             apiKey.substring(apiKey.length - 4);
 
           // Do a simple string replacement to avoid URL encoding
-          return url.replace(apiKey, masked);
+          maskedUrl = maskedUrl.replace(apiKey, masked);
         }
       }
 
-      return url;
+      // Check for path-based API keys (e.g., Alchemy: /v2/API_KEY)
+      // Match patterns like /v2/[long-string], /api/[long-string], etc.
+      const pathApiKeyPattern = /\/(v2|v1|api)\/([a-zA-Z0-9_-]{16,})/g;
+      maskedUrl = maskedUrl.replace(pathApiKeyPattern, (match, prefix, apiKey) => {
+        if (apiKey.length > 8) {
+          const masked =
+            apiKey.substring(0, 4) +
+            '•'.repeat(Math.min(apiKey.length - 8, 20)) +
+            apiKey.substring(apiKey.length - 4);
+          return `/${prefix}/${masked}`;
+        }
+        return match;
+      });
+
+      return maskedUrl;
     } catch {
-      // If URL parsing fails, return original
-      return url;
+      // If URL parsing fails, still try to mask path-based API keys
+      try {
+        const pathApiKeyPattern = /\/(v2|v1|api)\/([a-zA-Z0-9_-]{16,})/g;
+        return url.replace(pathApiKeyPattern, (match, prefix, apiKey) => {
+          if (apiKey.length > 8) {
+            const masked =
+              apiKey.substring(0, 4) +
+              '•'.repeat(Math.min(apiKey.length - 8, 20)) +
+              apiKey.substring(apiKey.length - 4);
+            return `/${prefix}/${masked}`;
+          }
+          return match;
+        });
+      } catch {
+        return url;
+      }
     }
   };
 
@@ -2405,6 +2434,50 @@ const App: React.FC = () => {
                 ))}
               </div>
 
+              {/* Ad Blocker Control */}
+              <div className="settings-subsection" style={{ marginTop: 'var(--space-xl)' }}>
+                <h3>Ad Blocker</h3>
+                <p className="settings-subsection-desc">
+                  Control ad and tracker blocking across all websites
+                </p>
+                {!flags.privacy && (
+                  <p className="settings-subsection-hint">
+                    Enable "Privacy & Ad Blocking" above to use ad blocker features.
+                  </p>
+                )}
+
+                <div className="settings-group" role="list">
+                  <div className="settings-item" role="listitem">
+                    <div className="settings-item-info">
+                      <div className="settings-item-icon">
+                        <BlockIcon size={20} />
+                      </div>
+                      <div className="settings-item-text">
+                        <span className="settings-item-name">Block Ads & Trackers</span>
+                        <span className="settings-item-desc">
+                          Hide annoying ads and stop companies from watching what you do online
+                        </span>
+                      </div>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={
+                          privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled
+                        }
+                        onChange={() =>
+                          handleAdBlockerToggle(
+                            !(privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled),
+                          )
+                        }
+                        disabled={!flags.privacy}
+                      />
+                      <span className="toggle-track" aria-hidden="true" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div
                 style={{
                   marginTop: 'var(--space-xl)',
@@ -3334,47 +3407,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {}
-              <div className="settings-subsection">
-                <h3>Tracker Blocking</h3>
-                {!flags.privacy && (
-                  <p className="settings-subsection-hint">
-                    Enable "Privacy & Ad Blocking" in the General tab to activate these features.
-                  </p>
-                )}
-
-                <div className="settings-group" role="list">
-                  <div className="settings-item" role="listitem">
-                    <div className="settings-item-info">
-                      <div className="settings-item-icon">
-                        <BlockIcon size={20} />
-                      </div>
-                      <div className="settings-item-text">
-                        <span className="settings-item-name">Block Ads & Trackers</span>
-                        <span className="settings-item-desc">
-                          Hide annoying ads and stop companies from watching what you do online
-                        </span>
-                      </div>
-                    </div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={
-                          privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled
-                        }
-                        onChange={() =>
-                          handleAdBlockerToggle(
-                            !(privacyStatus?.adBlockerEnabled ?? privacySettings.adBlockerEnabled),
-                          )
-                        }
-                        disabled={!flags.privacy}
-                      />
-                      <span className="toggle-track" aria-hidden="true" />
-                    </label>
-                  </div>
-                </div>
-              </div>
 
               {}
               {rulesetStats && (

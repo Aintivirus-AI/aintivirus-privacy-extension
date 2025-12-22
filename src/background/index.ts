@@ -327,11 +327,17 @@ async function handleMessage(
     case 'EVM_CANCEL_TX':
     case 'EVM_GET_GAS_PRESETS':
     case 'EVM_ESTIMATE_REPLACEMENT_FEE':
-    // Jupiter Swap
+    // Jupiter Swap (Solana)
     case 'WALLET_SWAP_QUOTE':
     case 'WALLET_SWAP_EXECUTE':
     case 'WALLET_SWAP_AVAILABLE':
     case 'WALLET_SWAP_REFERRAL_STATUS':
+    // EVM Swap (ParaSwap)
+    case 'EVM_SWAP_QUOTE':
+    case 'EVM_SWAP_EXECUTE':
+    case 'EVM_SWAP_AVAILABLE':
+    // EVM RPC forwarding for dApps
+    case 'EVM_RPC_REQUEST':
       return handleWalletMessageWrapper(extMessage.type as WalletMessageType, extMessage.payload);
 
     case 'SECURITY_CONNECTION_REQUEST':
@@ -378,6 +384,7 @@ async function handleMessage(
     case 'DAPP_GET_PROVIDER_STATE':
     case 'DAPP_PAGE_UNLOAD':
     case 'GET_TAB_ID':
+      console.log('[Background] Handling dApp message:', extMessage.type, extMessage.payload);
       return handleDAppMessageWrapper(extMessage.type, extMessage.payload, sender);
 
     default:

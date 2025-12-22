@@ -75,3 +75,5 @@ export {
 } from './Skeleton';
 
 export { TokenIcon, default as TokenIconDefault } from './TokenIcon';
+
+export { SwapTokenSelector, default as SwapTokenSelectorDefault } from './SwapTokenSelector';

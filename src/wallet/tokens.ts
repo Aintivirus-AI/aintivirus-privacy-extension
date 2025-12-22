@@ -824,12 +824,31 @@ export async function addCustomToken(
     const testnet = settings.networkEnvironment === 'testnet';
 
     const { isERC20Token } = await import('./chains/evm/tokens');
-    const isValid = await isERC20Token(chainId, testnet, mint);
+    
+    // Add timeout to prevent hanging on slow RPC
+    const timeoutPromise = new Promise<boolean>((_, reject) => {
+      setTimeout(() => reject(new Error('Token validation timed out')), 10000);
+    });
+    
+    try {
+      const isValid = await Promise.race([
+        isERC20Token(chainId, testnet, mint),
+        timeoutPromise,
+      ]);
 
-    if (!isValid) {
+      if (!isValid) {
+        throw new WalletError(
+          WalletErrorCode.TOKEN_NOT_FOUND,
+          'Token contract not found or invalid ERC-20 token',
+        );
+      }
+    } catch (error) {
+      if (error instanceof WalletError) {
+        throw error;
+      }
       throw new WalletError(
         WalletErrorCode.TOKEN_NOT_FOUND,
-        'Token contract not found or invalid ERC-20 token',
+        'Failed to validate token. Please try again.',
       );
     }
   } else {

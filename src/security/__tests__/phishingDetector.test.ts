@@ -342,3 +342,4 @@ describe('Levenshtein Distance (via typosquatting detection)', () => {
     expect(result.signals.filter((s) => s.type === 'typosquat')).toHaveLength(0);
   });
 });
+

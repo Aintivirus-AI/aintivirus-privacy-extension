@@ -4,19 +4,21 @@ import { PublicKey } from '@solana/web3.js';
 export type SolanaNetwork = 'mainnet-beta' | 'devnet';
 
 /**
- * Build-time injected API key for Helius Solana RPC.
+ * Build-time injected API key for Alchemy (supports both ETH and Solana).
  *
  * - In development, you can provide it via a local `.env` file (not committed).
  * - In CI/production builds, inject it as an environment variable.
  */
-const HELIUS_API_KEY = process.env.AINTIVIRUS_HELIUS_API_KEY;
+const ALCHEMY_API_KEY = process.env.AINTIVIRUS_ALCHEMY_API_KEY;
 
-function getHeliusRpcUrl(network: SolanaNetwork): string | null {
-  if (!HELIUS_API_KEY) return null;
+function getAlchemySolanaRpcUrl(network: SolanaNetwork): string | null {
+  if (!ALCHEMY_API_KEY) return null;
 
   const base =
-    network === 'devnet' ? 'https://devnet.helius-rpc.com/' : 'https://mainnet.helius-rpc.com/';
-  return `${base}?api-key=${encodeURIComponent(HELIUS_API_KEY)}`;
+    network === 'devnet'
+      ? 'https://solana-devnet.g.alchemy.com/v2/'
+      : 'https://solana-mainnet.g.alchemy.com/v2/';
+  return `${base}${ALCHEMY_API_KEY}`;
 }
 
 export interface NetworkConfig {
@@ -29,15 +31,15 @@ export interface NetworkConfig {
 export const NETWORK_CONFIGS: Record<SolanaNetwork, NetworkConfig> = {
   'mainnet-beta': {
     name: 'mainnet-beta',
-
-    rpcUrl: getHeliusRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
+    // Use Alchemy if available, otherwise fallback to public RPCs
+    rpcUrl: getAlchemySolanaRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://solana-mainnet.rpc.extrnode.com'],
     explorerUrl: 'https://explorer.solana.com',
   },
   devnet: {
     name: 'devnet',
-
-    rpcUrl: getHeliusRpcUrl('devnet') ?? 'https://rpc.ankr.com/solana_devnet',
+    // Use Alchemy if available, otherwise fallback to public RPCs
+    rpcUrl: getAlchemySolanaRpcUrl('devnet') ?? 'https://rpc.ankr.com/solana_devnet',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana_devnet'],
     explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
   },
@@ -421,11 +423,17 @@ export type WalletMessageType =
   | 'WALLET_REVOKE_ALLOWANCE'
   | 'WALLET_IMPORT_PRIVATE_KEY'
   | 'WALLET_EXPORT_PRIVATE_KEY'
-  // Jupiter Swap
+  // Jupiter Swap (Solana)
   | 'WALLET_SWAP_QUOTE'
   | 'WALLET_SWAP_EXECUTE'
   | 'WALLET_SWAP_AVAILABLE'
-  | 'WALLET_SWAP_REFERRAL_STATUS';
+  | 'WALLET_SWAP_REFERRAL_STATUS'
+  // EVM Swap (ParaSwap - no API key required)
+  | 'EVM_SWAP_QUOTE'
+  | 'EVM_SWAP_EXECUTE'
+  | 'EVM_SWAP_AVAILABLE'
+  // EVM RPC forwarding for dApps
+  | 'EVM_RPC_REQUEST';
 
 export interface WalletMessagePayloads {
   WALLET_CREATE: { password: string };
@@ -532,6 +540,34 @@ export interface WalletMessagePayloads {
     slippageBps?: number;
   };
   WALLET_SWAP_AVAILABLE: undefined;
+
+  // EVM Swap (ParaSwap)
+  EVM_SWAP_QUOTE: {
+    evmChainId: EVMChainId;
+    srcToken: string;
+    destToken: string;
+    srcAmount: string;
+    srcDecimals: number;
+    destDecimals: number;
+    slippageBps?: number;
+  };
+  EVM_SWAP_EXECUTE: {
+    evmChainId: EVMChainId;
+    srcToken: string;
+    destToken: string;
+    srcAmount: string;
+    srcDecimals: number;
+    slippageBps?: number;
+  };
+  EVM_SWAP_AVAILABLE: { evmChainId: EVMChainId };
+
+  // EVM RPC forwarding for dApps
+  EVM_RPC_REQUEST: {
+    method: string;
+    params: unknown;
+    chainId: EVMChainId;
+    testnet: boolean;
+  };
   WALLET_SWAP_REFERRAL_STATUS: undefined;
 }
 
@@ -608,6 +644,14 @@ export interface WalletMessageResponses {
   WALLET_SWAP_EXECUTE: SwapExecuteResult;
   WALLET_SWAP_AVAILABLE: boolean;
   WALLET_SWAP_REFERRAL_STATUS: SwapReferralStatus;
+
+  // EVM Swap responses
+  EVM_SWAP_QUOTE: EVMSwapQuoteResult;
+  EVM_SWAP_EXECUTE: EVMSwapExecuteResult;
+  EVM_SWAP_AVAILABLE: boolean;
+
+  // EVM RPC forwarding - returns raw RPC result
+  EVM_RPC_REQUEST: unknown;
 }
 
 export interface RpcHealthSummary {
@@ -667,7 +711,54 @@ export interface SwapReferralStatus {
   referralAccount: string | null;
 }
 
-export type TransactionDirection = 'sent' | 'received' | 'unknown';
+// EVM Swap types (ParaSwap - no API key required)
+export interface EVMSwapQuoteResult {
+  /** EVM chain ID */
+  chainId: EVMChainId;
+  /** Source token address */
+  srcToken: string;
+  /** Destination token address */
+  destToken: string;
+  /** Source amount in smallest units */
+  srcAmount: string;
+  /** Destination amount in smallest units */
+  destAmount: string;
+  /** Formatted source amount for display */
+  srcAmountFormatted: string;
+  /** Formatted destination amount for display */
+  destAmountFormatted: string;
+  /** Minimum received amount considering slippage */
+  minimumReceivedFormatted: string;
+  /** Exchange rate */
+  exchangeRate: string;
+  /** Estimated gas cost in USD */
+  gasCostUSD: string;
+  /** Route description (e.g., "Uniswap → SushiSwap") */
+  route: string;
+  /** Raw quote data for execution */
+  rawQuote: unknown;
+}
+
+export interface EVMSwapExecuteResult {
+  /** Transaction hash */
+  hash: string;
+  /** Explorer URL for the transaction */
+  explorerUrl: string;
+  /** Source token address */
+  srcToken: string;
+  /** Destination token address */
+  destToken: string;
+  /** Source amount in smallest units */
+  srcAmount: string;
+  /** Destination amount in smallest units */
+  destAmount: string;
+  /** Whether transaction was confirmed */
+  confirmed: boolean;
+  /** Error message if failed */
+  error?: string;
+}
+
+export type TransactionDirection = 'sent' | 'received' | 'self' | 'unknown';
 
 export type TransactionStatus = 'confirmed' | 'pending' | 'failed';
 
@@ -726,6 +817,22 @@ export interface TransactionHistoryItem {
     amount: number;
 
     logoUri?: string;
+  };
+
+  /** Swap info when transaction is a token swap */
+  swapInfo?: {
+    fromToken: {
+      symbol: string;
+      amount: number;
+      mint?: string;
+      logoUri?: string;
+    };
+    toToken: {
+      symbol: string;
+      amount: number;
+      mint?: string;
+      logoUri?: string;
+    };
   };
 }
 
@@ -830,6 +937,24 @@ export interface EVMSendParams {
   amount: string;
 
   evmChainId?: EVMChainId | null;
+
+  /** Contract call data (hex string) for smart contract interactions */
+  data?: string;
+
+  /** Raw hex value for contract calls (to preserve precision) */
+  valueHex?: string;
+
+  /** Gas limit override */
+  gas?: string;
+
+  /** Gas price override (legacy transactions) */
+  gasPrice?: string;
+
+  /** Max fee per gas (EIP-1559) */
+  maxFeePerGas?: string;
+
+  /** Max priority fee per gas (EIP-1559) */
+  maxPriorityFeePerGas?: string;
 }
 
 export interface EVMTokenSendParams {
@@ -868,6 +993,9 @@ export interface EVMTokenBalance {
   uiBalance: number;
 
   logoUri?: string;
+
+  /** True if this token was explicitly added by the user */
+  isCustom?: boolean;
 }
 
 export interface EVMFeeEstimate {
@@ -908,42 +1036,39 @@ export interface ChainDisplayInfo {
   isTestnet: boolean;
 }
 
-export const SUPPORTED_CHAINS: ChainDisplayInfo[] = [
-  { type: 'solana', name: 'Solana', symbol: 'SOL', icon: 'solana', isTestnet: false },
-  {
-    type: 'evm',
-    evmChainId: 'ethereum',
-    name: 'Ethereum',
-    symbol: 'ETH',
-    icon: 'ethereum',
-    isTestnet: false,
-  },
-  {
-    type: 'evm',
-    evmChainId: 'polygon',
-    name: 'Polygon',
-    symbol: 'MATIC',
-    icon: 'polygon',
-    isTestnet: false,
-  },
-  {
-    type: 'evm',
-    evmChainId: 'arbitrum',
-    name: 'Arbitrum',
-    symbol: 'ETH',
-    icon: 'arbitrum',
-    isTestnet: false,
-  },
-  {
-    type: 'evm',
-    evmChainId: 'optimism',
-    name: 'Optimism',
-    symbol: 'ETH',
-    icon: 'optimism',
-    isTestnet: false,
-  },
-  { type: 'evm', evmChainId: 'base', name: 'Base', symbol: 'ETH', icon: 'base', isTestnet: false },
-];
+/**
+ * Dynamically generated list of supported chains from the registry.
+ * To add a new chain, simply add it to CHAIN_REGISTRY in src/wallet/chains/registry.ts
+ * and it will automatically appear here.
+ */
+import { CHAIN_REGISTRY } from './chains/registry';
+
+function buildSupportedChains(): ChainDisplayInfo[] {
+  const chains: ChainDisplayInfo[] = [];
+
+  // Sort chains: Solana first, then EVM chains alphabetically
+  const sortedChains = Object.values(CHAIN_REGISTRY).sort((a, b) => {
+    if (a.family === 'solana' && b.family !== 'solana') return -1;
+    if (b.family === 'solana' && a.family !== 'solana') return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  for (const chain of sortedChains) {
+    const chainType: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
+    chains.push({
+      type: chainType,
+      evmChainId: chain.family === 'evm' ? (chain.id as EVMChainId) : undefined,
+      name: chain.name,
+      symbol: chain.symbol,
+      icon: chain.iconId,
+      isTestnet: false,
+    });
+  }
+
+  return chains;
+}
+
+export const SUPPORTED_CHAINS: ChainDisplayInfo[] = buildSupportedChains();
 
 export const MULTI_CHAIN_VAULT_VERSION = 3;
 

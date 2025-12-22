@@ -235,3 +235,4 @@ describe('Solana Balance Formatting', () => {
     expect(sol).toBe(0.0000001);
   });
 });
+

@@ -88,7 +88,15 @@ interface InMemoryWalletState {
 
   lockTimer: ReturnType<typeof setTimeout> | null;
 
-  passwordHash: string | null;
+  /**
+   * Session password kept in memory while wallet is unlocked.
+   * Required for deriving wallet-specific encryption keys when switching wallets
+   * or creating new accounts. Cleared on lock. This is a necessary tradeoff for
+   * HD wallet functionality - the alternative would require re-prompting the user
+   * for their password on every wallet/account switch operation.
+   * @security This is cleared when the wallet is locked (lockWallet).
+   */
+  sessionPassword: string | null;
 
   cachedMnemonic: string | null;
 }
@@ -106,7 +114,7 @@ const memoryState: InMemoryWalletState = {
   accountIndex: 0,
   isWatchOnly: false,
   lockTimer: null,
-  passwordHash: null,
+  sessionPassword: null,
   cachedMnemonic: null,
 };
 
@@ -547,7 +555,7 @@ export async function createWallet(password: string): Promise<{
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = label;
-  memoryState.passwordHash = password;
+  memoryState.sessionPassword = password;
   memoryState.cachedMnemonic = mnemonic;
 
   await startAutoLockTimer();
@@ -569,7 +577,7 @@ export async function importWallet(
 ): Promise<{ publicAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
 
-  const effectivePassword = password || memoryState.passwordHash;
+  const effectivePassword = password || memoryState.sessionPassword;
 
   if (versionInfo.version === 1) {
     throw new WalletError(
@@ -623,7 +631,7 @@ export async function importWallet(
     vault = versionInfo.multiWalletVault!;
     encryptedData = await getEncryptedWalletData();
 
-    if (password && password !== memoryState.passwordHash) {
+    if (password && password !== memoryState.sessionPassword) {
       const isValid = await validateMasterPassword(
         password,
         vault.masterSalt,
@@ -705,7 +713,7 @@ export async function importWallet(
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
-  memoryState.passwordHash = effectivePassword!;
+  memoryState.sessionPassword = effectivePassword!;
 
   await startAutoLockTimer();
 
@@ -864,7 +872,7 @@ async function unlockWalletV2(
     memoryState.publicAddress = publicAddress;
     memoryState.evmAddress = evmAddress;
     memoryState.walletLabel = walletEntry.label;
-    memoryState.passwordHash = password;
+    memoryState.sessionPassword = password;
 
     await startAutoLockTimer();
 
@@ -886,7 +894,7 @@ export function lockWallet(): void {
 
   memoryState.keypair = null;
   memoryState.evmKeypair = null;
-  memoryState.passwordHash = null;
+  memoryState.sessionPassword = null;
   memoryState.cachedMnemonic = null;
   memoryState.isWatchOnly = false;
 }
@@ -982,7 +990,7 @@ export async function addWallet(
 ): Promise<{ mnemonic: string; publicAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
 
-  const effectivePassword = password || memoryState.passwordHash;
+  const effectivePassword = password || memoryState.sessionPassword;
 
   if (versionInfo.version === 0) {
     if (!effectivePassword) {
@@ -1007,7 +1015,7 @@ export async function addWallet(
 
   const vault = versionInfo.multiWalletVault!;
 
-  if (password && password !== memoryState.passwordHash) {
+  if (password && password !== memoryState.sessionPassword) {
     const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
     if (!isValid) {
       throw new WalletError(WalletErrorCode.INVALID_PASSWORD, 'Incorrect password');
@@ -1063,7 +1071,7 @@ export async function addWallet(
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
-  memoryState.passwordHash = effectivePassword;
+  memoryState.sessionPassword = effectivePassword;
 
   const mnemonicForBackup = mnemonic.slice();
   mnemonic = '';
@@ -1093,7 +1101,7 @@ export async function switchWallet(
     throw new WalletError(WalletErrorCode.WALLET_NOT_FOUND, 'Multi-wallet support not available');
   }
 
-  const effectivePassword = password || memoryState.passwordHash;
+  const effectivePassword = password || memoryState.sessionPassword;
 
   if (!effectivePassword) {
     throw new WalletError(WalletErrorCode.WALLET_LOCKED, 'Wallet is locked. Please unlock first.');
@@ -1106,7 +1114,7 @@ export async function switchWallet(
     throw new WalletError(WalletErrorCode.WALLET_NOT_FOUND, 'Wallet not found');
   }
 
-  if (password && password !== memoryState.passwordHash) {
+  if (password && password !== memoryState.sessionPassword) {
     const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
     if (!isValid) {
       throw new WalletError(WalletErrorCode.INVALID_PASSWORD, 'Incorrect password');
@@ -1180,7 +1188,7 @@ export async function switchWallet(
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletEntry.label;
-  memoryState.passwordHash = effectivePassword;
+  memoryState.sessionPassword = effectivePassword;
 
   await startAutoLockTimer();
 
@@ -1245,7 +1253,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
   if (vault.activeWalletId === walletId) {
     vault.activeWalletId = vault.wallets[0].id;
 
-    if ((memoryState.keypair || memoryState.evmKeypair) && memoryState.passwordHash) {
+    if ((memoryState.keypair || memoryState.evmKeypair) && memoryState.sessionPassword) {
       const encryptedData = await getEncryptedWalletData();
       const newActiveData = encryptedData[vault.activeWalletId];
       if (newActiveData) {
@@ -1522,7 +1530,7 @@ export async function switchAccount(
     throw new WalletError(WalletErrorCode.ACCOUNT_NOT_FOUND, 'Account not found');
   }
 
-  if (!memoryState.cachedMnemonic && !memoryState.passwordHash) {
+  if (!memoryState.cachedMnemonic && !memoryState.sessionPassword) {
     throw new WalletError(
       WalletErrorCode.WALLET_LOCKED,
       'Wallet is locked. Please unlock to switch accounts.',
@@ -1530,7 +1538,7 @@ export async function switchAccount(
   }
 
   if (walletId !== memoryState.activeWalletId) {
-    if (!memoryState.passwordHash) {
+    if (!memoryState.sessionPassword) {
       throw new WalletError(WalletErrorCode.WALLET_LOCKED, 'Password required to switch wallets');
     }
 
@@ -1540,7 +1548,7 @@ export async function switchAccount(
       throw new WalletError(WalletErrorCode.WALLET_NOT_FOUND, 'Wallet data not found');
     }
 
-    const key = await deriveKeyFromPassword(memoryState.passwordHash, walletData.salt);
+    const key = await deriveKeyFromPassword(memoryState.sessionPassword, walletData.salt);
     const mnemonic = await decrypt(walletData.ciphertext, key, walletData.iv);
 
     const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
@@ -2014,7 +2022,7 @@ export async function convertWatchOnlyToFull(
   memoryState.accountName = account.name;
   memoryState.accountIndex = matchingIndex;
   memoryState.cachedMnemonic = normalizedMnemonic;
-  memoryState.passwordHash = password;
+  memoryState.sessionPassword = password;
   memoryState.isWatchOnly = false;
 
   return { walletId, accountId };
@@ -2162,7 +2170,7 @@ export async function importWalletFromPrivateKey(
 ): Promise<{ publicAddress: string; evmAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
 
-  const effectivePassword = password || memoryState.passwordHash;
+  const effectivePassword = password || memoryState.sessionPassword;
 
   if (versionInfo.version === 1) {
     throw new WalletError(
@@ -2236,7 +2244,7 @@ export async function importWalletFromPrivateKey(
     vault = versionInfo.multiWalletVault!;
     encryptedData = await getEncryptedWalletData();
 
-    if (password && password !== memoryState.passwordHash) {
+    if (password && password !== memoryState.sessionPassword) {
       const isValid = await validateMasterPassword(
         password,
         vault.masterSalt,
@@ -2305,7 +2313,7 @@ export async function importWalletFromPrivateKey(
   memoryState.publicAddress = publicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
-  memoryState.passwordHash = effectivePassword!;
+  memoryState.sessionPassword = effectivePassword!;
 
   await startAutoLockTimer();
 

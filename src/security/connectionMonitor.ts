@@ -24,6 +24,7 @@ import {
 } from './storage';
 import { analyzeDomain } from './phishingDetector';
 import { getPublicAddress } from '../wallet/storage';
+import { revokePermission as revokeDappPermission } from '../dapp/permissions/store';
 
 // Records and evaluates a new connection attempt; returns phishing analysis for UI.
 export async function handleConnectionRequest(
@@ -48,17 +49,30 @@ export async function approveConnection(
   tabId?: number,
 ): Promise<ConnectionRecord> {
   const normalizedDomain = extractDomain(url);
+  console.log('[Security] approveConnection called:', { domain, normalizedDomain, publicKey, tabId });
 
   let connectedKey = publicKey;
   if (!connectedKey) {
     connectedKey = (await getPublicAddress()) || 'unknown';
   }
 
+  // Mark any existing non-revoked records for this domain as revoked to prevent duplicates
+  const existingRecords = await getConnectionHistory({ domain: normalizedDomain, approved: true, revoked: false });
+  const now = Date.now();
+  for (const existingRecord of existingRecords) {
+    if (existingRecord.domain === normalizedDomain) {
+      await updateConnectionRecord(existingRecord.id, {
+        revoked: true,
+        revokedAt: now,
+      });
+    }
+  }
+
   const record: ConnectionRecord = {
     id: generateId(),
     domain: normalizedDomain,
     url,
-    timestamp: Date.now(),
+    timestamp: now,
     publicKey: connectedKey,
     approved: true,
     revoked: false,
@@ -66,12 +80,13 @@ export async function approveConnection(
     warnings,
   };
 
+  console.log('[Security] Adding connection record:', record);
   await addConnectionRecord(record);
 
   await setActiveConnection(normalizedDomain, {
     domain: normalizedDomain,
     publicKey: connectedKey,
-    connectedAt: Date.now(),
+    connectedAt: now,
     tabId,
   });
 
@@ -106,12 +121,27 @@ export async function revokeConnection(domain: string): Promise<void> {
 
   await removeActiveConnection(normalizedDomain);
 
-  const history = await getConnectionHistory({ domain: normalizedDomain, approved: true }, 1);
-  if (history.length > 0) {
-    await updateConnectionRecord(history[0].id, {
-      revoked: true,
-      revokedAt: Date.now(),
-    });
+  // Mark ALL records for this domain as revoked (not just the first one)
+  const history = await getConnectionHistory({ domain: normalizedDomain, approved: true, revoked: false });
+  const now = Date.now();
+  for (const record of history) {
+    // Only update records that exactly match the domain (not substring matches)
+    if (record.domain === normalizedDomain) {
+      await updateConnectionRecord(record.id, {
+        revoked: true,
+        revokedAt: now,
+      });
+    }
+  }
+
+  // Also revoke the dApp permission so the site can no longer connect
+  try {
+    // Build the origin URL from the domain
+    const origin = `https://${normalizedDomain}`;
+    // Revoke for all chain types (both EVM and Solana)
+    await revokeDappPermission(origin);
+  } catch (err) {
+    console.error('[Security] Failed to revoke dApp permission:', err);
   }
 }
 

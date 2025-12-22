@@ -154,11 +154,6 @@ export const BOOTSTRAP_TRACKER_DOMAINS: string[] = [
   'adblock-tester.com',
   'd3pkae9owd2lcf.cloudfront.net',
 
-  'sentry.io',
-  'browser.sentry-cdn.com',
-  'sentry-cdn.com',
-  'ingest.sentry.io',
-  'o0.ingest.sentry.io',
   'bugsnag.com',
   'd2wy8f7a9ursnm.cloudfront.net',
   'sessions.bugsnag.com',
@@ -499,6 +494,7 @@ export const DEFAULT_LAST_KNOWN_GOOD: LastKnownGoodStorage = {};
 export const MAX_UNSUPPORTED_PATTERNS = 50;
 
 export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
+  // Google / GPT
   '.adsbygoogle',
   'ins.adsbygoogle',
   '[id^="google_ads_iframe"]',
@@ -507,6 +503,12 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   '[data-ad-client]',
   '[data-google-query-id]',
 
+  // Native/label-based
+  '[aria-label="Advertisement"]',
+  '[aria-label="Ad"]',
+  '[aria-label="Ads"]',
+
+  // Taboola / Outbrain / AdThrive
   '.taboola-widget',
   '[id^="taboola-"]',
   '.OUTBRAIN',
@@ -514,14 +516,45 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   '.adthrive-ad',
   '[id^="adthrive-"]',
 
+  // Common ad iframes
   'iframe[src*="googlesyndication.com"]',
   'iframe[src*="doubleclick.net"]',
   'iframe[id^="google_ads_"]',
 
-  '[aria-label="Advertisement"]',
-  '[data-testid="ad"]',
-  '[data-ad-unit]',
+  // Common ad-tech iframe sources
+  'iframe[src*="amazon-adsystem.com"]',
+  'iframe[src*="criteo.com"]',
+  'iframe[src*="rubiconproject.com"]',
+  'iframe[src*="openx.net"]',
+  'iframe[src*="pubmatic.com"]',
+  'iframe[src*="adnxs.com"]',
+  'iframe[src*="xandr.com"]',
+  'iframe[src*="taboola.com"]',
+  'iframe[src*="outbrain.com"]',
 
+  // Common ad data-* hooks
+  '[data-ad-unit]',
+  '[data-ad]',
+  '[data-ads]',
+  '[data-ad-id]',
+  '[data-ad-name]',
+  '[data-ad-format]',
+  '[data-ad-type]',
+  '[data-ad-size]',
+  '[data-ad-width]',
+  '[data-ad-height]',
+  '[data-native-ad]',
+  '[data-sponsored]',
+  '[data-sponsor]',
+  '[data-promoted]',
+
+  '[data-pw*="-ad"]',
+  '[data-pw*="_ad"]',
+  '[data-pw^="ad-"]',
+  '[data-pw$="-ad"]',
+  '[data-testid="ad"]',
+
+  // Images / banners
   'img[src*="/ads/"]',
   'img[src*="/adv/"]',
   'img[src*="/banner"]',
@@ -530,9 +563,11 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   'a[href*="doubleclick.net"] img',
   'a[href*="googleadservices.com"] img',
 
+  // Objects / embeds
   'object[data*="ads"]',
   'embed[src*="ads"]',
 
+  // Generic class/id names
   '.ad-img',
   '.ad-banner',
   '.banner-ad',
@@ -542,8 +577,23 @@ export const BOOTSTRAP_COSMETIC_SELECTORS: string[] = [
   '.advertisement-image',
   '.sponsored-banner',
 
+  // Common widgets
+  '#carbonads',
+  '.carbonads',
+  '[id^="ezoic-pub-ad"]',
+  '.ezoic-ad',
+  '.mgid',
+  '[id^="MGID"]',
+  '.revcontent',
+  '[id^="revcontent"]',
+  '.zergnet-widget',
+  '[id^="zergnet-widget"]',
+
   '#sentry-feedback',
   '.sentry-error-embed',
+
+  '.bg-marshmallow',
+
 ];
 
 export const PROTECTED_SITES: string[] = [

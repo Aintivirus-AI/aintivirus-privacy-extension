@@ -170,6 +170,104 @@ export async function createTokenTransfer(
   }
 }
 
+export interface ContractCallParams {
+  from: string;
+  to: string;
+  value: bigint;
+  data: string;
+  gasLimit?: bigint;
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+  gasPrice?: bigint;
+}
+
+export async function createContractCall(
+  chainId: EVMChainId,
+  testnet: boolean,
+  params: ContractCallParams,
+): Promise<UnsignedEVMTransaction> {
+  const { from, to, value, data } = params;
+
+  if (!isValidEVMAddress(from)) {
+    throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid sender address', 'evm');
+  }
+  if (!isValidEVMAddress(to)) {
+    throw new ChainError(ChainErrorCode.INVALID_ADDRESS, 'Invalid recipient address', 'evm');
+  }
+
+  const nonce = await getTransactionCount(chainId, testnet, from, 'pending');
+  const numericChainId = getNumericChainId(chainId, testnet);
+
+  // Use provided gas params or estimate
+  let gasLimit = params.gasLimit;
+  let maxFeePerGas = params.maxFeePerGas;
+  let maxPriorityFeePerGas = params.maxPriorityFeePerGas;
+  let gasPrice = params.gasPrice;
+
+  // If no gas limit provided, estimate it
+  if (!gasLimit) {
+    try {
+      const provider = await getBestProvider(chainId, testnet);
+      const estimated = await provider.estimateGas({
+        from,
+        to,
+        value,
+        data,
+      });
+      // Add 20% buffer for safety
+      gasLimit = (estimated * 120n) / 100n;
+    } catch {
+      // Fallback to a reasonable default for contract calls
+      gasLimit = 300000n;
+    }
+  }
+
+  // If no fee params provided, get current fees
+  if (!maxFeePerGas && !gasPrice) {
+    try {
+      const provider = await getBestProvider(chainId, testnet);
+      const feeData = await provider.getFeeData();
+
+      if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+        maxFeePerGas = feeData.maxFeePerGas;
+        maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+      } else if (feeData.gasPrice) {
+        gasPrice = feeData.gasPrice;
+      }
+    } catch {
+      // Fallback to legacy gas price
+      gasPrice = 50000000000n; // 50 gwei
+    }
+  }
+
+  // EIP-1559 transaction
+  if (maxFeePerGas) {
+    return {
+      chainId: numericChainId,
+      to,
+      value,
+      data,
+      gasLimit,
+      maxFeePerGas,
+      maxPriorityFeePerGas: maxPriorityFeePerGas || maxFeePerGas / 10n,
+      nonce,
+      type: 2,
+    };
+  }
+
+  // Legacy transaction
+  return {
+    chainId: numericChainId,
+    to,
+    value,
+    data,
+    gasLimit,
+    gasPrice: gasPrice || 50000000000n,
+    nonce,
+    type: 0,
+  };
+}
+
 export function signTransaction(
   tx: UnsignedEVMTransaction,
   keypair: EVMKeypair,

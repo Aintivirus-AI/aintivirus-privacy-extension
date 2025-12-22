@@ -295,7 +295,11 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
       for (const pair of data.pairs) {
         if (pair.priceUsd && pair.baseToken.address) {
           const price = parseFloat(pair.priceUsd);
-          const mint = pair.baseToken.address;
+          const rawAddress = pair.baseToken.address;
+          // For EVM addresses, normalize to lowercase for consistent lookups
+          // DexScreener returns checksummed EVM addresses but we query with lowercase
+          // Solana addresses are case-sensitive base58, so don't lowercase those
+          const mint = isEVMAddress(rawAddress) ? rawAddress.toLowerCase() : rawAddress;
 
           if (!isNaN(price) && price > 0 && !result.has(mint)) {
             result.set(mint, price);

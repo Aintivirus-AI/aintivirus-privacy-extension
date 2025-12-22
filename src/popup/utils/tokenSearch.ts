@@ -282,3 +282,4 @@ export function hasSearchResults(
 ): boolean {
   return solMatches || ethMatches || splTokens.length > 0 || evmTokens.length > 0;
 }
+

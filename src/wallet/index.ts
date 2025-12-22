@@ -60,6 +60,7 @@ import {
   getEVMAdapter,
   getEVMChainConfig,
   getEVMExplorerUrl,
+  getNumericChainId,
   parseAmount,
   formatAmount,
 } from './chains';
@@ -85,8 +86,10 @@ import {
 import {
   signTransaction as signEVMTransaction,
   broadcastTransaction,
+  createContractCall,
   type UnsignedEVMTransaction,
 } from './chains/evm/transactions';
+import { withFailover } from './chains/evm/client';
 import {
   getBalance,
   getBalanceWithRetry,
@@ -114,7 +117,7 @@ import {
   type PopularToken,
 } from './tokens';
 
-// Jupiter Swap imports
+// Jupiter Swap imports (Solana)
 import {
   getFormattedSwapQuote,
   performSwap,
@@ -122,6 +125,14 @@ import {
   getReferralStatus,
   type SwapQuote,
 } from './jupiterSwap';
+
+// EVM Swap imports (ParaSwap - no API key required)
+import {
+  getFormattedEVMSwapQuote,
+  performEVMSwap,
+  isEVMSwapAvailable,
+  type EVMSwapQuote,
+} from './evmSwap';
 
 import { balanceDedup } from './requestDedup';
 
@@ -333,6 +344,19 @@ export async function handleWalletMessage(
 
     case 'WALLET_SWAP_REFERRAL_STATUS':
       return handleSwapReferralStatus();
+
+    // EVM Swap (ParaSwap)
+    case 'EVM_SWAP_QUOTE':
+      return handleEVMSwapQuote(payload as WalletMessagePayloads['EVM_SWAP_QUOTE']);
+
+    case 'EVM_SWAP_EXECUTE':
+      return handleEVMSwapExecute(payload as WalletMessagePayloads['EVM_SWAP_EXECUTE']);
+
+    case 'EVM_SWAP_AVAILABLE':
+      return handleEVMSwapAvailable(payload as WalletMessagePayloads['EVM_SWAP_AVAILABLE']);
+
+    case 'EVM_RPC_REQUEST':
+      return handleEVMRpcRequest(payload as WalletMessagePayloads['EVM_RPC_REQUEST']);
 
     default:
       throw new WalletError(WalletErrorCode.NETWORK_ERROR, `Unknown wallet message type: ${type}`);
@@ -802,11 +826,19 @@ async function handleGetTokenMetadata(
       const testnet = settings.networkEnvironment === 'testnet';
 
       const { getTokenMetadata: getEVMTokenMetadata } = await import('./chains/evm/tokens');
+      const { getAddress } = await import('ethers');
       const metadata = await getEVMTokenMetadata(chainId, testnet, mint);
 
       if (metadata) {
         const chainSlug = chainId === 'ethereum' ? 'ethereum' : chainId;
-        const logoUri = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainSlug}/assets/${mint}/logo.png`;
+        // TrustWallet requires checksummed addresses
+        let checksumAddress: string;
+        try {
+          checksumAddress = getAddress(mint);
+        } catch {
+          checksumAddress = mint;
+        }
+        const logoUri = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainSlug}/assets/${checksumAddress}/logo.png`;
 
         return {
           symbol: metadata.symbol,
@@ -923,7 +955,17 @@ async function handleGetEVMBalance(
 async function handleSendETH(
   payload: WalletMessagePayloads['WALLET_SEND_ETH'],
 ): Promise<EVMTransactionResult> {
-  const { recipient, amount, evmChainId } = payload;
+  const {
+    recipient,
+    amount,
+    evmChainId,
+    data,
+    valueHex,
+    gas,
+    gasPrice,
+    maxFeePerGas,
+    maxPriorityFeePerGas,
+  } = payload;
 
   const evmKeypair = getUnlockedEVMKeypair();
   if (!evmKeypair) {
@@ -937,13 +979,77 @@ async function handleSendETH(
   const chainId = evmChainId || settings.activeEVMChain || 'ethereum';
   const testnet = settings.networkEnvironment === 'testnet';
   const config = getEVMChainConfig(chainId);
+  const numericChainId = getNumericChainId(chainId, testnet);
 
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
 
-  const amountWei = parseAmount(amount, config.decimals);
+  // For contract calls, use valueHex if available (preserves precision)
+  // Otherwise fall back to parsing the decimal amount
+  const amountWei =
+    valueHex && data && data !== '0x' ? BigInt(valueHex) : parseAmount(amount, config.decimals);
 
-  const unsignedTx = await adapter.createTransfer(evmKeypair.address, recipient, amountWei);
-  const signedTx = await adapter.signTransaction(unsignedTx, {
+  let unsignedTx;
+  let txData = data || '0x';
+
+  // Helper to safely parse hex values to BigInt
+  const parseHexToBigInt = (hex: string | undefined): bigint | undefined => {
+    if (!hex) return undefined;
+    try {
+      return BigInt(hex.startsWith('0x') ? hex : `0x${hex}`);
+    } catch {
+      return undefined;
+    }
+  };
+
+  // If data is provided, this is a contract call (e.g., Uniswap swap)
+  if (data && data !== '0x') {
+    unsignedTx = await createContractCall(chainId, testnet, {
+      from: evmKeypair.address,
+      to: recipient,
+      value: amountWei,
+      data: data,
+      gasLimit: parseHexToBigInt(gas),
+      gasPrice: parseHexToBigInt(gasPrice),
+      maxFeePerGas: parseHexToBigInt(maxFeePerGas),
+      maxPriorityFeePerGas: parseHexToBigInt(maxPriorityFeePerGas),
+    });
+
+    // Sign and broadcast directly for contract calls
+    const signedTx = signEVMTransaction(unsignedTx, evmKeypair, numericChainId);
+    const txResponse = await broadcastTransaction(chainId, testnet, signedTx);
+
+    const explorerBase = getEVMExplorerUrl(chainId, testnet);
+
+    // Track pending transaction
+    try {
+      await addPendingTx(
+        createPendingTxRecord({
+          hash: txResponse.hash,
+          nonce: unsignedTx.nonce,
+          chainId: chainId,
+          from: evmKeypair.address,
+          to: recipient,
+          value: amountWei,
+          data: txData,
+          gasLimit: unsignedTx.gasLimit,
+          maxFeePerGas: unsignedTx.maxFeePerGas || unsignedTx.gasPrice || 0n,
+          maxPriorityFeePerGas: unsignedTx.maxPriorityFeePerGas || 0n,
+          testnet: testnet,
+        }),
+      );
+    } catch (err) {}
+
+    return {
+      hash: txResponse.hash,
+      explorerUrl: `${explorerBase}/tx/${txResponse.hash}`,
+      confirmed: false,
+      error: undefined,
+    };
+  }
+
+  // Simple ETH transfer (no data)
+  const createdTx = await adapter.createTransfer(evmKeypair.address, recipient, amountWei);
+  const signedTx = await adapter.signTransaction(createdTx, {
     chainType: 'evm',
     address: evmKeypair.address,
     privateKey: evmKeypair.privateKey,
@@ -954,7 +1060,7 @@ async function handleSendETH(
 
   if (!result.confirmed && !result.error) {
     try {
-      const rawTx = unsignedTx._raw as UnsignedEVMTransaction | undefined;
+      const rawTx = createdTx._raw as UnsignedEVMTransaction | undefined;
       if (rawTx) {
         await addPendingTx(
           createPendingTxRecord({
@@ -1077,7 +1183,12 @@ async function handleGetEVMTokens(
 
   for (const token of customTokens) {
     if (token.mint.startsWith('0x')) {
-      adapter.addCustomToken(token.mint);
+      // Pass pre-known metadata to skip slow RPC calls (like Solana does)
+      adapter.addCustomToken(token.mint, {
+        symbol: token.symbol,
+        name: token.name,
+        logoUri: token.logoUri,
+      });
       customTokenMap.set(token.mint.toLowerCase(), {
         symbol: token.symbol,
         name: token.name,
@@ -1114,7 +1225,9 @@ async function handleGetEVMTokens(
         !hiddenTokens.has(t.address.toLowerCase()) || customTokenMints.has(t.address.toLowerCase()),
     )
     .map((t) => {
-      const customMeta = customTokenMap.get(t.address.toLowerCase());
+      const normalizedAddress = t.address.toLowerCase();
+      const customMeta = customTokenMap.get(normalizedAddress);
+      const isCustom = customTokenMints.has(normalizedAddress);
       return {
         address: t.address,
         symbol: customMeta?.symbol || t.symbol,
@@ -1123,6 +1236,7 @@ async function handleGetEVMTokens(
         rawBalance: t.rawBalance,
         uiBalance: t.uiBalance,
         logoUri: customMeta?.logoUri || t.logoUri,
+        isCustom,
       };
     });
 }
@@ -1140,13 +1254,37 @@ async function handleGetEVMHistory(
   const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
   const testnet = settings.networkEnvironment === 'testnet';
 
-  const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
-  const result = await adapter.getTransactionHistory(evmAddress, payload?.limit || 20);
+  try {
+    const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
+    const result = await adapter.getTransactionHistory(evmAddress, payload?.limit || 20);
 
-  return {
-    transactions: result.transactions,
-    hasMore: result.hasMore,
-  };
+    // BigInt cannot be serialized through Chrome's message passing
+    // Convert to serializable format for the UI
+    const explorerBase = getEVMExplorerUrl(chainId, testnet);
+    const serializableTransactions = result.transactions.map((tx) => ({
+      hash: tx.hash,
+      timestamp: tx.timestamp,
+      direction: tx.direction,
+      type: tx.type,
+      amount: tx.amountFormatted,
+      symbol: tx.symbol,
+      counterparty: tx.counterparty,
+      fee: Number(tx.fee) / 1e18,
+      status: tx.status,
+      explorerUrl: tx.explorerUrl || `${explorerBase}/tx/${tx.hash}`,
+      tokenAddress: tx.tokenAddress,
+      logoUri: tx.logoUri,
+      // Include swap info for swap transactions
+      swapInfo: tx.swapInfo,
+    }));
+
+    return {
+      transactions: serializableTransactions,
+      hasMore: result.hasMore,
+    };
+  } catch {
+    return { transactions: [], hasMore: false };
+  }
 }
 
 async function handleEstimateEVMFee(
@@ -1497,10 +1635,367 @@ function handleSwapReferralStatus(): WalletMessageResponses['WALLET_SWAP_REFERRA
   return getReferralStatus();
 }
 
+// ============================================================================
+// EVM Swap Handlers (ParaSwap - no API key required)
+// ============================================================================
+
+/**
+ * Get a swap quote from ParaSwap for EVM chains
+ */
+async function handleEVMSwapQuote(
+  payload: WalletMessagePayloads['EVM_SWAP_QUOTE'],
+): Promise<WalletMessageResponses['EVM_SWAP_QUOTE']> {
+  const { evmChainId, srcToken, destToken, srcAmount, srcDecimals, destDecimals, slippageBps } =
+    payload;
+
+  // Get the user's EVM address
+  const evmAddress = getEVMAddress();
+  if (!evmAddress) {
+    throw new WalletError(WalletErrorCode.WALLET_LOCKED, 'Wallet is locked or EVM address not available');
+  }
+
+  const result = await getFormattedEVMSwapQuote(
+    evmChainId,
+    srcToken,
+    destToken,
+    srcAmount,
+    srcDecimals,
+    destDecimals,
+    evmAddress,
+    slippageBps,
+  );
+
+  return {
+    chainId: result.quote.chainId,
+    srcToken: result.quote.srcToken,
+    destToken: result.quote.destToken,
+    srcAmount: result.quote.srcAmount,
+    destAmount: result.quote.destAmount,
+    srcAmountFormatted: result.srcAmountFormatted,
+    destAmountFormatted: result.destAmountFormatted,
+    minimumReceivedFormatted: result.minimumReceivedFormatted,
+    exchangeRate: result.exchangeRate,
+    gasCostUSD: result.gasCostUSD,
+    route: result.route,
+    rawQuote: result.quote,
+  };
+}
+
+/**
+ * Execute a swap via ParaSwap on EVM chains
+ */
+async function handleEVMSwapExecute(
+  payload: WalletMessagePayloads['EVM_SWAP_EXECUTE'],
+): Promise<WalletMessageResponses['EVM_SWAP_EXECUTE']> {
+  const { evmChainId, srcToken, destToken, srcAmount, srcDecimals, slippageBps } = payload;
+
+  // Get the user's EVM address
+  const evmAddress = getEVMAddress();
+  if (!evmAddress) {
+    throw new WalletError(WalletErrorCode.WALLET_LOCKED, 'Wallet is locked or EVM address not available');
+  }
+
+  // Get current network settings to determine if testnet
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  return performEVMSwap(
+    evmChainId,
+    srcToken,
+    destToken,
+    srcAmount,
+    srcDecimals,
+    evmAddress,
+    slippageBps,
+    testnet,
+  );
+}
+
+/**
+ * Check if EVM swap is available for a chain (mainnet only)
+ */
+function handleEVMSwapAvailable(
+  payload: WalletMessagePayloads['EVM_SWAP_AVAILABLE'],
+): boolean {
+  const { evmChainId } = payload;
+  // ParaSwap only works on mainnet
+  return isEVMSwapAvailable(evmChainId, false);
+}
+
+// ============================================================================
+// EVM RPC Forwarding Handler
+// ============================================================================
+
+/**
+ * Forward arbitrary EVM RPC requests to the blockchain.
+ * This enables dApps to make read-only calls like eth_call, eth_estimateGas, etc.
+ */
+async function handleEVMRpcRequest(
+  payload: WalletMessagePayloads['EVM_RPC_REQUEST'],
+): Promise<unknown> {
+  const { method, params, chainId, testnet } = payload;
+  const paramsArray = Array.isArray(params) ? params : params ? [params] : [];
+
+  return withFailover(chainId, testnet, async (provider) => {
+    switch (method) {
+      case 'eth_chainId': {
+        const network = await provider.getNetwork();
+        return '0x' + network.chainId.toString(16);
+      }
+
+      case 'net_version': {
+        const network = await provider.getNetwork();
+        return network.chainId.toString();
+      }
+
+      case 'eth_blockNumber': {
+        const blockNumber = await provider.getBlockNumber();
+        return '0x' + blockNumber.toString(16);
+      }
+
+      case 'eth_getBalance': {
+        const [address, blockTag] = paramsArray as [string, string?];
+        const balance = await provider.getBalance(address, blockTag || 'latest');
+        return '0x' + balance.toString(16);
+      }
+
+      case 'eth_getCode': {
+        const [address, blockTag] = paramsArray as [string, string?];
+        return await provider.getCode(address, blockTag || 'latest');
+      }
+
+      case 'eth_getStorageAt': {
+        const [address, position, blockTag] = paramsArray as [string, string, string?];
+        return await provider.getStorage(address, position, blockTag || 'latest');
+      }
+
+      case 'eth_call': {
+        const [txObject, blockTag] = paramsArray as [
+          { to: string; data?: string; from?: string; value?: string; gas?: string },
+          string?,
+        ];
+        return await provider.call({
+          to: txObject.to,
+          data: txObject.data,
+          from: txObject.from,
+          value: txObject.value ? BigInt(txObject.value) : undefined,
+          gasLimit: txObject.gas ? BigInt(txObject.gas) : undefined,
+          blockTag: blockTag || 'latest',
+        });
+      }
+
+      case 'eth_estimateGas': {
+        const [txObject] = paramsArray as [
+          { to?: string; data?: string; from?: string; value?: string },
+        ];
+        const estimate = await provider.estimateGas({
+          to: txObject.to,
+          data: txObject.data,
+          from: txObject.from,
+          value: txObject.value ? BigInt(txObject.value) : undefined,
+        });
+        return '0x' + estimate.toString(16);
+      }
+
+      case 'eth_gasPrice': {
+        const feeData = await provider.getFeeData();
+        const gasPrice = feeData.gasPrice || 0n;
+        return '0x' + gasPrice.toString(16);
+      }
+
+      case 'eth_maxPriorityFeePerGas': {
+        const feeData = await provider.getFeeData();
+        const priorityFee = feeData.maxPriorityFeePerGas || 0n;
+        return '0x' + priorityFee.toString(16);
+      }
+
+      case 'eth_feeHistory': {
+        const [blockCount, newestBlock, rewardPercentiles] = paramsArray as [
+          string | number,
+          string,
+          number[]?,
+        ];
+        // ethers v6 uses getFeeData instead of feeHistory, return approximation
+        const feeData = await provider.getFeeData();
+        const baseFee = feeData.maxFeePerGas || 0n;
+        return {
+          oldestBlock: '0x' + (await provider.getBlockNumber()).toString(16),
+          baseFeePerGas: ['0x' + baseFee.toString(16)],
+          gasUsedRatio: [0.5],
+          reward: rewardPercentiles ? [rewardPercentiles.map(() => '0x0')] : undefined,
+        };
+      }
+
+      case 'eth_getBlockByNumber': {
+        const [blockTag, includeTransactions] = paramsArray as [string, boolean?];
+        const block = await provider.getBlock(blockTag, !!includeTransactions);
+        if (!block) return null;
+        return formatBlockResponse(block, !!includeTransactions);
+      }
+
+      case 'eth_getBlockByHash': {
+        const [blockHash, includeTransactions] = paramsArray as [string, boolean?];
+        const block = await provider.getBlock(blockHash, !!includeTransactions);
+        if (!block) return null;
+        return formatBlockResponse(block, !!includeTransactions);
+      }
+
+      case 'eth_getTransactionByHash': {
+        const [txHash] = paramsArray as [string];
+        const tx = await provider.getTransaction(txHash);
+        if (!tx) return null;
+        return formatTransactionResponse(tx);
+      }
+
+      case 'eth_getTransactionReceipt': {
+        const [txHash] = paramsArray as [string];
+        const receipt = await provider.getTransactionReceipt(txHash);
+        if (!receipt) return null;
+        return formatReceiptResponse(receipt);
+      }
+
+      case 'eth_getTransactionCount': {
+        const [address, blockTag] = paramsArray as [string, string?];
+        const count = await provider.getTransactionCount(address, blockTag || 'latest');
+        return '0x' + count.toString(16);
+      }
+
+      case 'eth_getLogs': {
+        const [filter] = paramsArray as [
+          {
+            fromBlock?: string;
+            toBlock?: string;
+            address?: string | string[];
+            topics?: (string | string[] | null)[];
+          },
+        ];
+        const logs = await provider.getLogs({
+          fromBlock: filter.fromBlock || 'latest',
+          toBlock: filter.toBlock || 'latest',
+          address: filter.address,
+          topics: filter.topics,
+        });
+        return logs.map((log) => ({
+          address: log.address,
+          topics: log.topics,
+          data: log.data,
+          blockNumber: '0x' + log.blockNumber.toString(16),
+          transactionHash: log.transactionHash,
+          transactionIndex: '0x' + log.transactionIndex.toString(16),
+          blockHash: log.blockHash,
+          logIndex: '0x' + log.index.toString(16),
+          removed: log.removed,
+        }));
+      }
+
+      case 'eth_accounts': {
+        // Return connected account if wallet is unlocked
+        const evmAddress = getEVMAddress();
+        return evmAddress ? [evmAddress] : [];
+      }
+
+      default:
+        // For unsupported methods, try raw RPC call
+        try {
+          return await provider.send(method, paramsArray);
+        } catch (error) {
+          throw new WalletError(
+            WalletErrorCode.NETWORK_ERROR,
+            `RPC method ${method} not supported: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+        }
+    }
+  });
+}
+
+// Helper to format block response for EIP-1474 compliance
+function formatBlockResponse(block: any, includeTransactions: boolean): object {
+  return {
+    number: '0x' + block.number.toString(16),
+    hash: block.hash,
+    parentHash: block.parentHash,
+    nonce: block.nonce || '0x0000000000000000',
+    sha3Uncles: '0x0000000000000000000000000000000000000000000000000000000000000000',
+    logsBloom: block.logsBloom || '0x' + '0'.repeat(512),
+    transactionsRoot: block.transactionsRoot || '0x' + '0'.repeat(64),
+    stateRoot: block.stateRoot || '0x' + '0'.repeat(64),
+    receiptsRoot: block.receiptsRoot || '0x' + '0'.repeat(64),
+    miner: block.miner,
+    difficulty: '0x0',
+    totalDifficulty: '0x0',
+    extraData: block.extraData || '0x',
+    size: '0x0',
+    gasLimit: '0x' + (block.gasLimit?.toString(16) || '0'),
+    gasUsed: '0x' + (block.gasUsed?.toString(16) || '0'),
+    timestamp: '0x' + block.timestamp.toString(16),
+    transactions: includeTransactions
+      ? (block.prefetchedTransactions || []).map(formatTransactionResponse)
+      : block.transactions || [],
+    uncles: [],
+    baseFeePerGas: block.baseFeePerGas ? '0x' + block.baseFeePerGas.toString(16) : undefined,
+  };
+}
+
+// Helper to format transaction response
+function formatTransactionResponse(tx: any): object {
+  return {
+    hash: tx.hash,
+    nonce: '0x' + tx.nonce.toString(16),
+    blockHash: tx.blockHash,
+    blockNumber: tx.blockNumber !== null ? '0x' + tx.blockNumber.toString(16) : null,
+    transactionIndex:
+      tx.transactionIndex !== null ? '0x' + tx.transactionIndex.toString(16) : null,
+    from: tx.from,
+    to: tx.to,
+    value: '0x' + (tx.value?.toString(16) || '0'),
+    gasPrice: tx.gasPrice ? '0x' + tx.gasPrice.toString(16) : undefined,
+    gas: '0x' + (tx.gasLimit?.toString(16) || tx.gas?.toString(16) || '0'),
+    input: tx.data || '0x',
+    v: tx.signature?.v !== undefined ? '0x' + tx.signature.v.toString(16) : undefined,
+    r: tx.signature?.r,
+    s: tx.signature?.s,
+    type: tx.type !== undefined ? '0x' + tx.type.toString(16) : '0x0',
+    maxFeePerGas: tx.maxFeePerGas ? '0x' + tx.maxFeePerGas.toString(16) : undefined,
+    maxPriorityFeePerGas: tx.maxPriorityFeePerGas
+      ? '0x' + tx.maxPriorityFeePerGas.toString(16)
+      : undefined,
+    chainId: tx.chainId ? '0x' + tx.chainId.toString(16) : undefined,
+  };
+}
+
+// Helper to format receipt response
+function formatReceiptResponse(receipt: any): object {
+  return {
+    transactionHash: receipt.hash,
+    transactionIndex: '0x' + receipt.index.toString(16),
+    blockHash: receipt.blockHash,
+    blockNumber: '0x' + receipt.blockNumber.toString(16),
+    from: receipt.from,
+    to: receipt.to,
+    cumulativeGasUsed: '0x' + receipt.cumulativeGasUsed.toString(16),
+    gasUsed: '0x' + receipt.gasUsed.toString(16),
+    contractAddress: receipt.contractAddress,
+    logs: receipt.logs.map((log: any) => ({
+      address: log.address,
+      topics: log.topics,
+      data: log.data,
+      blockNumber: '0x' + log.blockNumber.toString(16),
+      transactionHash: log.transactionHash,
+      transactionIndex: '0x' + log.transactionIndex.toString(16),
+      blockHash: log.blockHash,
+      logIndex: '0x' + log.index.toString(16),
+      removed: log.removed,
+    })),
+    logsBloom: receipt.logsBloom,
+    status: receipt.status !== undefined ? '0x' + receipt.status.toString(16) : undefined,
+    effectiveGasPrice: receipt.gasPrice ? '0x' + receipt.gasPrice.toString(16) : undefined,
+    type: receipt.type !== undefined ? '0x' + receipt.type.toString(16) : '0x0',
+  };
+}
+
 export async function initializeWalletModule(): Promise<void> {
   await walletExists();
   await getWalletSettings();
-
   await initializeRpcHealth();
 }
 
