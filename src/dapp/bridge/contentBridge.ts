@@ -107,6 +107,17 @@ function handleInpageMessage(event: MessageEvent): void {
   }
 }
 
+// Helper to wake up service worker if it's been terminated
+async function ensureServiceWorkerAwake(): Promise<boolean> {
+  try {
+    // Send a simple ping to wake up the service worker
+    const response = await chrome.runtime.sendMessage({ type: 'PING' });
+    return response?.success === true;
+  } catch {
+    return false;
+  }
+}
+
 async function forwardToBackground(message: DAppMessage): Promise<void> {
   cleanupAndEnforceLimits();
 
@@ -118,38 +129,86 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
     nonce,
   });
 
-  try {
-    const backgroundMessage: BackgroundMessage = {
-      type: 'DAPP_REQUEST',
-      payload: {
-        id: message.id,
-        nonce,
-        type: message.type,
-        chainType: message.chainType,
-        method: (message.payload as { method?: string })?.method || message.type,
-        params: (message.payload as { params?: unknown })?.params,
-        origin: message.origin,
-        tabId: currentTabId,
-        favicon: getFavicon(),
-        title: document.title,
-      },
-    };
+  const backgroundMessage: BackgroundMessage = {
+    type: 'DAPP_REQUEST',
+    payload: {
+      id: message.id,
+      nonce,
+      type: message.type,
+      chainType: message.chainType,
+      method: (message.payload as { method?: string })?.method || message.type,
+      params: (message.payload as { params?: unknown })?.params,
+      origin: message.origin,
+      tabId: currentTabId,
+      favicon: getFavicon(),
+      title: document.title,
+    },
+  };
 
-    const response = (await chrome.runtime.sendMessage(backgroundMessage)) as BackgroundResponse;
+  // Retry logic to handle service worker termination
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 200;
 
-    if (response) {
-      sendResponseToInpage(message.id, response.success, response.data, response.error);
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      // On first attempt or after a failure, try to wake up the service worker
+      if (attempt > 0) {
+        console.log(`[DApp Bridge] Attempt ${attempt + 1}: Waking up service worker...`);
+        await ensureServiceWorkerAwake();
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      }
+
+      const response = (await chrome.runtime.sendMessage(backgroundMessage)) as BackgroundResponse;
+
+      if (response) {
+        pendingRequests.delete(message.id);
+        sendResponseToInpage(message.id, response.success, response.data, response.error);
+        return;
+      } else {
+        // No response usually means the background didn't handle the message
+        console.warn('[DApp Bridge] No response from background');
+        if (attempt < MAX_RETRIES - 1) {
+          continue;
+        }
+        pendingRequests.delete(message.id);
+        sendResponseToInpage(message.id, false, undefined, 'No response from extension background');
+        return;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[DApp Bridge] Error (attempt ${attempt + 1}/${MAX_RETRIES}):`, errorMessage);
+
+      const isConnectionError =
+        errorMessage.includes('Could not establish connection') ||
+        errorMessage.includes('Receiving end does not exist') ||
+        errorMessage.includes('Extension context invalidated');
+
+      // If it's a connection error and we have retries left, wait and try again
+      if (isConnectionError && attempt < MAX_RETRIES - 1) {
+        console.warn(`[DApp Bridge] Connection error, will retry after delay...`);
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)));
+        continue;
+      }
+
+      pendingRequests.delete(message.id);
+
+      // If the extension context is invalidated, the page needs to be refreshed
+      if (errorMessage.includes('Extension context invalidated')) {
+        sendResponseToInpage(
+          message.id,
+          false,
+          undefined,
+          'Extension was reloaded. Please refresh this page to reconnect.',
+        );
+      } else {
+        sendResponseToInpage(message.id, false, undefined, errorMessage);
+      }
+      return;
     }
-  } catch (error) {
-    sendResponseToInpage(
-      message.id,
-      false,
-      undefined,
-      error instanceof Error ? error.message : 'Unknown error',
-    );
-  } finally {
-    pendingRequests.delete(message.id);
   }
+
+  pendingRequests.delete(message.id);
+  sendResponseToInpage(message.id, false, undefined, 'Failed to connect to extension after multiple attempts');
 }
 
 function sendResponseToInpage(

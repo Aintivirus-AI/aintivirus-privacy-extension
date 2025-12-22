@@ -1,4 +1,4 @@
-import { Interface, Contract, formatUnits, isAddress } from 'ethers';
+import { Interface, Contract, formatUnits, isAddress, getAddress } from 'ethers';
 import type { EVMChainId, NetworkEnvironment, TokenBalance } from '../types';
 import { ChainError, ChainErrorCode } from '../types';
 import { call, withFailover, getBestProvider } from './client';
@@ -227,11 +227,15 @@ export async function getTokenMetadata(
     decimals = Number(dec);
   } catch {}
 
+  // Try to get logo from known tokens or construct TrustWallet URL
+  const logoUri = getTokenLogoUri(chainId, tokenAddress);
+
   return {
     address: tokenAddress,
     name,
     symbol,
     decimals,
+    logoUri,
   };
 }
 
@@ -315,26 +319,81 @@ export async function getPopularTokenBalances(
   return results.filter((b): b is ERC20Balance => b !== null);
 }
 
+// Pre-known metadata for custom tokens to skip RPC calls (like Solana does)
+export interface PreKnownTokenMeta {
+  symbol?: string;
+  name?: string;
+  decimals?: number;
+  logoUri?: string;
+}
+
 export async function getMultipleTokenBalances(
   chainId: EVMChainId,
   testnet: boolean,
   ownerAddress: string,
   tokenAddresses: string[],
+  // Optional pre-known metadata to skip slow RPC calls
+  knownMetadata?: Map<string, PreKnownTokenMeta>,
 ): Promise<ERC20Balance[]> {
   if (tokenAddresses.length === 0) {
     return [];
   }
 
-  const queryFunctions = tokenAddresses.map((address) => async (): Promise<ERC20Balance | null> => {
+  const queryFunctions = tokenAddresses.map((address) => async (): Promise<ERC20Balance> => {
+    const normalizedAddress = address.toLowerCase();
+    const preKnown = knownMetadata?.get(normalizedAddress);
+    
     try {
-      return await getTokenBalanceWithMetadata(chainId, testnet, address, ownerAddress);
+      // For custom tokens, ALWAYS skip slow RPC metadata fetch (like Solana does)
+      // Just get the balance and use whatever metadata we have (or placeholders)
+      // This prevents the plugin from hanging on slow/unresponsive RPCs
+      if (preKnown) {
+        const balance = await getTokenBalance(chainId, testnet, address, ownerAddress);
+        const decimals = preKnown.decimals ?? 18;
+        const uiBalance = parseFloat(formatUnits(balance, decimals));
+        
+        // Generate a short address label if no symbol provided
+        const shortAddr = `${address.slice(0, 6)}...`;
+        
+        return {
+          address: address,
+          name: preKnown.name || 'Unknown Token',
+          symbol: preKnown.symbol || shortAddr,
+          decimals: decimals,
+          rawBalance: balance.toString(),
+          uiBalance,
+          logoUri: preKnown.logoUri || getTokenLogoUri(chainId, address),
+        };
+      }
+      
+      // No pre-known metadata at all - this shouldn't happen for custom tokens
+      // but handle it gracefully by just getting balance with placeholder metadata
+      const balance = await getTokenBalance(chainId, testnet, address, ownerAddress);
+      return {
+        address: address,
+        name: 'Unknown Token',
+        symbol: `${address.slice(0, 6)}...`,
+        decimals: 18,
+        rawBalance: balance.toString(),
+        uiBalance: parseFloat(formatUnits(balance, 18)),
+        logoUri: getTokenLogoUri(chainId, address),
+      };
     } catch (error) {
-      return null;
+      // Return a placeholder entry for failed queries so custom tokens still appear
+      return {
+        address: address,
+        name: preKnown?.name || 'Unknown Token',
+        symbol: preKnown?.symbol || `${address.slice(0, 6)}...`,
+        decimals: preKnown?.decimals ?? 18,
+        rawBalance: '0',
+        uiBalance: 0,
+        logoUri: preKnown?.logoUri,
+      };
     }
   });
 
   const results = await executeWithRateLimit(queryFunctions, 2, 200);
-  return results.filter((b): b is ERC20Balance => b !== null);
+  return results;
 }
 
 export async function isERC20Token(
@@ -375,7 +434,14 @@ export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): stri
 
   const chainName = chainNames[chainId];
   if (chainName) {
-    return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainName}/assets/${tokenAddress}/logo.png`;
+    // TrustWallet requires checksummed addresses
+    let checksumAddress: string;
+    try {
+      checksumAddress = getAddress(tokenAddress);
+    } catch {
+      checksumAddress = tokenAddress;
+    }
+    return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainName}/assets/${checksumAddress}/logo.png`;
   }
 
   return undefined;

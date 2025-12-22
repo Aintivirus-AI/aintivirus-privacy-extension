@@ -38,7 +38,7 @@ import {
   confirmTransaction,
   type UnsignedEVMTransaction,
 } from './transactions';
-import { getPopularTokenBalances, getMultipleTokenBalances, toTokenBalance } from './tokens';
+import { getPopularTokenBalances, getMultipleTokenBalances, toTokenBalance, getTokenLogoUri, type PreKnownTokenMeta } from './tokens';
 import { getAlchemyEVMHistory, isAlchemyConfigured } from '../../alchemy';
 
 // EVM adapter implements ChainAdapter using the shared EVM utilities below.
@@ -75,6 +75,7 @@ export class EVMAdapter implements ChainAdapter {
 
   private _network: NetworkEnvironment;
   private _customTokens: string[] = [];
+  private _customTokenMeta: Map<string, PreKnownTokenMeta> = new Map();
 
   constructor(evmChainId: EVMChainId, network: NetworkEnvironment = 'mainnet') {
     this.evmChainId = evmChainId;
@@ -156,11 +157,13 @@ export class EVMAdapter implements ChainAdapter {
 
       let customBalances: TokenBalance[] = [];
       if (this._customTokens.length > 0) {
+        // Pass pre-known metadata to skip slow RPC calls (like Solana does)
         const custom = await getMultipleTokenBalances(
           this.evmChainId,
           testnet,
           address,
           this._customTokens,
+          this._customTokenMeta,
         );
         customBalances = custom.map(toTokenBalance);
       }
@@ -183,11 +186,15 @@ export class EVMAdapter implements ChainAdapter {
     }
   }
 
-  addCustomToken(tokenAddress: string): void {
+  addCustomToken(tokenAddress: string, metadata?: PreKnownTokenMeta): void {
     if (isValidEVMAddress(tokenAddress)) {
       const normalized = tokenAddress.toLowerCase();
       if (!this._customTokens.includes(normalized)) {
         this._customTokens.push(normalized);
+      }
+      // Store pre-known metadata to skip slow RPC calls (like Solana does)
+      if (metadata) {
+        this._customTokenMeta.set(normalized, metadata);
       }
     }
   }
@@ -390,10 +397,6 @@ export class EVMAdapter implements ChainAdapter {
         );
 
         const transactions: ChainTxHistoryItem[] = result.transactions.map((tx) => {
-          // Alchemy now returns value as Wei string (converted in alchemy.ts)
-          const value = BigInt(tx.value || '0');
-          const valueFormatted = Number(formatUnits(value, this.nativeDecimals));
-
           // Use the direction from Alchemy (based on which query returned this tx)
           // This is more reliable than comparing from/to addresses
           const direction = tx.direction;
@@ -404,6 +407,28 @@ export class EVMAdapter implements ChainAdapter {
                                   tx.to?.toLowerCase() === address.toLowerCase();
           const finalDirection: 'sent' | 'received' | 'self' | 'unknown' = isSelfTransfer ? 'self' : direction;
 
+          // Determine if this is a token transfer or native transfer
+          const isTokenTransfer = tx.category === 'erc20' || tx.category === 'erc721' || tx.category === 'erc1155';
+          
+          // For token transfers, use token value and decimals; for native, use native value
+          let amount: bigint;
+          let amountFormatted: number;
+          let symbol: string;
+          
+          if (isTokenTransfer && tx.tokenValue) {
+            // Token transfer - use the token's value and decimals
+            amount = BigInt(tx.tokenValue);
+            const decimals = tx.tokenDecimals || 18;
+            amountFormatted = Number(formatUnits(amount, decimals));
+            // Use the asset symbol from Alchemy, fallback to native symbol
+            symbol = tx.asset || this.nativeSymbol;
+          } else {
+            // Native transfer - use native value
+            amount = BigInt(tx.value || '0');
+            amountFormatted = Number(formatUnits(amount, this.nativeDecimals));
+            symbol = this.nativeSymbol;
+          }
+
           // Set descriptive type based on category and direction
           let type: string;
           if (tx.category === 'erc20') {
@@ -411,24 +436,54 @@ export class EVMAdapter implements ChainAdapter {
           } else if (tx.category === 'erc721' || tx.category === 'erc1155') {
             type = isOutgoing ? 'Sent NFT' : 'Received NFT';
           } else {
-            // Native currency (ETH, MATIC, etc.)
-            type = isOutgoing ? 'Sent' : 'Received';
+            // Native currency (ETH, MATIC, etc.) - include symbol like "Sent ETH"
+            type = isOutgoing ? `Sent ${this.nativeSymbol}` : `Received ${this.nativeSymbol}`;
           }
+
+          // Look up logo from known tokens list for token transfers
+          const logoUri = tx.tokenAddress 
+            ? getTokenLogoUri(this.evmChainId, tx.tokenAddress)
+            : undefined;
+
+          // If this is a swap, override direction and type
+          const isSwap = !!tx.swapInfo;
+          const txDirection = isSwap ? ('self' as const) : finalDirection;
+          const txType = isSwap ? 'Swap' : type;
 
           return {
             hash: tx.hash,
             timestamp: tx.timestamp || null,
-            direction: finalDirection,
-            type,
-            amount: value,
-            amountFormatted: valueFormatted,
-            symbol: this.nativeSymbol,
+            direction: txDirection,
+            type: txType,
+            amount,
+            amountFormatted,
+            symbol,
             counterparty: isOutgoing ? tx.to : tx.from,
             fee: BigInt(0), // Alchemy doesn't provide fee in transfers API
             status: 'confirmed' as const,
             block: parseInt(tx.blockNum, 16),
             explorerUrl: `${explorerBase}/tx/${tx.hash}`,
             tokenAddress: tx.tokenAddress,
+            logoUri,
+            // Include swap info for swap transactions
+            swapInfo: tx.swapInfo ? {
+              fromToken: {
+                symbol: tx.swapInfo.fromToken.symbol,
+                amount: tx.swapInfo.fromToken.amount,
+                address: tx.swapInfo.fromToken.address,
+                logoUri: tx.swapInfo.fromToken.address 
+                  ? getTokenLogoUri(this.evmChainId, tx.swapInfo.fromToken.address)
+                  : undefined,
+              },
+              toToken: {
+                symbol: tx.swapInfo.toToken.symbol,
+                amount: tx.swapInfo.toToken.amount,
+                address: tx.swapInfo.toToken.address,
+                logoUri: tx.swapInfo.toToken.address 
+                  ? getTokenLogoUri(this.evmChainId, tx.swapInfo.toToken.address)
+                  : undefined,
+              },
+            } : undefined,
           };
         });
 
@@ -489,10 +544,12 @@ export class EVMAdapter implements ChainAdapter {
         let type: string;
         if (tx.input && tx.input !== '0x' && tx.input.length > 2) {
           const methodId = tx.input.slice(0, 10);
-          type = this.decodeMethodType(methodId);
+          type = this.decodeMethodType(methodId, direction);
         } else {
-          // Simple transfer with no contract data
-          type = isOutgoing ? 'Sent' : 'Received';
+          // Simple native token transfer with no contract data (like "Sent ETH" or "Received MATIC")
+          type = direction === 'sent' ? `Sent ${this.nativeSymbol}` : 
+                 direction === 'received' ? `Received ${this.nativeSymbol}` : 
+                 'Transfer';
         }
 
         const gasUsed = tx.gasUsed ? BigInt(tx.gasUsed) * BigInt(tx.gasPrice || '0') : BigInt(0);
@@ -565,10 +622,27 @@ export class EVMAdapter implements ChainAdapter {
     return testnet ? urls.testnet : urls.mainnet;
   }
 
-  private decodeMethodType(methodId: string): string {
+  private decodeMethodType(methodId: string, direction: 'sent' | 'received' | 'self' | 'unknown'): string {
+    const methodIdLower = methodId.toLowerCase();
+    
+    // Token transfer methods - use direction to match Solana's format
+    const tokenTransferMethods = ['0xa9059cbb', '0x23b872dd'];
+    if (tokenTransferMethods.includes(methodIdLower)) {
+      return direction === 'sent' ? 'Sent Token' : 
+             direction === 'received' ? 'Received Token' : 
+             'Token Transfer';
+    }
+    
+    // NFT transfer methods
+    const nftTransferMethods = ['0x42842e0e', '0xb88d4fde'];
+    if (nftTransferMethods.includes(methodIdLower)) {
+      return direction === 'sent' ? 'Sent NFT' : 
+             direction === 'received' ? 'Received NFT' : 
+             'NFT Transfer';
+    }
+    
+    // Other known methods
     const methodTypes: Record<string, string> = {
-      '0xa9059cbb': 'Token Transfer',
-      '0x23b872dd': 'Token Transfer',
       '0x095ea7b3': 'Token Approval',
       '0x38ed1739': 'Swap',
       '0x8803dbee': 'Swap',
@@ -583,12 +657,10 @@ export class EVMAdapter implements ChainAdapter {
       '0x02751cec': 'Remove Liquidity',
       '0x2e1a7d4d': 'Withdraw',
       '0xd0e30db0': 'Deposit',
-      '0x42842e0e': 'NFT Transfer',
-      '0xb88d4fde': 'NFT Transfer',
       '0xa22cb465': 'NFT Approval',
     };
 
-    return methodTypes[methodId.toLowerCase()] || 'Contract Call';
+    return methodTypes[methodIdLower] || 'Contract Call';
   }
 
   private get nativeDecimals(): number {

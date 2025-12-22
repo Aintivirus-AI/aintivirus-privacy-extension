@@ -444,7 +444,7 @@ export type WalletRevokeAllowanceMessage = BaseMessage<
   WalletMessagePayloads['WALLET_REVOKE_ALLOWANCE']
 >;
 
-// Jupiter Swap messages
+// Jupiter Swap messages (Solana)
 export type WalletSwapQuoteMessage = BaseMessage<
   'WALLET_SWAP_QUOTE',
   WalletMessagePayloads['WALLET_SWAP_QUOTE']
@@ -455,6 +455,25 @@ export type WalletSwapExecuteMessage = BaseMessage<
 >;
 export type WalletSwapAvailableMessage = BaseMessage<'WALLET_SWAP_AVAILABLE'>;
 export type WalletSwapReferralStatusMessage = BaseMessage<'WALLET_SWAP_REFERRAL_STATUS'>;
+
+// EVM Swap messages (ParaSwap)
+export type EVMSwapQuoteMessage = BaseMessage<
+  'EVM_SWAP_QUOTE',
+  WalletMessagePayloads['EVM_SWAP_QUOTE']
+>;
+export type EVMSwapExecuteMessage = BaseMessage<
+  'EVM_SWAP_EXECUTE',
+  WalletMessagePayloads['EVM_SWAP_EXECUTE']
+>;
+export type EVMSwapAvailableMessage = BaseMessage<
+  'EVM_SWAP_AVAILABLE',
+  WalletMessagePayloads['EVM_SWAP_AVAILABLE']
+>;
+
+export type EVMRpcRequestMessage = BaseMessage<
+  'EVM_RPC_REQUEST',
+  WalletMessagePayloads['EVM_RPC_REQUEST']
+>;
 
 export type SecurityConnectionRequestMessage = BaseMessage<
   'SECURITY_CONNECTION_REQUEST',
@@ -695,11 +714,18 @@ export type ExtensionMessage =
   | WalletEstimateRevokeFeeMessage
   | WalletRevokeAllowanceMessage
 
-  // Jupiter Swap
+  // Jupiter Swap (Solana)
   | WalletSwapQuoteMessage
   | WalletSwapExecuteMessage
   | WalletSwapAvailableMessage
   | WalletSwapReferralStatusMessage
+
+  // EVM Swap (ParaSwap)
+  | EVMSwapQuoteMessage
+  | EVMSwapExecuteMessage
+  | EVMSwapAvailableMessage
+
+  | EVMRpcRequestMessage
   | SecurityConnectionRequestMessage
   | SecurityConnectionApproveMessage
   | SecurityConnectionDenyMessage

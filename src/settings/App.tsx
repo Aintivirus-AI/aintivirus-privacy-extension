@@ -662,9 +662,10 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
   // Helper function to mask API keys in URLs
   const maskApiKey = (url: string): string => {
     try {
+      let maskedUrl = url;
       const urlObj = new URL(url);
 
-      // Check for various API key parameter names
+      // Check for query parameter API keys
       const apiKeyParams = ['api-key', 'apikey', 'apiKey'];
 
       for (const param of apiKeyParams) {
@@ -678,14 +679,42 @@ const WalletSecuritySettings: React.FC<WalletSecuritySettingsProps> = ({ walletE
             apiKey.substring(apiKey.length - 4);
 
           // Do a simple string replacement to avoid URL encoding
-          return url.replace(apiKey, masked);
+          maskedUrl = maskedUrl.replace(apiKey, masked);
         }
       }
 
-      return url;
+      // Check for path-based API keys (e.g., Alchemy: /v2/API_KEY)
+      // Match patterns like /v2/[long-string], /api/[long-string], etc.
+      const pathApiKeyPattern = /\/(v2|v1|api)\/([a-zA-Z0-9_-]{16,})/g;
+      maskedUrl = maskedUrl.replace(pathApiKeyPattern, (match, prefix, apiKey) => {
+        if (apiKey.length > 8) {
+          const masked =
+            apiKey.substring(0, 4) +
+            '•'.repeat(Math.min(apiKey.length - 8, 20)) +
+            apiKey.substring(apiKey.length - 4);
+          return `/${prefix}/${masked}`;
+        }
+        return match;
+      });
+
+      return maskedUrl;
     } catch {
-      // If URL parsing fails, return original
-      return url;
+      // If URL parsing fails, still try to mask path-based API keys
+      try {
+        const pathApiKeyPattern = /\/(v2|v1|api)\/([a-zA-Z0-9_-]{16,})/g;
+        return url.replace(pathApiKeyPattern, (match, prefix, apiKey) => {
+          if (apiKey.length > 8) {
+            const masked =
+              apiKey.substring(0, 4) +
+              '•'.repeat(Math.min(apiKey.length - 8, 20)) +
+              apiKey.substring(apiKey.length - 4);
+            return `/${prefix}/${masked}`;
+          }
+          return match;
+        });
+      } catch {
+        return url;
+      }
     }
   };
 

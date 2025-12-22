@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { sendToBackground } from '@shared/messaging';
 import { TokenIcon } from './TokenIcon';
 
 interface TokenSearchResult {
@@ -127,35 +126,19 @@ export const TokenSearchDropdown: React.FC<TokenSearchDropdownProps> = ({
       setSearchError(null);
       lastSearchedRef.current = trimmedValue;
       try {
-        if (chainType === 'evm') {
-          const res = await sendToBackground({
-            type: 'WALLET_GET_TOKEN_METADATA',
-            payload: { mint: trimmedValue },
-          });
-
-          if (res.success && res.data) {
-            const metadata = res.data as { symbol: string; name: string; logoUri?: string };
-            setSearchResult({
-              address: trimmedValue,
-              symbol: metadata.symbol,
-              name: metadata.name,
-              logoUri: metadata.logoUri,
-            });
-            setIsOpen(true);
-            setIsSearching(false);
-            return;
-          }
-        }
-
+        // Use DexScreener for both EVM and Solana - it's fast with proper timeouts
+        // and provides reliable logo URIs (unlike slow RPC calls for EVM)
         const result = await searchDexScreener(trimmedValue);
 
         if (result) {
           setSearchResult(result);
           setIsOpen(true);
-        } else {
-          setSearchResult(null);
-          setSearchError('Token not found. You can still add it manually.');
+          setIsSearching(false);
+          return;
         }
+
+        setSearchResult(null);
+        setSearchError('Token not found. You can still add it manually.');
       } catch (error) {
         setSearchError('Search failed. You can enter details manually.');
       } finally {

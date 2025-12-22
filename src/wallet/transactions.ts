@@ -319,8 +319,9 @@ export async function sendSol(params: SendTransactionParams): Promise<SendTransa
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        if (error instanceof SendTransactionError) {
-          const logs = error.logs;
+        // Log transaction error details for debugging in development
+        if (error instanceof SendTransactionError && process.env.NODE_ENV === 'development') {
+          console.debug('[Wallet] Transaction send error logs:', error.logs);
         }
 
         if (attempt < MAX_RETRIES - 1) {
@@ -337,13 +338,10 @@ export async function sendSol(params: SendTransactionParams): Promise<SendTransa
     }
 
     const confirmResult = await confirmTransaction(signature);
-
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
-    if (!confirmResult.confirmed) {
-    } else {
-    }
-
+    // Transaction submitted - confirmation status is informational only
+    // The transaction was successfully broadcast regardless of confirmation
     return {
       signature,
       explorerUrl,
@@ -585,8 +583,9 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        if (error instanceof SendTransactionError) {
-          const logs = error.logs;
+        // Log transaction error details for debugging in development
+        if (error instanceof SendTransactionError && process.env.NODE_ENV === 'development') {
+          console.debug('[Wallet] Token transfer error logs:', error.logs);
         }
 
         if (attempt < MAX_RETRIES - 1) {
@@ -603,13 +602,10 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
     }
 
     const confirmResult = await confirmTransaction(signature);
-
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
-    if (!confirmResult.confirmed) {
-    } else {
-    }
-
+    // Transaction submitted - confirmation status is informational only
+    // The transaction was successfully broadcast regardless of confirmation
     return {
       signature,
       explorerUrl,

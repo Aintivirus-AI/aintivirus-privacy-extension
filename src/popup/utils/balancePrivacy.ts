@@ -23,7 +23,7 @@ export function formatHiddenUsd(value: string, isHidden: boolean): string {
 
 export function formatHiddenTxAmount(
   amount: number,
-  direction: 'sent' | 'received' | 'swap' | 'unknown',
+  direction: 'sent' | 'received' | 'self' | 'swap' | 'unknown',
   symbol: string,
   formatter: (n: number) => string,
   isHidden: boolean,

@@ -265,6 +265,32 @@ async function fetchTransactionDetails(
         item.tokenInfo = await enrichTokenInfo(item.tokenInfo);
       }
 
+      // Enrich swap token info
+      if (item.swapInfo) {
+        if (item.swapInfo.fromToken.mint) {
+          const enrichedFrom = await enrichTokenInfo({
+            mint: item.swapInfo.fromToken.mint,
+            decimals: 0, // Not used for swap display
+            amount: item.swapInfo.fromToken.amount,
+            symbol: item.swapInfo.fromToken.symbol,
+            logoUri: item.swapInfo.fromToken.logoUri,
+          });
+          item.swapInfo.fromToken.symbol = enrichedFrom.symbol || item.swapInfo.fromToken.symbol;
+          item.swapInfo.fromToken.logoUri = enrichedFrom.logoUri || item.swapInfo.fromToken.logoUri;
+        }
+        if (item.swapInfo.toToken.mint) {
+          const enrichedTo = await enrichTokenInfo({
+            mint: item.swapInfo.toToken.mint,
+            decimals: 0, // Not used for swap display
+            amount: item.swapInfo.toToken.amount,
+            symbol: item.swapInfo.toToken.symbol,
+            logoUri: item.swapInfo.toToken.logoUri,
+          });
+          item.swapInfo.toToken.symbol = enrichedTo.symbol || item.swapInfo.toToken.symbol;
+          item.swapInfo.toToken.logoUri = enrichedTo.logoUri || item.swapInfo.toToken.logoUri;
+        }
+      }
+
       transactions.push(item);
     }
   }
@@ -312,6 +338,10 @@ function parseTransactionToHistoryItem(
       name: result.tokenInfo.name,
       logoUri: result.tokenInfo.logoUri,
     };
+  }
+
+  if (result.swapInfo) {
+    item.swapInfo = result.swapInfo;
   }
 
   return item;
@@ -398,6 +428,7 @@ function parseTransferInfo(
   counterparty: string | null;
   type: string;
   tokenInfo?: ExtractedTokenInfo;
+  swapInfo?: SwapInfo;
 } {
   const meta = parsed.meta;
   const message = parsed.transaction.message;
@@ -411,9 +442,92 @@ function parseTransferInfo(
     };
   }
 
+  // Calculate SOL balance change first
+  const accountKeys = message.accountKeys;
+  const walletIndex = accountKeys.findIndex((key) => key.pubkey.toBase58() === walletAddress);
+  
+  let solBalanceChange = 0;
+  if (walletIndex !== -1) {
+    const preBalance = meta.preBalances[walletIndex] || 0;
+    const postBalance = meta.postBalances[walletIndex] || 0;
+    solBalanceChange = postBalance - preBalance;
+  }
+
   const tokenTransferInfo = parseTokenTransfer(parsed, walletAddress);
 
+  // Check if this is a swap (token transfer has swap info OR SOL + token change)
   if (tokenTransferInfo) {
+    // If we already detected a token-to-token swap
+    if (tokenTransferInfo.swapInfo) {
+      return {
+        direction: 'self',
+        amount: 0,
+        counterparty: tokenTransferInfo.counterparty,
+        type: 'Swap',
+        tokenInfo: tokenTransferInfo.tokenInfo,
+        swapInfo: tokenTransferInfo.swapInfo,
+      };
+    }
+    
+    // Check for SOL <-> Token swap
+    // Significant SOL change (more than just fees, > 0.001 SOL = 1_000_000 lamports)
+    const significantSolChange = Math.abs(solBalanceChange) > 1_000_000;
+    
+    if (significantSolChange) {
+      const solSent = solBalanceChange < 0;
+      const tokenReceived = tokenTransferInfo.direction === 'received';
+      const tokenSent = tokenTransferInfo.direction === 'sent';
+      
+      // SOL sent + Token received = Swap SOL -> Token
+      if (solSent && tokenReceived) {
+        const solAmount = (Math.abs(solBalanceChange) - meta.fee) / LAMPORTS_PER_SOL;
+        return {
+          direction: 'self',
+          amount: 0,
+          counterparty: null,
+          type: 'Swap',
+          tokenInfo: tokenTransferInfo.tokenInfo,
+          swapInfo: {
+            fromToken: {
+              symbol: 'SOL',
+              amount: solAmount > 0 ? solAmount : 0,
+            },
+            toToken: {
+              symbol: tokenTransferInfo.tokenInfo.symbol || 'Token',
+              amount: tokenTransferInfo.tokenInfo.amount,
+              mint: tokenTransferInfo.tokenInfo.mint,
+              logoUri: tokenTransferInfo.tokenInfo.logoUri,
+            },
+          },
+        };
+      }
+      
+      // Token sent + SOL received = Swap Token -> SOL
+      if (tokenSent && !solSent && solBalanceChange > 0) {
+        const solAmount = solBalanceChange / LAMPORTS_PER_SOL;
+        return {
+          direction: 'self',
+          amount: 0,
+          counterparty: null,
+          type: 'Swap',
+          tokenInfo: tokenTransferInfo.tokenInfo,
+          swapInfo: {
+            fromToken: {
+              symbol: tokenTransferInfo.tokenInfo.symbol || 'Token',
+              amount: tokenTransferInfo.tokenInfo.amount,
+              mint: tokenTransferInfo.tokenInfo.mint,
+              logoUri: tokenTransferInfo.tokenInfo.logoUri,
+            },
+            toToken: {
+              symbol: 'SOL',
+              amount: solAmount,
+            },
+          },
+        };
+      }
+    }
+    
+    // Regular token transfer (not a swap)
     return {
       direction: tokenTransferInfo.direction,
       amount: 0,
@@ -422,9 +536,6 @@ function parseTransferInfo(
       tokenInfo: tokenTransferInfo.tokenInfo,
     };
   }
-
-  const accountKeys = message.accountKeys;
-  const walletIndex = accountKeys.findIndex((key) => key.pubkey.toBase58() === walletAddress);
 
   if (walletIndex === -1) {
     return {
@@ -435,23 +546,19 @@ function parseTransferInfo(
     };
   }
 
-  const preBalance = meta.preBalances[walletIndex] || 0;
-  const postBalance = meta.postBalances[walletIndex] || 0;
-  const balanceChange = postBalance - preBalance;
-
   let direction: TransactionDirection = 'unknown';
   let amount = 0;
   let counterparty: string | null = null;
 
-  if (balanceChange > 0) {
+  if (solBalanceChange > 0) {
     direction = 'received';
-    amount = balanceChange;
+    amount = solBalanceChange;
 
     counterparty = findCounterparty(meta, accountKeys, 'sender');
-  } else if (balanceChange < 0) {
+  } else if (solBalanceChange < 0) {
     direction = 'sent';
 
-    amount = Math.abs(balanceChange) - meta.fee;
+    amount = Math.abs(solBalanceChange) - meta.fee;
     if (amount < 0) amount = 0;
 
     counterparty = findCounterparty(meta, accountKeys, 'recipient');
@@ -467,19 +574,99 @@ function parseTransferInfo(
   };
 }
 
-function parseTokenTransfer(
-  parsed: ParsedTransactionWithMeta,
-  walletAddress: string,
-): {
+interface SwapInfo {
+  fromToken: {
+    symbol: string;
+    amount: number;
+    mint?: string;
+    logoUri?: string;
+  };
+  toToken: {
+    symbol: string;
+    amount: number;
+    mint?: string;
+    logoUri?: string;
+  };
+}
+
+interface TokenTransferResult {
   direction: TransactionDirection;
   counterparty: string | null;
   tokenInfo: ExtractedTokenInfo;
-} | null {
+  swapInfo?: SwapInfo;
+}
+
+function parseTokenTransfer(
+  parsed: ParsedTransactionWithMeta,
+  walletAddress: string,
+): TokenTransferResult | null {
   const instructions = parsed.transaction.message.instructions;
   const meta = parsed.meta;
 
   if (!meta) return null;
 
+  // Check for swap first: look for multiple token balance changes (one sent, one received)
+  const preTokenBalances = meta.preTokenBalances || [];
+  const postTokenBalances = meta.postTokenBalances || [];
+  
+  if (preTokenBalances.length > 0 || postTokenBalances.length > 0) {
+    const allChanges = findAllTokenBalanceChanges(
+      preTokenBalances,
+      postTokenBalances,
+      walletAddress,
+      parsed.transaction.message.accountKeys,
+    );
+    
+    // Check if this is a swap (has both sent and received token changes)
+    const sentChanges = allChanges.filter(c => c.direction === 'sent');
+    const receivedChanges = allChanges.filter(c => c.direction === 'received');
+    
+    if (sentChanges.length > 0 && receivedChanges.length > 0) {
+      // This is a swap! Use the first sent and first received
+      const sentChange = sentChanges[0];
+      const receivedChange = receivedChanges[0];
+      
+      return {
+        direction: 'self', // Use 'self' to indicate swap
+        counterparty: null,
+        tokenInfo: {
+          mint: sentChange.mint,
+          decimals: sentChange.decimals,
+          amount: Math.abs(sentChange.uiAmount),
+        },
+        swapInfo: {
+          fromToken: {
+            symbol: sentChange.symbol || 'Token',
+            amount: Math.abs(sentChange.uiAmount),
+            mint: sentChange.mint,
+            logoUri: sentChange.logoUri,
+          },
+          toToken: {
+            symbol: receivedChange.symbol || 'Token',
+            amount: Math.abs(receivedChange.uiAmount),
+            mint: receivedChange.mint,
+            logoUri: receivedChange.logoUri,
+          },
+        },
+      };
+    }
+    
+    // Not a swap, just a single token transfer
+    if (allChanges.length > 0) {
+      const change = allChanges[0];
+      return {
+        direction: change.direction,
+        counterparty: null,
+        tokenInfo: {
+          mint: change.mint,
+          decimals: change.decimals,
+          amount: Math.abs(change.uiAmount),
+        },
+      };
+    }
+  }
+
+  // Fall back to instruction parsing for simple transfers
   for (const instruction of instructions) {
     if ('program' in instruction && instruction.program === 'spl-token') {
       const parsedInstruction = instruction as {
@@ -519,58 +706,23 @@ function parseTokenTransfer(
             },
           };
         }
-
-        if (meta.preTokenBalances && meta.postTokenBalances) {
-          const tokenBalanceChange = findTokenBalanceChange(
-            meta.preTokenBalances,
-            meta.postTokenBalances,
-            walletAddress,
-            parsed.transaction.message.accountKeys,
-          );
-
-          if (tokenBalanceChange) {
-            return {
-              direction: tokenBalanceChange.direction,
-              counterparty: null,
-              tokenInfo: {
-                mint: tokenBalanceChange.mint,
-                decimals: tokenBalanceChange.decimals,
-                amount: Math.abs(tokenBalanceChange.uiAmount),
-              },
-            };
-          }
-        }
       }
-    }
-  }
-
-  const preTokenBalances = meta.preTokenBalances || [];
-  const postTokenBalances = meta.postTokenBalances || [];
-  if (preTokenBalances.length > 0 || postTokenBalances.length > 0) {
-    const tokenBalanceChange = findTokenBalanceChange(
-      preTokenBalances,
-      postTokenBalances,
-      walletAddress,
-      parsed.transaction.message.accountKeys,
-    );
-
-    if (tokenBalanceChange) {
-      return {
-        direction: tokenBalanceChange.direction,
-        counterparty: null,
-        tokenInfo: {
-          mint: tokenBalanceChange.mint,
-          decimals: tokenBalanceChange.decimals,
-          amount: Math.abs(tokenBalanceChange.uiAmount),
-        },
-      };
     }
   }
 
   return null;
 }
 
-function findTokenBalanceChange(
+interface TokenBalanceChange {
+  mint: string;
+  decimals: number;
+  uiAmount: number;
+  direction: TransactionDirection;
+  symbol?: string;
+  logoUri?: string;
+}
+
+function findAllTokenBalanceChanges(
   preBalances: {
     accountIndex: number;
     mint: string;
@@ -585,12 +737,8 @@ function findTokenBalanceChange(
   }[],
   walletAddress: string,
   _accountKeys: { pubkey: PublicKey }[],
-): {
-  mint: string;
-  decimals: number;
-  uiAmount: number;
-  direction: TransactionDirection;
-} | null {
+): TokenBalanceChange[] {
+  const changes: TokenBalanceChange[] = [];
   const preMap = new Map<string, { mint: string; uiAmount: number; decimals: number }>();
   const postMap = new Map<string, { mint: string; uiAmount: number; decimals: number }>();
 
@@ -614,6 +762,7 @@ function findTokenBalanceChange(
     }
   }
 
+  // Check for changes in existing tokens
   for (const [mint, postData] of postMap) {
     const preData = preMap.get(mint);
     const preAmount = preData?.uiAmount || 0;
@@ -621,38 +770,60 @@ function findTokenBalanceChange(
     const change = postAmount - preAmount;
 
     if (Math.abs(change) > 0.000001) {
-      return {
+      changes.push({
         mint: postData.mint,
         decimals: postData.decimals,
         uiAmount: change,
         direction: change > 0 ? 'received' : 'sent',
-      };
+      });
     }
   }
 
+  // Check for tokens that were fully sent (no longer in postBalances)
   for (const [mint, preData] of preMap) {
     if (!postMap.has(mint) && preData.uiAmount > 0) {
-      return {
+      changes.push({
         mint: preData.mint,
         decimals: preData.decimals,
         uiAmount: -preData.uiAmount,
         direction: 'sent',
-      };
+      });
     }
   }
 
+  // Check for newly received tokens (not in preBalances)
   for (const [mint, postData] of postMap) {
     if (!preMap.has(mint) && postData.uiAmount > 0) {
-      return {
+      changes.push({
         mint: postData.mint,
         decimals: postData.decimals,
         uiAmount: postData.uiAmount,
         direction: 'received',
-      };
+      });
     }
   }
 
-  return null;
+  return changes;
+}
+
+function findTokenBalanceChange(
+  preBalances: {
+    accountIndex: number;
+    mint: string;
+    owner?: string;
+    uiTokenAmount: { decimals: number; uiAmount: number | null };
+  }[],
+  postBalances: {
+    accountIndex: number;
+    mint: string;
+    owner?: string;
+    uiTokenAmount: { decimals: number; uiAmount: number | null };
+  }[],
+  walletAddress: string,
+  accountKeys: { pubkey: PublicKey }[],
+): TokenBalanceChange | null {
+  const changes = findAllTokenBalanceChanges(preBalances, postBalances, walletAddress, accountKeys);
+  return changes.length > 0 ? changes[0] : null;
 }
 
 function findCounterparty(

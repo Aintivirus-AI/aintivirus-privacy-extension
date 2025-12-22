@@ -129,6 +129,22 @@ export interface TxResult {
   error?: string;
 }
 
+/** Swap info for displaying swap transactions */
+export interface ChainSwapInfo {
+  fromToken: {
+    symbol: string;
+    amount: number;
+    address?: string;
+    logoUri?: string;
+  };
+  toToken: {
+    symbol: string;
+    amount: number;
+    address?: string;
+    logoUri?: string;
+  };
+}
+
 export interface ChainTxHistoryItem {
   hash: string;
 
@@ -157,6 +173,9 @@ export interface ChainTxHistoryItem {
   tokenAddress?: string;
 
   logoUri?: string;
+
+  /** Swap info when transaction is a token swap */
+  swapInfo?: ChainSwapInfo;
 }
 
 export interface ChainFeeEstimate {

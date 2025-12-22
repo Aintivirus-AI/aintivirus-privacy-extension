@@ -227,16 +227,23 @@ export function logError(error: unknown, context?: string, level: LogLevel = 'er
 
   const logMessage = `${prefix}${contextStr} ${message}${code ? ` (${code})` : ''}`;
 
-  switch (level) {
-    case 'debug':
-      break;
-    case 'info':
-      break;
-    case 'warn':
-      break;
-    case 'error':
-    default:
-      break;
+  // Only log in development mode to avoid exposing sensitive info in production
+  if (process.env.NODE_ENV === 'development') {
+    switch (level) {
+      case 'debug':
+        console.debug(logMessage);
+        break;
+      case 'info':
+        console.info(logMessage);
+        break;
+      case 'warn':
+        console.warn(logMessage);
+        break;
+      case 'error':
+      default:
+        console.error(logMessage);
+        break;
+    }
   }
 }
 
