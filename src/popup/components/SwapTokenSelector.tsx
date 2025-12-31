@@ -11,14 +11,10 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TokenIcon } from './TokenIcon';
-import {
-  searchSwapTokens,
-  getPopularTokens,
-  fetchSolanaTokenByAddress,
-  type SwapToken,
-} from '../../wallet/swapTokens';
+import type { SwapToken } from '../../wallet/swapTokens';
 import type { SPLTokenBalance, EVMTokenBalance, EVMChainId } from '@shared/types';
 import { SearchIcon, CloseIcon, CheckIcon } from '../Icons';
+import { sendToBackground } from '@shared/messaging';
 
 // ============================================================================
 // Types
@@ -67,12 +63,12 @@ const TokenListItem: React.FC<TokenListItemProps> = ({
   showBalance = false,
 }) => {
   const fallbackLogo = token.chainId === 'solana'
-    ? 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'
-    : 'https://assets.coingecko.com/coins/images/279/small/ethereum.png';
+    ? 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'
+    : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
 
   return (
     <button
-      className={`swap-token-list-item ${isSelected ? 'selected' : ''}`}
+      className={`swap-token-list-item ${isSelected ? 'selected' : ''} ${!token.verified ? 'unverified' : ''}`}
       onClick={onClick}
       type="button"
     >
@@ -86,9 +82,13 @@ const TokenListItem: React.FC<TokenListItemProps> = ({
       <div className="swap-token-list-item-info">
         <div className="swap-token-list-item-symbol">
           {token.symbol}
-          {token.verified && (
-            <span className="swap-token-verified" title="Verified">
+          {token.verified ? (
+            <span className="swap-token-verified" title="Verified Token">
               <CheckIcon size={12} />
+            </span>
+          ) : (
+            <span className="swap-token-unverified" title="Unverified - Trade with caution">
+              ⚠️
             </span>
           )}
         </div>
@@ -150,7 +150,7 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
           symbol: 'SOL',
           name: 'Solana',
           decimals: 9,
-          logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+          logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
           verified: true,
           balance: nativeBalance.toString(),
           chainId: 'solana',
@@ -216,15 +216,19 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
   }, [chainType, solanaTokens, evmTokens, nativeBalance, evmChainId]);
 
   // Load popular tokens on mount or chain change
+  // Routes through background script to avoid CORS issues
   useEffect(() => {
     let cancelled = false;
     
     const loadPopular = async () => {
       setIsLoadingPopular(true);
       try {
-        const tokens = await getPopularTokens(chainType, evmChainId, 20);
-        if (!cancelled) {
-          setPopularTokens(tokens);
+        const response = await sendToBackground({
+          type: 'SWAP_GET_POPULAR_TOKENS',
+          payload: { chainType, evmChainId, limit: 20 },
+        });
+        if (!cancelled && response.success && response.data) {
+          setPopularTokens(response.data as SwapToken[]);
         }
       } catch (error) {
         console.error('Failed to load popular tokens:', error);
@@ -243,6 +247,7 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
   }, [chainType, evmChainId]);
 
   // Handle search with debouncing
+  // Routes through background script to avoid CORS issues
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -260,8 +265,15 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
     
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const results = await searchSwapTokens(trimmedQuery, chainType, evmChainId);
-        setSearchResults(results);
+        const response = await sendToBackground({
+          type: 'SWAP_SEARCH_TOKENS',
+          payload: { query: trimmedQuery, chainType, evmChainId },
+        });
+        if (response.success && response.data) {
+          setSearchResults(response.data as SwapToken[]);
+        } else {
+          setSearchResults([]);
+        }
       } catch (error) {
         console.error('Token search failed:', error);
         setSearchResults([]);
@@ -342,8 +354,8 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
   }, [searchQuery, searchResults, userTokens, popularTokens, filterExcluded]);
 
   const fallbackLogo = chainType === 'solana'
-    ? 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'
-    : 'https://assets.coingecko.com/coins/images/279/small/ethereum.png';
+    ? 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'
+    : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
 
   return (
     <div className="swap-token-selector-container" ref={containerRef}>
@@ -445,7 +457,7 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
                   <>
                     <p>No tokens found for "{searchQuery}"</p>
                     <p className="swap-token-selector-hint">
-                      Try searching by name, symbol, or paste a token address
+                      Try pasting the token's contract address to find any tradable token
                     </p>
                   </>
                 ) : (

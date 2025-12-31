@@ -332,6 +332,10 @@ async function handleMessage(
     case 'WALLET_SWAP_EXECUTE':
     case 'WALLET_SWAP_AVAILABLE':
     case 'WALLET_SWAP_REFERRAL_STATUS':
+    // Swap Token Discovery (routes through background for CORS)
+    case 'SWAP_GET_POPULAR_TOKENS':
+    case 'SWAP_SEARCH_TOKENS':
+    case 'SWAP_GET_TOKEN_BY_ADDRESS':
     // EVM Swap (ParaSwap)
     case 'EVM_SWAP_QUOTE':
     case 'EVM_SWAP_EXECUTE':

@@ -136,6 +136,11 @@
         "id": "aintivirus-custom",
         "enabled": true,
         "path": "rules/static_ruleset_custom.json"
+      },
+      {
+        "id": "wallet-api-allowlist",
+        "enabled": true,
+        "path": "rules/wallet_api_allowlist.json"
       }
     ]
   },

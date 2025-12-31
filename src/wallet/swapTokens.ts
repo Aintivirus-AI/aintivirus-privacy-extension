@@ -2,7 +2,7 @@
  * Dynamic Token List Services for Swap
  * 
  * Provides token discovery and search for:
- * - Solana (via Jupiter token API)
+ * - Solana (via DexScreener API)
  * - EVM chains (via ParaSwap tokens API)
  */
 
@@ -25,16 +25,6 @@ export interface SwapToken {
   usdValue?: number;
 }
 
-interface JupiterTokenInfo {
-  address: string;
-  symbol: string;
-  name: string;
-  decimals: number;
-  logoURI?: string;
-  tags?: string[];
-  daily_volume?: number;
-}
-
 interface ParaSwapToken {
   symbol: string;
   address: string;
@@ -46,9 +36,6 @@ interface ParaSwapToken {
 // ============================================================================
 // Configuration
 // ============================================================================
-
-// Jupiter Token API - for Solana tokens (verified tokens list)
-const JUPITER_TOKEN_API = 'https://tokens.jup.ag';
 
 // ParaSwap Token API - for EVM tokens
 const PARASWAP_TOKEN_API = 'https://api.paraswap.io/tokens';
@@ -107,11 +94,12 @@ function isCacheValid(cache: TokenCache | undefined): boolean {
 }
 
 // ============================================================================
-// Solana Token Functions (Jupiter)
+// Solana Token Functions (DexScreener-based)
 // ============================================================================
 
 /**
- * Fetch all verified Solana tokens from Jupiter
+ * Get popular/default Solana tokens
+ * Returns hardcoded popular tokens - reliable and fast
  */
 export async function fetchSolanaTokens(): Promise<SwapToken[]> {
   const cacheKey = getCacheKey('solana');
@@ -121,124 +109,183 @@ export async function fetchSolanaTokens(): Promise<SwapToken[]> {
     return cached!.tokens;
   }
 
+  // Return popular tokens (hardcoded for reliability)
+  const tokens = getDefaultSolanaTokens();
+  
+  // Cache the results
+  tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
+
+  return tokens;
+}
+
+// DexScreener API for searching any token
+const DEXSCREENER_SEARCH_API = 'https://api.dexscreener.com/latest/dex/search';
+const DEXSCREENER_TOKEN_API = 'https://api.dexscreener.com/latest/dex/tokens';
+
+/**
+ * Get token logo from DexScreener's info or fallback to Jupiter CDN
+ */
+function getDexScreenerLogo(pair: { info?: { imageUrl?: string }; baseToken: { address: string; symbol: string } }): string {
+  // DexScreener provides image URL in pair.info.imageUrl
+  if (pair.info?.imageUrl) {
+    return pair.info.imageUrl;
+  }
+  // Fallback to Jupiter CDN
+  return `https://img.jup.ag/tokens/${pair.baseToken.address}`;
+}
+
+/**
+ * Search tokens on DexScreener (finds any token with liquidity)
+ */
+async function searchDexScreener(query: string): Promise<SwapToken[]> {
   try {
-    // Fetch verified tokens - these are safe to swap
-    const response = await fetchWithTimeout(`${JUPITER_TOKEN_API}/tokens?tags=verified`);
+    const response = await fetchWithTimeout(
+      `${DEXSCREENER_SEARCH_API}?q=${encodeURIComponent(query)}`,
+      10000
+    );
     
     if (!response.ok) {
-      throw new Error(`Jupiter API error: ${response.status}`);
+      console.warn('DexScreener search returned non-OK status:', response.status);
+      return [];
     }
 
-    const data: JupiterTokenInfo[] = await response.json();
-
-    // Map to our token format and sort by daily volume
-    const tokens: SwapToken[] = data
-      .map((token) => ({
-        address: token.address,
-        symbol: token.symbol,
-        name: token.name,
-        decimals: token.decimals,
-        logoUri: token.logoURI || getDefaultSolanaLogo(token.symbol),
-        verified: true,
-        chainId: 'solana',
-      }))
-      .sort((a, b) => {
-        // Prioritize SOL, USDC, USDT
-        const priority = ['SOL', 'USDC', 'USDT', 'JUP', 'BONK', 'WIF', 'RAY'];
-        const aIdx = priority.indexOf(a.symbol);
-        const bIdx = priority.indexOf(b.symbol);
-        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-        if (aIdx !== -1) return -1;
-        if (bIdx !== -1) return 1;
-        return a.symbol.localeCompare(b.symbol);
-      });
-
-    // Cache the results
-    tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
-
-    return tokens;
+    const data = await response.json();
+    const pairs = data.pairs || [];
+    
+    // Filter for Solana tokens and deduplicate by address
+    const seenAddresses = new Set<string>();
+    const tokens: SwapToken[] = [];
+    
+    for (const pair of pairs) {
+      if (pair.chainId !== 'solana') continue;
+      
+      // Add base token if not seen
+      if (pair.baseToken && !seenAddresses.has(pair.baseToken.address)) {
+        seenAddresses.add(pair.baseToken.address);
+        tokens.push({
+          address: pair.baseToken.address,
+          symbol: pair.baseToken.symbol,
+          name: pair.baseToken.name || pair.baseToken.symbol,
+          decimals: 9, // Default, will be corrected when fetching
+          logoUri: getDexScreenerLogo(pair),
+          verified: false, // DexScreener tokens are not verified by default
+          chainId: 'solana',
+        });
+      }
+    }
+    
+    console.log(`DexScreener found ${tokens.length} tokens for query: ${query}`);
+    return tokens.slice(0, 50);
   } catch (error) {
-    console.error('Failed to fetch Solana tokens:', error);
-    // Return default tokens on error
-    return getDefaultSolanaTokens();
+    console.error('DexScreener search failed:', error);
+    return [];
   }
 }
 
 /**
  * Search Solana tokens by symbol, name, or address
+ * Uses DexScreener exclusively for reliable token search
  */
 export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
-  const allTokens = await fetchSolanaTokens();
   const normalizedQuery = query.toLowerCase().trim();
   
   if (!normalizedQuery) {
-    return allTokens.slice(0, 50); // Return top 50 by default
+    // Return default tokens when no query
+    return getDefaultSolanaTokens();
   }
 
-  // Check if it's an address search
+  // Check if it's an address search (Solana addresses are 32-44 base58 chars)
   if (normalizedQuery.length >= 32 && normalizedQuery.length <= 44) {
-    // Search for exact address match
-    const exactMatch = allTokens.find(
-      (t) => t.address.toLowerCase() === normalizedQuery
-    );
-    if (exactMatch) return [exactMatch];
-    
-    // Try to fetch token info for unknown address
+    // Try to fetch token info for the address
     const tokenInfo = await fetchSolanaTokenByAddress(normalizedQuery);
     if (tokenInfo) return [tokenInfo];
-    
     return [];
   }
 
-  // Search by symbol or name
-  const results = allTokens.filter((token) => {
-    const symbolMatch = token.symbol.toLowerCase().includes(normalizedQuery);
-    const nameMatch = token.name.toLowerCase().includes(normalizedQuery);
-    return symbolMatch || nameMatch;
-  });
+  // Search using DexScreener only
+  const dexScreenerTokens = await searchDexScreener(query);
+  
+  console.log(`DexScreener search found ${dexScreenerTokens.length} tokens for: ${query}`);
 
-  // Sort: exact symbol match first, then partial matches
-  return results.sort((a, b) => {
+  // Sort: exact symbol match first, then by symbol starts with query
+  return dexScreenerTokens.sort((a, b) => {
     const aExact = a.symbol.toLowerCase() === normalizedQuery;
     const bExact = b.symbol.toLowerCase() === normalizedQuery;
     if (aExact && !bExact) return -1;
     if (!aExact && bExact) return 1;
-    return 0;
-  }).slice(0, 50);
+    
+    // Then by symbol match (starts with query)
+    const aStartsWith = a.symbol.toLowerCase().startsWith(normalizedQuery);
+    const bStartsWith = b.symbol.toLowerCase().startsWith(normalizedQuery);
+    if (aStartsWith && !bStartsWith) return -1;
+    if (!aStartsWith && bStartsWith) return 1;
+    
+    return a.symbol.localeCompare(b.symbol);
+  }).slice(0, 100);
 }
 
 /**
  * Fetch a single Solana token by address (for custom token input)
+ * Uses DexScreener exclusively
  */
 export async function fetchSolanaTokenByAddress(address: string): Promise<SwapToken | null> {
   try {
-    // Try Jupiter's token lookup
-    const response = await fetchWithTimeout(
-      `${JUPITER_TOKEN_API}/token/${address}`,
-      8000
+    const dexResponse = await fetchWithTimeout(
+      `${DEXSCREENER_TOKEN_API}/${address}`,
+      10000
     );
 
-    if (response.ok) {
-      const token: JupiterTokenInfo = await response.json();
-      return {
-        address: token.address,
-        symbol: token.symbol,
-        name: token.name,
-        decimals: token.decimals,
-        logoUri: token.logoURI || getDefaultSolanaLogo(token.symbol),
-        verified: token.tags?.includes('verified') || false,
-        chainId: 'solana',
-      };
+    if (dexResponse.ok) {
+      const data = await dexResponse.json();
+      const pairs = data.pairs || [];
+      
+      // Find a Solana pair for this token
+      const solanaPair = pairs.find((p: { chainId: string }) => p.chainId === 'solana');
+      if (solanaPair) {
+        // Determine if this address is base or quote token
+        const isBaseToken = solanaPair.baseToken?.address === address;
+        const tokenData = isBaseToken ? solanaPair.baseToken : solanaPair.quoteToken;
+        
+        if (tokenData) {
+          // Get logo from DexScreener info if available
+          const logoUri = solanaPair.info?.imageUrl || getTokenLogoUrl(tokenData.address, tokenData.symbol);
+          
+          return {
+            address: tokenData.address,
+            symbol: tokenData.symbol,
+            name: tokenData.name || tokenData.symbol,
+            decimals: 9, // Default for Solana tokens
+            logoUri,
+            verified: false,
+            chainId: 'solana',
+          };
+        }
+      }
     }
-
-    return null;
-  } catch {
-    return null;
+  } catch (error) {
+    console.warn('DexScreener token lookup failed for address:', address, error);
   }
+
+  return null;
 }
 
-function getDefaultSolanaLogo(symbol: string): string {
-  return `https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png`;
+/**
+ * Generate a placeholder for unknown tokens
+ * Only used when no logo URI is available and we can't find one from Jupiter
+ */
+function getDefaultSolanaLogo(_symbol: string): string {
+  // Return a generic crypto placeholder - NOT the SOL logo
+  return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%239CA3AF"%3E%3Ccircle cx="12" cy="12" r="10" stroke="%236B7280" stroke-width="1" fill="%231F2937"/%3E%3Ctext x="12" y="16" text-anchor="middle" font-size="10" fill="%239CA3AF"%3E%3F%3C/text%3E%3C/svg%3E';
+}
+
+/**
+ * Get token logo URL - prefer Jupiter's CDN which has logos for most tradeable tokens
+ * Returns the Jupiter CDN URL for the token address
+ */
+function getTokenLogoUrl(address: string, _symbol: string): string {
+  // Jupiter's logo CDN - this endpoint serves logos for all tokens in their registry
+  // Format: https://img.jup.ag/tokens/{address}
+  return `https://img.jup.ag/tokens/${address}`;
 }
 
 function getDefaultSolanaTokens(): SwapToken[] {
@@ -248,7 +295,7 @@ function getDefaultSolanaTokens(): SwapToken[] {
       symbol: 'SOL',
       name: 'Solana',
       decimals: 9,
-      logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+      logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
       verified: true,
     },
     {
@@ -256,7 +303,7 @@ function getDefaultSolanaTokens(): SwapToken[] {
       symbol: 'USDC',
       name: 'USD Coin',
       decimals: 6,
-      logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+      logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
       verified: true,
     },
     {
@@ -264,7 +311,7 @@ function getDefaultSolanaTokens(): SwapToken[] {
       symbol: 'USDT',
       name: 'Tether USD',
       decimals: 6,
-      logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png',
+      logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
       verified: true,
     },
     {
@@ -596,4 +643,5 @@ export async function getPopularTokens(
 export function clearTokenCache(): void {
   tokenCache.clear();
 }
+
 

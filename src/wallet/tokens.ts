@@ -984,11 +984,13 @@ export function getTokenLogoUrls(token: SPLTokenBalance): string[] {
     urls.push(token.logoUri);
   }
 
-  urls.push(
-    `https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/${token.mint}/logo.png`,
-  );
-
+  // Jupiter CDN is more reliable than deprecated solana-labs token-list
   urls.push(`https://tokens.jup.ag/token/${token.mint}/logo`);
+
+  // jsDelivr CDN as fallback
+  urls.push(
+    `https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/${token.mint}/logo.png`,
+  );
 
   urls.push(generateTokenPlaceholder(token.symbol));
 

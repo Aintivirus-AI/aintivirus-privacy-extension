@@ -24,12 +24,14 @@ function getTrustWalletUrl(chain: string, address: string): string {
   };
   const chainName = chainMap[chain];
   if (!chainName || !address) return '';
-  return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainName}/assets/${address}/logo.png`;
+  // Use jsDelivr CDN for better reliability
+  return `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainName}/assets/${address}/logo.png`;
 }
 
 function getSolanaTokenListUrl(mint: string): string {
   if (!mint) return '';
-  return `https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/${mint}/logo.png`;
+  // Use jsDelivr CDN for better reliability (deprecated raw GitHub URLs often fail)
+  return `https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/${mint}/logo.png`;
 }
 
 function getJupiterLogoUrl(mint: string): string {

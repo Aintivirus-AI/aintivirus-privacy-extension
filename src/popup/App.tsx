@@ -59,7 +59,7 @@ import { RecentRecipientsDropdown } from './components/RecentRecipientsDropdown'
 import { TokenIcon } from './components/TokenIcon';
 import { TokenSearchDropdown } from './components/TokenSearchDropdown';
 import { SwapTokenSelector } from './components/SwapTokenSelector';
-import { type SwapToken, getPopularTokens } from '../wallet/swapTokens';
+import { type SwapToken } from '../wallet/swapTokens';
 import { useHideBalances, useSessionSetting, SESSION_KEYS } from './hooks/useSessionSetting';
 import { useRecentRecipients } from './hooks/useRecentRecipients';
 import { useDebounce } from './hooks/useDebounce';
@@ -1165,26 +1165,26 @@ const ChainIcon: React.FC<{ chain: ChainType; evmChainId?: EVMChainId; size?: nu
   evmChainId,
   size = 16,
 }) => {
-  // Get the chain logo URL
+  // Get the chain logo URL - using jsDelivr CDN for reliability
   const getLogoUrl = (): string => {
     if (chain === 'solana') {
-      return 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
+      return 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png';
     }
 
-    // EVM chain logos from trusted sources
+    // EVM chain logos from jsDelivr CDN (more reliable than raw GitHub)
     switch (evmChainId) {
       case 'ethereum':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+        return 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
       case 'polygon':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png';
+        return 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/info/logo.png';
       case 'arbitrum':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png';
+        return 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/info/logo.png';
       case 'optimism':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png';
+        return 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/info/logo.png';
       case 'base':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png';
+        return 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/base/info/logo.png';
       default:
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+        return 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
     }
   };
 
@@ -2268,7 +2268,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                 // Determine logo: use token logo for token transfers, SOL logo for native
                 const logoUri = tx.tokenInfo
                   ? tokenLogoUri
-                  : 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
+                  : 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png';
 
                 return (
                   <div
@@ -2285,7 +2285,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                         // Swap transaction - show dual token logos
                         <div className="tx-swap-logos">
                           <img
-                            src={tx.swapInfo.fromToken.logoUri || 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'}
+                            src={tx.swapInfo.fromToken.logoUri || 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'}
                             alt={tx.swapInfo.fromToken.symbol}
                             style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
                             onError={(e) => {
@@ -2298,7 +2298,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                             </svg>
                           </div>
                           <img
-                            src={tx.swapInfo.toToken.logoUri || 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'}
+                            src={tx.swapInfo.toToken.logoUri || 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'}
                             alt={tx.swapInfo.toToken.symbol}
                             style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
                             onError={(e) => {
@@ -2426,8 +2426,8 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                   base: 'base',
                 };
                 const chain = chainNames[activeEVMChain || 'ethereum'] || 'ethereum';
-                // Use checksummed address for TrustWallet (they store with checksum)
-                return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chain}/assets/${tokenAddr}/logo.png`;
+                // Use jsDelivr CDN for reliability (more reliable than raw GitHub)
+                return `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chain}/assets/${tokenAddr}/logo.png`;
               };
               
               // For native transfers, use the chain logo; for token transfers, use multiple fallbacks
@@ -2688,7 +2688,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                         >
                           <TokenIcon
                             symbol="SOL"
-                            logoUri="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+                            logoUri="https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png"
                             address="So11111111111111111111111111111111111111112"
                             chain="solana"
                             size={32}
@@ -2765,7 +2765,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                         >
                           <TokenIcon
                             symbol="ETH"
-                            logoUri="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+                            logoUri="https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png"
                             address="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                             chain="ethereum"
                             size={32}
@@ -4380,14 +4380,14 @@ const DEFAULT_SOLANA_TOKENS: SwapToken[] = [
     symbol: 'SOL',
     name: 'Solana',
     decimals: 9,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
   },
   {
     address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+    logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
   },
 ];
 
@@ -4500,15 +4500,27 @@ const SwapView: React.FC<SwapViewProps> = ({
     const loadDefaultTokens = async () => {
       setTokensLoading(true);
       try {
-        const popularTokens = await getPopularTokens(
-          activeChain,
-          activeEVMChain || undefined,
-          10
-        );
+        // Route through background script to avoid CORS issues
+        const response = await sendToBackground({
+          type: 'SWAP_GET_POPULAR_TOKENS',
+          payload: {
+            chainType: activeChain,
+            evmChainId: activeEVMChain || undefined,
+            limit: 10,
+          },
+        });
         
-        if (!cancelled && popularTokens.length >= 2) {
-          setInputToken(popularTokens[0]);
-          setOutputToken(popularTokens[1]);
+        if (!cancelled && response.success && response.data) {
+          const popularTokens = response.data as SwapToken[];
+          if (popularTokens.length >= 2) {
+            setInputToken(popularTokens[0]);
+            setOutputToken(popularTokens[1]);
+          } else {
+            // Fallback to hardcoded defaults
+            const defaults = getDefaultTokens();
+            setInputToken(defaults[0]);
+            setOutputToken(defaults[1]);
+          }
         } else if (!cancelled) {
           // Fallback to hardcoded defaults
           const defaults = getDefaultTokens();

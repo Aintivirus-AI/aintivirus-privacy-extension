@@ -5372,6 +5372,7 @@ img.tx-token-logo {
 
 /* Token List Item */
 .swap-token-list-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -5412,6 +5413,25 @@ img.tx-token-logo {
   color: var(--accent-primary);
   display: flex;
   align-items: center;
+}
+
+.swap-token-unverified {
+  font-size: 0.75rem;
+  margin-left: 2px;
+  opacity: 0.8;
+}
+
+.swap-token-list-item.unverified {
+  opacity: 0.9;
+}
+
+.swap-token-list-item.unverified::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 8px;
+  pointer-events: none;
 }
 
 .swap-token-list-item-name {

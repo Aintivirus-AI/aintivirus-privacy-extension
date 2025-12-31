@@ -188,7 +188,7 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         symbol: 'SOL',
         name: 'Solana',
         decimals: 9,
-        logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+        logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
         isNative: true,
       },
       {
@@ -196,14 +196,14 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         symbol: 'USDC',
         name: 'USD Coin',
         decimals: 6,
-        logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+        logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
       },
       {
         address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
         symbol: 'USDT',
         name: 'Tether USD',
         decimals: 6,
-        logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png',
+        logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
       },
       {
         address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
@@ -231,7 +231,7 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         symbol: 'RAY',
         name: 'Raydium',
         decimals: 6,
-        logoUri: 'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo/logo-only-icon.svg',
+        logoUri: 'https://cdn.jsdelivr.net/gh/raydium-io/media-assets@master/logo/logo-only-icon.svg',
       },
     ],
   },
@@ -920,4 +920,5 @@ export function chainIdToLegacy(chainId: string): { chainType: ChainType; evmCha
   }
   return { chainType: 'evm', evmChainId: chainId as EVMChainId };
 }
+
 

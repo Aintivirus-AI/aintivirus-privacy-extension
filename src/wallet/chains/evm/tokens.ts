@@ -36,7 +36,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'USDC',
       decimals: 6,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
     },
     {
       address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
@@ -44,7 +44,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'USDT',
       decimals: 6,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
     },
     {
       address: '0x6B175474E89094C44Da98b954EescdeCF54d54d2B',
@@ -52,7 +52,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'DAI',
       decimals: 18,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EeRe95cdeCF54d54d2B/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EescdeCF54d54d2B/logo.png',
     },
     {
       address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
@@ -60,7 +60,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'WBTC',
       decimals: 8,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png',
     },
     {
       address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -68,7 +68,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'WETH',
       decimals: 18,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png',
     },
   ],
   polygon: [
@@ -78,7 +78,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'USDC',
       decimals: 6,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/assets/0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/assets/0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359/logo.png',
     },
     {
       address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
@@ -441,7 +441,8 @@ export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): stri
     } catch {
       checksumAddress = tokenAddress;
     }
-    return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainName}/assets/${checksumAddress}/logo.png`;
+    // Use jsDelivr CDN for better reliability
+    return `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainName}/assets/${checksumAddress}/logo.png`;
   }
 
   return undefined;

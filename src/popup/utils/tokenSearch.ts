@@ -283,3 +283,5 @@ export function hasSearchResults(
   return solMatches || ethMatches || splTokens.length > 0 || evmTokens.length > 0;
 }
 
+
+

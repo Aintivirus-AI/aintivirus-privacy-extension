@@ -18,20 +18,19 @@ import type { ChainType, EVMChainId } from '@wallet/types';
 // ============================================================================
 
 /**
- * Logo URL sources for chains (TrustWallet assets are reliable)
+ * Logo URL sources for chains (using jsDelivr CDN for reliability)
  */
 const CHAIN_LOGO_URLS: Record<string, string> = {
-  solana:
-    'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+  solana: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
   ethereum:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png',
   polygon:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/info/logo.png',
   arbitrum:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/info/logo.png',
   optimism:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
-  base: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/info/logo.png',
+  base: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/base/info/logo.png',
   // Add more chain logos here as you add chains to the registry
   // The pattern is: chainId: 'logo-url'
 };
@@ -42,8 +41,8 @@ const CHAIN_LOGO_URLS: Record<string, string> = {
 export function getChainLogoUrl(chainId: string): string {
   return (
     CHAIN_LOGO_URLS[chainId] ??
-    // Fallback to TrustWallet's generic pattern
-    `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainId}/info/logo.png`
+    // Fallback to jsDelivr CDN with TrustWallet's generic pattern
+    `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainId}/info/logo.png`
   );
 }
 
@@ -258,4 +257,5 @@ export function getDefaultSlippage(chainId: string): number {
 export function getDefaultSlippageLegacy(chainType: ChainType): number {
   return chainType === 'solana' ? 50 : 100;
 }
+
 

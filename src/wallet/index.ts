@@ -126,6 +126,13 @@ import {
   type SwapQuote,
 } from './jupiterSwap';
 
+// Swap Token Discovery imports (for background-routed token fetching)
+import {
+  getPopularTokens,
+  searchSwapTokens,
+  fetchSolanaTokenByAddress,
+} from './swapTokens';
+
 // EVM Swap imports (ParaSwap - no API key required)
 import {
   getFormattedEVMSwapQuote,
@@ -357,6 +364,18 @@ export async function handleWalletMessage(
 
     case 'EVM_RPC_REQUEST':
       return handleEVMRpcRequest(payload as WalletMessagePayloads['EVM_RPC_REQUEST']);
+
+    // Swap Token Discovery (routes through background for CORS)
+    case 'SWAP_GET_POPULAR_TOKENS':
+      return handleSwapGetPopularTokens(payload as WalletMessagePayloads['SWAP_GET_POPULAR_TOKENS']);
+
+    case 'SWAP_SEARCH_TOKENS':
+      return handleSwapSearchTokens(payload as WalletMessagePayloads['SWAP_SEARCH_TOKENS']);
+
+    case 'SWAP_GET_TOKEN_BY_ADDRESS':
+      return handleSwapGetTokenByAddress(
+        payload as WalletMessagePayloads['SWAP_GET_TOKEN_BY_ADDRESS'],
+      );
 
     default:
       throw new WalletError(WalletErrorCode.NETWORK_ERROR, `Unknown wallet message type: ${type}`);
@@ -838,7 +857,8 @@ async function handleGetTokenMetadata(
         } catch {
           checksumAddress = mint;
         }
-        const logoUri = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainSlug}/assets/${checksumAddress}/logo.png`;
+        // Use jsDelivr CDN for better reliability
+        const logoUri = `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainSlug}/assets/${checksumAddress}/logo.png`;
 
         return {
           symbol: metadata.symbol,
@@ -1633,6 +1653,47 @@ async function handleSwapAvailable(): Promise<boolean> {
  */
 function handleSwapReferralStatus(): WalletMessageResponses['WALLET_SWAP_REFERRAL_STATUS'] {
   return getReferralStatus();
+}
+
+// ============================================================================
+// Swap Token Discovery Handlers (routes through background for CORS)
+// ============================================================================
+
+/**
+ * Get popular/default tokens for a chain
+ * Routes through background script to avoid CORS issues in popup
+ */
+async function handleSwapGetPopularTokens(
+  payload: WalletMessagePayloads['SWAP_GET_POPULAR_TOKENS'],
+): Promise<WalletMessageResponses['SWAP_GET_POPULAR_TOKENS']> {
+  const { chainType, evmChainId, limit } = payload;
+  return getPopularTokens(chainType, evmChainId, limit);
+}
+
+/**
+ * Search tokens by symbol, name, or address
+ * Routes through background script to avoid CORS issues in popup
+ */
+async function handleSwapSearchTokens(
+  payload: WalletMessagePayloads['SWAP_SEARCH_TOKENS'],
+): Promise<WalletMessageResponses['SWAP_SEARCH_TOKENS']> {
+  const { query, chainType, evmChainId } = payload;
+  return searchSwapTokens(query, chainType, evmChainId);
+}
+
+/**
+ * Get token info by address (for custom token input)
+ * Routes through background script to avoid CORS issues in popup
+ */
+async function handleSwapGetTokenByAddress(
+  payload: WalletMessagePayloads['SWAP_GET_TOKEN_BY_ADDRESS'],
+): Promise<WalletMessageResponses['SWAP_GET_TOKEN_BY_ADDRESS']> {
+  const { address, chainType } = payload;
+  if (chainType === 'solana') {
+    return fetchSolanaTokenByAddress(address);
+  }
+  // EVM token lookup not implemented yet - return null
+  return null;
 }
 
 // ============================================================================

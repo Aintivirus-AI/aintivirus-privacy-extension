@@ -428,6 +428,10 @@ export type WalletMessageType =
   | 'WALLET_SWAP_EXECUTE'
   | 'WALLET_SWAP_AVAILABLE'
   | 'WALLET_SWAP_REFERRAL_STATUS'
+  // Swap Token Discovery (routes through background for CORS)
+  | 'SWAP_GET_POPULAR_TOKENS'
+  | 'SWAP_SEARCH_TOKENS'
+  | 'SWAP_GET_TOKEN_BY_ADDRESS'
   // EVM Swap (ParaSwap - no API key required)
   | 'EVM_SWAP_QUOTE'
   | 'EVM_SWAP_EXECUTE'
@@ -569,6 +573,11 @@ export interface WalletMessagePayloads {
     testnet: boolean;
   };
   WALLET_SWAP_REFERRAL_STATUS: undefined;
+
+  // Swap Token Discovery (routes through background for CORS)
+  SWAP_GET_POPULAR_TOKENS: { chainType: 'solana' | 'evm'; evmChainId?: EVMChainId; limit?: number };
+  SWAP_SEARCH_TOKENS: { query: string; chainType: 'solana' | 'evm'; evmChainId?: EVMChainId };
+  SWAP_GET_TOKEN_BY_ADDRESS: { address: string; chainType: 'solana' | 'evm' };
 }
 
 export interface WalletMessageResponses {
@@ -652,6 +661,11 @@ export interface WalletMessageResponses {
 
   // EVM RPC forwarding - returns raw RPC result
   EVM_RPC_REQUEST: unknown;
+
+  // Swap Token Discovery responses
+  SWAP_GET_POPULAR_TOKENS: SwapTokenInfo[];
+  SWAP_SEARCH_TOKENS: SwapTokenInfo[];
+  SWAP_GET_TOKEN_BY_ADDRESS: SwapTokenInfo | null;
 }
 
 export interface RpcHealthSummary {
@@ -709,6 +723,31 @@ export interface SwapReferralStatus {
   feeBps: number;
   /** Referral account public key if configured */
   referralAccount: string | null;
+}
+
+/**
+ * Token info for swap token discovery
+ * Used by the token selector components
+ */
+export interface SwapTokenInfo {
+  /** Token address (mint for Solana, contract address for EVM) */
+  address: string;
+  /** Token symbol (e.g., SOL, USDC) */
+  symbol: string;
+  /** Full token name */
+  name: string;
+  /** Token decimals */
+  decimals: number;
+  /** Logo URI for display */
+  logoUri: string;
+  /** Chain identifier */
+  chainId?: string;
+  /** Whether the token is verified */
+  verified?: boolean;
+  /** User's balance (if applicable) */
+  balance?: string;
+  /** USD value (if applicable) */
+  usdValue?: number;
 }
 
 // EVM Swap types (ParaSwap - no API key required)
@@ -889,7 +928,7 @@ export const DEFAULT_TOKEN_LIST: TokenMetadata[] = [
     name: 'USD Coin',
     decimals: 6,
     logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
   },
   {
     mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
@@ -897,23 +936,21 @@ export const DEFAULT_TOKEN_LIST: TokenMetadata[] = [
     name: 'Tether USD',
     decimals: 6,
     logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg',
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
   },
   {
     mint: 'So11111111111111111111111111111111111111112',
     symbol: 'wSOL',
     name: 'Wrapped SOL',
     decimals: 9,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
   },
   {
     mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
     symbol: 'mSOL',
     name: 'Marinade staked SOL',
     decimals: 9,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png',
+    logoUri: 'https://marinade.finance/static/media/mSOL.png',
   },
   {
     mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',

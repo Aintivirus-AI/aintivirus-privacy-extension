@@ -456,6 +456,20 @@ export type WalletSwapExecuteMessage = BaseMessage<
 export type WalletSwapAvailableMessage = BaseMessage<'WALLET_SWAP_AVAILABLE'>;
 export type WalletSwapReferralStatusMessage = BaseMessage<'WALLET_SWAP_REFERRAL_STATUS'>;
 
+// Swap Token Discovery messages (routes through background for CORS)
+export type SwapGetPopularTokensMessage = BaseMessage<
+  'SWAP_GET_POPULAR_TOKENS',
+  WalletMessagePayloads['SWAP_GET_POPULAR_TOKENS']
+>;
+export type SwapSearchTokensMessage = BaseMessage<
+  'SWAP_SEARCH_TOKENS',
+  WalletMessagePayloads['SWAP_SEARCH_TOKENS']
+>;
+export type SwapGetTokenByAddressMessage = BaseMessage<
+  'SWAP_GET_TOKEN_BY_ADDRESS',
+  WalletMessagePayloads['SWAP_GET_TOKEN_BY_ADDRESS']
+>;
+
 // EVM Swap messages (ParaSwap)
 export type EVMSwapQuoteMessage = BaseMessage<
   'EVM_SWAP_QUOTE',
@@ -719,6 +733,11 @@ export type ExtensionMessage =
   | WalletSwapExecuteMessage
   | WalletSwapAvailableMessage
   | WalletSwapReferralStatusMessage
+
+  // Swap Token Discovery (routes through background for CORS)
+  | SwapGetPopularTokensMessage
+  | SwapSearchTokensMessage
+  | SwapGetTokenByAddressMessage
 
   // EVM Swap (ParaSwap)
   | EVMSwapQuoteMessage
