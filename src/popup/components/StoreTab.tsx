@@ -4,6 +4,10 @@ import { SearchIcon, CartIcon, CloseIcon, RefreshIcon } from '../Icons';
 import StoreProductCard from './StoreProductCard';
 import StoreCart from './StoreCart';
 import StoreCheckout from './StoreCheckout';
+import StoreSubTabs, { type StoreSubTab } from './StoreSubTabs';
+import StoreMixer from './StoreMixer';
+import StoreGiftCards from './StoreGiftCards';
+import StoreESim from './StoreESim';
 
 // API URLs - tries localhost first for development, then production
 const API_URLS = [
@@ -41,15 +45,19 @@ interface StoreTabProps {
   onUnlockWallet?: () => void;
 }
 
-type StoreView = 'products' | 'cart' | 'checkout';
+type MerchView = 'products' | 'cart' | 'checkout';
 
 const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
+  // Sub-tab state
+  const [activeSubTab, setActiveSubTab] = useState<StoreSubTab>('merch');
+  
+  // Merch state
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [view, setView] = useState<StoreView>('products');
+  const [merchView, setMerchView] = useState<MerchView>('products');
 
   // Load cart from chrome storage on mount
   useEffect(() => {
@@ -119,8 +127,10 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
   }, []);
 
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+    if (activeSubTab === 'merch') {
+      fetchProducts();
+    }
+  }, [fetchProducts, activeSubTab]);
 
   const addToCart = (product: Product, size?: string, quantity: number = 1) => {
     setCart((prev) => {
@@ -184,106 +194,163 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
     );
   });
 
-  if (view === 'cart') {
+  // Handle sub-tab change
+  const handleSubTabChange = (tab: StoreSubTab) => {
+    setActiveSubTab(tab);
+    // Reset merch view when switching tabs
+    if (tab === 'merch') {
+      setMerchView('products');
+    }
+  };
+
+  // Render Merch Cart view
+  if (activeSubTab === 'merch' && merchView === 'cart') {
     return (
-      <StoreCart
-        cart={cart}
-        onBack={() => setView('products')}
-        onCheckout={() => setView('checkout')}
-        onUpdateQuantity={updateQuantity}
-        onRemove={removeFromCart}
-        totalPrice={totalPrice}
-      />
+      <div className="store-tab">
+        <StoreSubTabs activeTab={activeSubTab} onTabChange={handleSubTabChange} />
+        <StoreCart
+          cart={cart}
+          onBack={() => setMerchView('products')}
+          onCheckout={() => setMerchView('checkout')}
+          onUpdateQuantity={updateQuantity}
+          onRemove={removeFromCart}
+          totalPrice={totalPrice}
+        />
+      </div>
     );
   }
 
-  if (view === 'checkout') {
+  // Render Merch Checkout view
+  if (activeSubTab === 'merch' && merchView === 'checkout') {
     return (
-      <StoreCheckout
-        cart={cart}
-        totalPrice={totalPrice}
-        walletState={walletState}
-        onBack={() => setView('cart')}
-        onSuccess={() => {
-          clearCart();
-          setView('products');
-        }}
-        onUnlockWallet={onUnlockWallet}
-      />
+      <div className="store-tab">
+        <StoreSubTabs activeTab={activeSubTab} onTabChange={handleSubTabChange} />
+        <StoreCheckout
+          cart={cart}
+          totalPrice={totalPrice}
+          walletState={walletState}
+          onBack={() => setMerchView('cart')}
+          onSuccess={() => {
+            clearCart();
+            setMerchView('products');
+          }}
+          onUnlockWallet={onUnlockWallet}
+        />
+      </div>
     );
   }
+
+  // Render main content based on active sub-tab
+  const renderContent = () => {
+    switch (activeSubTab) {
+      case 'merch':
+        return (
+          <>
+            <div className="store-header">
+              <h2 className="store-title">Featured Products</h2>
+              <div className="store-header-actions">
+                <div className="store-search">
+                  <SearchIcon size={14} />
+                  <input
+                    type="text"
+                    placeholder="Search Products"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="store-search-input"
+                  />
+                  {searchQuery && (
+                    <button
+                      className="store-search-clear"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      <CloseIcon size={12} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  className="store-cart-btn"
+                  onClick={() => setMerchView('cart')}
+                  aria-label="View cart"
+                >
+                  <CartIcon size={18} />
+                  {totalItems > 0 && <span className="store-cart-badge">{totalItems}</span>}
+                </button>
+              </div>
+            </div>
+
+            <div className="store-content">
+              {loading && (
+                <div className="store-loading">
+                  <div className="spinner" />
+                  <span>Loading products...</span>
+                </div>
+              )}
+
+              {error && (
+                <div className="store-error">
+                  <span>{error}</span>
+                  <button className="store-retry-btn" onClick={fetchProducts}>
+                    <RefreshIcon size={14} />
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {!loading && !error && filteredProducts.length === 0 && (
+                <div className="store-empty">
+                  <span>No products found{searchQuery ? ` matching "${searchQuery}"` : '.'}</span>
+                </div>
+              )}
+
+              {!loading && !error && filteredProducts.length > 0 && (
+                <div className="store-grid">
+                  {filteredProducts.map((product) => (
+                    <StoreProductCard
+                      key={product.id}
+                      product={product}
+                      onAddToCart={addToCart}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        );
+
+      case 'mixer':
+        return (
+          <StoreMixer 
+            walletState={walletState} 
+            onUnlockWallet={onUnlockWallet}
+          />
+        );
+
+      case 'giftcards':
+        return (
+          <StoreGiftCards 
+            walletState={walletState} 
+            onUnlockWallet={onUnlockWallet}
+          />
+        );
+
+      case 'esim':
+        return (
+          <StoreESim 
+            walletState={walletState} 
+            onUnlockWallet={onUnlockWallet}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="store-tab">
-      <div className="store-header">
-        <h2 className="store-title">Featured Products</h2>
-        <div className="store-header-actions">
-          <div className="store-search">
-            <SearchIcon size={14} />
-            <input
-              type="text"
-              placeholder="Search Products"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="store-search-input"
-            />
-            {searchQuery && (
-              <button
-                className="store-search-clear"
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-              >
-                <CloseIcon size={12} />
-              </button>
-            )}
-          </div>
-          <button
-            className="store-cart-btn"
-            onClick={() => setView('cart')}
-            aria-label="View cart"
-          >
-            <CartIcon size={18} />
-            {totalItems > 0 && <span className="store-cart-badge">{totalItems}</span>}
-          </button>
-        </div>
-      </div>
-
-      <div className="store-content">
-        {loading && (
-          <div className="store-loading">
-            <div className="spinner" />
-            <span>Loading products...</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="store-error">
-            <span>{error}</span>
-            <button className="store-retry-btn" onClick={fetchProducts}>
-              <RefreshIcon size={14} />
-              Retry
-            </button>
-          </div>
-        )}
-
-        {!loading && !error && filteredProducts.length === 0 && (
-          <div className="store-empty">
-            <span>No products found{searchQuery ? ` matching "${searchQuery}"` : '.'}</span>
-          </div>
-        )}
-
-        {!loading && !error && filteredProducts.length > 0 && (
-          <div className="store-grid">
-            {filteredProducts.map((product) => (
-              <StoreProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={addToCart}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <StoreSubTabs activeTab={activeSubTab} onTabChange={handleSubTabChange} />
+      {renderContent()}
     </div>
   );
 };

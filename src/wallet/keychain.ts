@@ -382,9 +382,7 @@ export function validatePrivateKey(privateKey: string): {
       evmKeypairFromPrivateKey(trimmed);
       return { valid: true, chainType: 'evm' };
     } catch (e) {}
-  }
-
-  try {
+  }  try {
     keypairFromPrivateKey(trimmed);
     return { valid: true, chainType: 'solana' };
   } catch (e) {
