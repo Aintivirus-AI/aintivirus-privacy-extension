@@ -98,6 +98,7 @@ import {
   KeyIcon,
   SwapIcon,
   ExternalLinkIcon,
+  PartnersIcon,
   RefreshIcon,
   ChevronIcon,
   PlusIcon,
@@ -6095,6 +6096,101 @@ const AddWalletView: React.FC<AddWalletViewProps> = ({ onClose, onComplete }) =>
   );
 };
 
+// --- Partners Modal ---
+
+interface Partner {
+  id: string;
+  name: string;
+  description: string;
+  affiliateUrl: string;
+  logoPlaceholder: string; // Gradient colors for placeholder
+}
+
+const PARTNERS: Partner[] = [
+  {
+    id: 'partner-alpha',
+    name: 'Partner Alpha',
+    description: 'Premium DeFi Tools for advanced traders and yield optimizers.',
+    affiliateUrl: 'https://example.com/partner-alpha?ref=aintivirus',
+    logoPlaceholder: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  },
+  {
+    id: 'partner-beta',
+    name: 'Partner Beta',
+    description: 'Secure Hardware Wallets to keep your crypto safe offline.',
+    affiliateUrl: 'https://example.com/partner-beta?ref=aintivirus',
+    logoPlaceholder: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  },
+  {
+    id: 'partner-gamma',
+    name: 'Partner Gamma',
+    description: 'NFT Marketplace with low fees and exclusive collections.',
+    affiliateUrl: 'https://example.com/partner-gamma?ref=aintivirus',
+    logoPlaceholder: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  },
+  {
+    id: 'partner-delta',
+    name: 'Partner Delta',
+    description: 'Crypto Education Platform for beginners to experts.',
+    affiliateUrl: 'https://example.com/partner-delta?ref=aintivirus',
+    logoPlaceholder: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+  },
+];
+
+interface PartnersModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const PartnersModal: React.FC<PartnersModalProps> = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  const handlePartnerClick = (url: string) => {
+    chrome.tabs.create({ url });
+  };
+
+  return (
+    <div className="partners-modal-overlay" onClick={onClose}>
+      <div className="partners-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="partners-modal-header">
+          <h2>Our Partners</h2>
+          <button className="partners-modal-close" onClick={onClose} aria-label="Close">
+            <CloseIcon size={20} />
+          </button>
+        </div>
+        <p className="partners-modal-subtitle">
+          Trusted services we recommend. Clicking will open in a new tab.
+        </p>
+        <div className="partners-grid">
+          {PARTNERS.map((partner) => (
+            <div key={partner.id} className="partner-card">
+              <div
+                className="partner-logo"
+                style={{ background: partner.logoPlaceholder }}
+              >
+                <span className="partner-logo-text">
+                  {partner.name.split(' ').map(w => w[0]).join('')}
+                </span>
+              </div>
+              <div className="partner-info">
+                <h3 className="partner-name">{partner.name}</h3>
+                <p className="partner-description">{partner.description}</p>
+              </div>
+              <button
+                className="partner-visit-btn"
+                onClick={() => handlePartnerClick(partner.affiliateUrl)}
+              >
+                <span>Visit</span>
+                <ExternalLinkIcon size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 const App: React.FC = () => {
@@ -6130,6 +6226,9 @@ const App: React.FC = () => {
 
   // Hide balances privacy mode (stored in session, clears on browser restart)
   const [hideBalances, toggleHideBalances] = useHideBalances();
+
+  // Partners modal state
+  const [showPartnersModal, setShowPartnersModal] = useState(false);
 
   // State for passing to swap view
   const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
@@ -6341,6 +6440,15 @@ const App: React.FC = () => {
         </button>
 
         <button
+          className="icon-btn partners-btn"
+          onClick={() => setShowPartnersModal(true)}
+          title="Partners"
+          aria-label="View partners"
+        >
+          <PartnersIcon size={18} />
+        </button>
+
+        <button
           className="icon-btn settings-btn"
           onClick={handleOpenSettings}
           title="Settings"
@@ -6403,6 +6511,8 @@ const App: React.FC = () => {
         </div>
         <span className="version-text">v0.2.0</span>
       </footer>
+
+      <PartnersModal isOpen={showPartnersModal} onClose={() => setShowPartnersModal(false)} />
     </div>
   );
 };
