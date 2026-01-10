@@ -77,3 +77,10 @@ export {
 export { TokenIcon, default as TokenIconDefault } from './TokenIcon';
 
 export { SwapTokenSelector, default as SwapTokenSelectorDefault } from './SwapTokenSelector';
+
+// Store components
+export { default as StoreTab } from './StoreTab';
+export { default as StoreProductCard } from './StoreProductCard';
+export { default as StoreCart } from './StoreCart';
+export { default as StoreCheckout } from './StoreCheckout';
+export type { Product, CartItem, ProductVariant } from './StoreTab';

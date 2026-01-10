@@ -107,7 +107,9 @@ import {
   EyeIcon,
   EyeOffIcon,
   SearchIcon,
+  StoreIcon,
 } from './Icons';
+import StoreTab from './components/StoreTab';
 import { getPasswordStrengthFeedback } from '../wallet/crypto';
 import { isValidSolanaAddress, isValidEVMAddress } from '../wallet/keychain';
 
@@ -122,7 +124,7 @@ interface PrivacyStats {
   sessionStart?: number;
 }
 
-type MainTab = 'security' | 'wallet';
+type MainTab = 'security' | 'wallet' | 'store';
 type WalletView = 'dashboard' | 'send' | 'receive' | 'manage' | 'add-wallet' | 'swap';
 
 function truncateAddress(address: string, chars: number = 4): string {
@@ -6438,6 +6440,15 @@ const App: React.FC = () => {
           <WalletIcon size={16} />
           <span>Wallet</span>
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'store' ? 'active' : ''}`}
+          onClick={() => setActiveTab('store')}
+          role="tab"
+          aria-selected={activeTab === 'store'}
+        >
+          <StoreIcon size={16} />
+          <span>Store</span>
+        </button>
 
         <button
           className="icon-btn partners-btn"
@@ -6478,6 +6489,13 @@ const App: React.FC = () => {
         />
       )}
 
+      {activeTab === 'store' && (
+        <StoreTab 
+          walletState={walletState} 
+          onUnlockWallet={() => setActiveTab('wallet')}
+        />
+      )}
+
       <footer className="popup-footer">
         <div className="footer-badges">
           {activeTab === 'security' && (
@@ -6490,6 +6508,12 @@ const App: React.FC = () => {
             <div className={`status-badge ${flags.wallet ? '' : 'inactive'}`}>
               <span className={`status-dot ${flags.wallet ? '' : 'inactive'}`} />
               <span>{flags.wallet ? 'Wallet Security Active' : 'Wallet Security Off'}</span>
+            </div>
+          )}
+          {activeTab === 'store' && (
+            <div className="status-badge">
+              <span className="status-dot" />
+              <span>Aintivirus Store</span>
             </div>
           )}
           {walletState && walletState.lockState === 'unlocked' && walletState.network && (

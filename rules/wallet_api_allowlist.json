@@ -9,6 +9,33 @@
     }
   },
   {
+    "id": 9,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||api.aintivirus.ai^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||aintivirus.ai^",
+      "resourceTypes": ["xmlhttprequest", "image", "other"]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||localhost:3000^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
     "id": 2,
     "priority": 100,
     "action": { "type": "allow" },
