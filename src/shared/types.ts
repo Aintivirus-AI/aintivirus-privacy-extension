@@ -150,6 +150,7 @@ export type MessageType =
   | WalletMessageType
   | 'GET_SOL_PRICE'
   | 'GET_ETH_PRICE'
+  | 'GET_EVM_NATIVE_PRICE'
   | 'GET_TOKEN_PRICES'
   | SecurityMessageType
   | 'DAPP_REQUEST'
@@ -409,6 +410,10 @@ export type WalletEstimateEVMFeeMessage = BaseMessage<
   WalletMessagePayloads['WALLET_ESTIMATE_EVM_FEE']
 >;
 export type WalletGetEVMAddressMessage = BaseMessage<'WALLET_GET_EVM_ADDRESS'>;
+export type WalletGetChainAddressMessage = BaseMessage<
+  'WALLET_GET_CHAIN_ADDRESS',
+  WalletMessagePayloads['WALLET_GET_CHAIN_ADDRESS']
+>;
 
 export type EVMGetPendingTxsMessage = BaseMessage<
   'EVM_GET_PENDING_TXS',
@@ -556,6 +561,7 @@ export type SecuritySetProgramTrustMessage = BaseMessage<
 
 export type GetSolPriceMessage = BaseMessage<'GET_SOL_PRICE'>;
 export type GetEthPriceMessage = BaseMessage<'GET_ETH_PRICE'>;
+export type GetEvmNativePriceMessage = BaseMessage<'GET_EVM_NATIVE_PRICE', { evmChainId: string }>;
 export type GetTokenPricesMessage = BaseMessage<'GET_TOKEN_PRICES', { mints: string[] }>;
 
 export type DappRequestMessage = BaseMessage<
@@ -719,6 +725,7 @@ export type ExtensionMessage =
   | WalletGetEVMHistoryMessage
   | WalletEstimateEVMFeeMessage
   | WalletGetEVMAddressMessage
+  | WalletGetChainAddressMessage
   | EVMGetPendingTxsMessage
   | EVMSpeedUpTxMessage
   | EVMCancelTxMessage
@@ -765,6 +772,7 @@ export type ExtensionMessage =
   | SecuritySetProgramTrustMessage
   | GetSolPriceMessage
   | GetEthPriceMessage
+  | GetEvmNativePriceMessage
   | GetTokenPricesMessage
   | DappRequestMessage
   | DappApproveMessage

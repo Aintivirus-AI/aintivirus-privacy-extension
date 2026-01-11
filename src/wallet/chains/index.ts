@@ -2,6 +2,9 @@ import type { ChainAdapter, ChainType, EVMChainId, NetworkEnvironment } from './
 import { ChainError, ChainErrorCode } from './types';
 import { createSolanaAdapter, SolanaAdapter } from './solana';
 import { createEVMAdapter, EVMAdapter } from './evm';
+import { createBitcoinAdapter, BitcoinAdapter, type BitcoinChainId } from './bitcoin';
+import { createTronAdapter, TronAdapter } from './tron';
+import { createMoneroAdapter, MoneroAdapter } from './monero';
 
 // Import from registry for the new dynamic chain support
 import {
@@ -99,8 +102,46 @@ export function getAdapterForChain(
   network: NetworkEnvironment = 'mainnet',
 ): ChainAdapter {
   const chain = getChainOrThrow(chainId);
-  const { chainType, evmChainId } = chainIdToLegacy(chainId);
-  return getChainAdapter(chainType, evmChainId, network);
+  
+  // Use adapter cache
+  const cacheKey = `${chainId}-${network}`;
+  const cached = adapterCache.get(cacheKey);
+  if (cached) {
+    if (cached.network !== network) {
+      cached.setNetwork(network);
+    }
+    return cached;
+  }
+  
+  let adapter: ChainAdapter;
+  
+  // Create adapter based on chain family
+  switch (chain.family) {
+    case 'solana':
+      adapter = createSolanaAdapter(network);
+      break;
+    case 'evm':
+      adapter = createEVMAdapter(chainId as EVMChainId, network);
+      break;
+    case 'bitcoin':
+      adapter = createBitcoinAdapter(chainId as BitcoinChainId, network);
+      break;
+    case 'tron':
+      adapter = createTronAdapter(network);
+      break;
+    case 'monero':
+      adapter = createMoneroAdapter(network);
+      break;
+    default:
+      throw new ChainError(
+        ChainErrorCode.UNSUPPORTED_CHAIN,
+        `Unsupported chain family: ${chain.family} for chain ${chainId}`,
+        'evm',
+      );
+  }
+  
+  adapterCache.set(cacheKey, adapter);
+  return adapter;
 }
 
 export function getSolanaAdapter(network: NetworkEnvironment = 'mainnet'): SolanaAdapter {
@@ -112,6 +153,21 @@ export function getEVMAdapter(
   network: NetworkEnvironment = 'mainnet',
 ): EVMAdapter {
   return getChainAdapter('evm', evmChainId, network) as EVMAdapter;
+}
+
+export function getBitcoinAdapter(
+  bitcoinChainId: BitcoinChainId,
+  network: NetworkEnvironment = 'mainnet',
+): BitcoinAdapter {
+  return getAdapterForChain(bitcoinChainId, network) as BitcoinAdapter;
+}
+
+export function getTronAdapter(network: NetworkEnvironment = 'mainnet'): TronAdapter {
+  return getAdapterForChain('tron', network) as TronAdapter;
+}
+
+export function getMoneroAdapter(network: NetworkEnvironment = 'mainnet'): MoneroAdapter {
+  return getAdapterForChain('monero', network) as MoneroAdapter;
 }
 
 export function clearAdapterCache(): void {
@@ -235,6 +291,41 @@ export {
 } from './config';
 
 export { SolanaAdapter, createSolanaAdapter } from './solana';
+
+export {
+  BitcoinAdapter,
+  createBitcoinAdapter,
+  BITCOIN_CHAINS,
+  getBitcoinChainConfig,
+  deriveBitcoinKeypair,
+  getBitcoinAddressFromMnemonic,
+  isValidBitcoinAddress,
+  type BitcoinChainId,
+  type BitcoinAddressType,
+  type BitcoinKeypair,
+} from './bitcoin';
+
+export {
+  TronAdapter,
+  createTronAdapter,
+  TRON_NETWORKS,
+  TRON_CONSTANTS,
+  deriveTronKeypair,
+  getTronAddressFromMnemonic,
+  isValidTronAddress,
+  type TronKeypair,
+} from './tron';
+
+export {
+  MoneroAdapter,
+  createMoneroAdapter,
+  createMoneroWatchOnlyAdapter,
+  MONERO_CONSTANTS,
+  isValidMoneroAddress,
+  isValidViewKey,
+  validateWatchOnlyConfig,
+  type MoneroWatchOnlyConfig,
+} from './monero';
 
 export {
   EVMAdapter,

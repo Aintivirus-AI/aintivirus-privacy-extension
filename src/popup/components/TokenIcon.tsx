@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 interface TokenIconProps {
   symbol: string;
@@ -7,7 +7,7 @@ interface TokenIconProps {
 
   address?: string;
 
-  chain: 'solana' | 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base';
+  chain: 'solana' | 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';
 
   size?: number;
 
@@ -21,6 +21,7 @@ function getTrustWalletUrl(chain: string, address: string): string {
     arbitrum: 'arbitrum',
     optimism: 'optimism',
     base: 'base',
+    bnb: 'smartchain',
   };
   const chainName = chainMap[chain];
   if (!chainName || !address) return '';
@@ -92,10 +93,10 @@ export const TokenIcon: React.FC<TokenIconProps> = ({
   size = 32,
   className = '',
 }) => {
-  const [currentSrc, setCurrentSrc] = useState<string>('');
   const [fallbackIndex, setFallbackIndex] = useState(0);
 
-  const getFallbackUrls = (): string[] => {
+  // Memoize fallback URLs to ensure stable reference
+  const fallbackUrls = useMemo(() => {
     const urls: string[] = [];
 
     if (logoUri) {
@@ -119,27 +120,32 @@ export const TokenIcon: React.FC<TokenIconProps> = ({
     urls.push(getPlaceholderUrl(symbol, chain));
 
     return urls;
-  };
-
-  const fallbackUrls = getFallbackUrls();
-
-  useEffect(() => {
-    setFallbackIndex(0);
-    setCurrentSrc(fallbackUrls[0] || getPlaceholderUrl(symbol, chain));
   }, [logoUri, address, chain, symbol]);
 
-  const handleError = () => {
-    const nextIndex = fallbackIndex + 1;
-    if (nextIndex < fallbackUrls.length) {
-      setFallbackIndex(nextIndex);
-      setCurrentSrc(fallbackUrls[nextIndex]);
-    } else {
-      setCurrentSrc(getPlaceholderUrl(symbol, chain));
-    }
-  };
+  // Reset fallback index when props change (token changed)
+  useEffect(() => {
+    setFallbackIndex(0);
+  }, [logoUri, address, chain, symbol]);
+
+  // Compute current src based on fallback index
+  const currentSrc = fallbackUrls[fallbackIndex] || getPlaceholderUrl(symbol, chain);
+
+  const handleError = useCallback(() => {
+    setFallbackIndex((prev) => {
+      const nextIndex = prev + 1;
+      // Only increment if we haven't exhausted fallbacks
+      if (nextIndex < fallbackUrls.length) {
+        return nextIndex;
+      }
+      // Stay at current (placeholder will be used via fallbackUrls)
+      return prev;
+    });
+  }, [fallbackUrls.length]);
 
   return (
     <img
+      // Key forces remount when token changes to avoid stale error handlers
+      key={`${address}-${logoUri}-${symbol}`}
       src={currentSrc}
       alt={`${symbol} logo`}
       width={size}

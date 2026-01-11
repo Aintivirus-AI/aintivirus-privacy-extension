@@ -47,6 +47,7 @@ const PARASWAP_CHAIN_IDS: Record<EVMChainId, number> = {
   arbitrum: 42161,
   optimism: 10,
   base: 8453,
+  bnb: 56,
 };
 
 // API timeout
@@ -595,6 +596,48 @@ function getDefaultEVMTokens(chainId: EVMChainId): SwapToken[] {
         name: 'USD Coin',
         decimals: 6,
         logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+        verified: true,
+      },
+    ],
+    bnb: [
+      {
+        address: NATIVE_TOKEN_ADDRESS,
+        symbol: 'BNB',
+        name: 'BNB',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+        verified: true,
+      },
+      {
+        address: '0x55d398326f99059fF775485246999027B3197955',
+        symbol: 'USDT',
+        name: 'Tether USD',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+        verified: true,
+      },
+      {
+        address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+        symbol: 'USDC',
+        name: 'USD Coin',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+        verified: true,
+      },
+      {
+        address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+        symbol: 'BUSD',
+        name: 'Binance USD',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png',
+        verified: true,
+      },
+      {
+        address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+        symbol: 'CAKE',
+        name: 'PancakeSwap',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
         verified: true,
       },
     ],

@@ -159,6 +159,44 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       decimals: 18,
     },
   ],
+
+  bnb: [
+    {
+      address: '0x55d398326f99059fF775485246999027B3197955',
+      name: 'Tether USD',
+      symbol: 'USDT',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+    },
+    {
+      address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      name: 'USD Coin',
+      symbol: 'USDC',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+    },
+    {
+      address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+      name: 'Binance USD',
+      symbol: 'BUSD',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png',
+    },
+    {
+      address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+      name: 'Wrapped BNB',
+      symbol: 'WBNB',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+    },
+    {
+      address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+      name: 'PancakeSwap',
+      symbol: 'CAKE',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
+    },
+  ],
 };
 
 export async function getTokenBalance(
@@ -430,6 +468,7 @@ export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): stri
     arbitrum: 'arbitrum',
     optimism: 'optimism',
     base: 'base',
+    bnb: 'smartchain',
   };
 
   const chainName = chainNames[chainId];

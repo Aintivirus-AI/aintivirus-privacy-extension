@@ -27,6 +27,10 @@ const EVM_EXPLORERS: Record<EVMChainId, { mainnet: string; testnet: string }> = 
     mainnet: 'https://basescan.org',
     testnet: 'https://sepolia.basescan.org',
   },
+  bnb: {
+    mainnet: 'https://bscscan.com',
+    testnet: 'https://testnet.bscscan.com',
+  },
 };
 
 const SOLANA_EXPLORER = 'https://explorer.solana.com';

@@ -614,6 +614,10 @@ export class EVMAdapter implements ChainAdapter {
         mainnet: 'https://api.basescan.org/api',
         testnet: 'https://api-sepolia.basescan.org/api',
       },
+      bnb: {
+        mainnet: 'https://api.bscscan.com/api',
+        testnet: 'https://api-testnet.bscscan.com/api',
+      },
     };
 
     const urls = apiUrls[this.evmChainId];

@@ -49,7 +49,7 @@ export type WalletLockState = 'locked' | 'unlocked' | 'uninitialized';
 
 export type ChainType = 'solana' | 'evm';
 
-export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base';
+export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';
 
 export type NetworkEnvironment = 'mainnet' | 'testnet';
 
@@ -75,6 +75,9 @@ export interface WalletState {
   activeChain: ChainType;
 
   activeEVMChain: EVMChainId | null;
+
+  /** For non-EVM/Solana chains, this stores the actual chain ID from the registry */
+  activeChainId?: string | null;
 
   evmAddress: string | null;
 
@@ -113,6 +116,9 @@ export interface WalletSettings {
   activeChain?: ChainType;
 
   activeEVMChain?: EVMChainId | null;
+
+  /** For non-EVM/Solana chains, this stores the actual chain ID from the registry */
+  activeChainId?: string | null;
 
   networkEnvironment?: NetworkEnvironment;
 
@@ -413,6 +419,7 @@ export type WalletMessageType =
   | 'WALLET_GET_EVM_HISTORY'
   | 'WALLET_ESTIMATE_EVM_FEE'
   | 'WALLET_GET_EVM_ADDRESS'
+  | 'WALLET_GET_CHAIN_ADDRESS'
   | 'EVM_GET_PENDING_TXS'
   | 'EVM_SPEED_UP_TX'
   | 'EVM_CANCEL_TX'
@@ -491,13 +498,13 @@ export interface WalletMessagePayloads {
   WALLET_REMOVE_RPC: { network: SolanaNetwork; url: string };
   WALLET_TEST_RPC: { url: string };
 
-  WALLET_SET_CHAIN: { chain: ChainType; evmChainId?: EVMChainId | null };
+  WALLET_SET_CHAIN: { chain: ChainType; evmChainId?: EVMChainId | null; chainId?: string | null };
   WALLET_SET_EVM_CHAIN: { evmChainId: EVMChainId };
-  WALLET_GET_EVM_BALANCE: { evmChainId?: EVMChainId | null };
+  WALLET_GET_EVM_BALANCE: { evmChainId?: EVMChainId | string | null };
   WALLET_SEND_ETH: EVMSendParams;
   WALLET_SEND_ERC20: EVMTokenSendParams;
-  WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | null; forceRefresh?: boolean };
-  WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | null; limit?: number };
+  WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | string | null; forceRefresh?: boolean };
+  WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | string | null; limit?: number };
   WALLET_ESTIMATE_EVM_FEE: {
     evmChainId?: EVMChainId | null;
     recipient: string;
@@ -505,6 +512,9 @@ export interface WalletMessagePayloads {
     tokenAddress?: string;
   };
   WALLET_GET_EVM_ADDRESS: undefined;
+  
+  /** Get the derived address for any chain by its registry ID */
+  WALLET_GET_CHAIN_ADDRESS: { chainId: string };
 
   EVM_GET_PENDING_TXS: { evmChainId?: EVMChainId; address?: string };
   EVM_SPEED_UP_TX: {
@@ -635,6 +645,7 @@ export interface WalletMessageResponses {
   WALLET_GET_EVM_HISTORY: { transactions: any[]; hasMore: boolean };
   WALLET_ESTIMATE_EVM_FEE: EVMFeeEstimate;
   WALLET_GET_EVM_ADDRESS: string;
+  WALLET_GET_CHAIN_ADDRESS: { address: string; chainId: string; chainFamily: string; symbol: string };
 
   EVM_GET_PENDING_TXS: EVMPendingTxInfo[];
   EVM_SPEED_UP_TX: EVMTransactionResult;
@@ -1059,10 +1070,20 @@ export interface EVMTransactionResult {
   error?: string;
 }
 
+export type ChainFamily = 'solana' | 'evm' | 'bitcoin' | 'tron' | 'monero';
+
 export interface ChainDisplayInfo {
+  /** Legacy chain type - 'solana' or 'evm' for backwards compatibility */
   type: ChainType;
 
+  /** EVM chain ID (only for EVM chains) */
   evmChainId?: EVMChainId;
+
+  /** Registry chain ID - unique identifier for the chain */
+  chainId: string;
+
+  /** Chain family - the actual chain family (solana, evm, bitcoin, tron, monero) */
+  family: ChainFamily;
 
   name: string;
 
@@ -1078,23 +1099,45 @@ export interface ChainDisplayInfo {
  * To add a new chain, simply add it to CHAIN_REGISTRY in src/wallet/chains/registry.ts
  * and it will automatically appear here.
  */
-import { CHAIN_REGISTRY } from './chains/registry';
+import { CHAIN_REGISTRY, type ChainFamily as RegistryChainFamily } from './chains/registry';
 
 function buildSupportedChains(): ChainDisplayInfo[] {
   const chains: ChainDisplayInfo[] = [];
 
-  // Sort chains: Solana first, then EVM chains alphabetically
+  // Define family priority for sorting
+  const familyOrder: Record<string, number> = {
+    solana: 0,
+    evm: 1,
+    bitcoin: 2,
+    tron: 3,
+    monero: 4,
+  };
+
+  // Sort chains by family then alphabetically
   const sortedChains = Object.values(CHAIN_REGISTRY).sort((a, b) => {
-    if (a.family === 'solana' && b.family !== 'solana') return -1;
-    if (b.family === 'solana' && a.family !== 'solana') return 1;
+    const orderA = familyOrder[a.family] ?? 99;
+    const orderB = familyOrder[b.family] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
     return a.name.localeCompare(b.name);
   });
 
   for (const chain of sortedChains) {
-    const chainType: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
+    // Legacy type: for backwards compatibility with UI components
+    const legacyType: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
+    
+    // Map registry chain family to our ChainFamily type
+    const family = ['solana', 'evm', 'bitcoin', 'tron', 'monero'].includes(chain.family)
+      ? (chain.family as ChainFamily)
+      : 'evm';
+    
+    // Only set evmChainId for actual EVM chains
+    const evmChainIdValue = chain.family === 'evm' ? (chain.id as EVMChainId) : undefined;
+    
     chains.push({
-      type: chainType,
-      evmChainId: chain.family === 'evm' ? (chain.id as EVMChainId) : undefined,
+      type: legacyType,
+      evmChainId: evmChainIdValue,
+      chainId: chain.id,
+      family,
       name: chain.name,
       symbol: chain.symbol,
       icon: chain.iconId,

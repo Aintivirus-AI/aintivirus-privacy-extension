@@ -48,6 +48,7 @@ const PARASWAP_CHAIN_IDS: Record<EVMChainId, number> = {
   arbitrum: 42161,
   optimism: 10,
   base: 8453,
+  bnb: 56,
 };
 
 // Common token addresses per chain
@@ -90,6 +91,15 @@ export const COMMON_EVM_TOKENS: Record<EVMChainId, Record<string, string>> = {
     USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     DAI: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
     cbETH: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22',
+  },
+  bnb: {
+    BNB: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Native BNB
+    WBNB: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+    BUSD: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+    USDT: '0x55d398326f99059fF775485246999027B3197955',
+    USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+    ETH: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+    CAKE: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
   },
 };
 

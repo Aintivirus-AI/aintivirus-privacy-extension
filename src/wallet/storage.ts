@@ -457,6 +457,7 @@ export async function getWalletState(): Promise<WalletState> {
     accountCount,
     activeChain: settings.activeChain || 'solana',
     activeEVMChain: settings.activeEVMChain || null,
+    activeChainId: settings.activeChainId || null,
     evmAddress,
     networkEnvironment: settings.networkEnvironment || 'mainnet',
     isWatchOnly,
@@ -815,6 +816,8 @@ async function unlockWalletV2(
     let publicAddress: string;
     let evmAddress: string = '';
 
+    let mnemonicToCache: string | null = null;
+
     if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
       const parts = decryptedData.split(':');
       const storedChainType = parts[1];
@@ -836,6 +839,8 @@ async function unlockWalletV2(
       } else {
         throw new WalletError(WalletErrorCode.DECRYPTION_FAILED, 'Unknown private key type');
       }
+      // Private key imports don't have a mnemonic to cache
+      mnemonicToCache = null;
     } else {
       const mnemonic = decryptedData;
       decryptedData = '';
@@ -853,6 +858,8 @@ async function unlockWalletV2(
 
       evmKeypair = deriveEVMKeypair(mnemonic);
       evmAddress = evmKeypair.address;
+      // Cache mnemonic for deriving addresses on other chains (Bitcoin, Tron, Monero, etc.)
+      mnemonicToCache = mnemonic;
     }
 
     if (!walletEntry.evmAddress && evmAddress) {
@@ -873,6 +880,7 @@ async function unlockWalletV2(
     memoryState.evmAddress = evmAddress;
     memoryState.walletLabel = walletEntry.label;
     memoryState.sessionPassword = password;
+    memoryState.cachedMnemonic = mnemonicToCache;
 
     await startAutoLockTimer();
 
@@ -1134,6 +1142,7 @@ export async function switchWallet(
   let evmKeypair: EVMKeypair | null = null;
   let publicAddress: string;
   let evmAddress: string = '';
+  let mnemonicToCache: string | null = null;
 
   if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
     const parts = decryptedData.split(':');
@@ -1156,6 +1165,8 @@ export async function switchWallet(
     } else {
       throw new WalletError(WalletErrorCode.DECRYPTION_FAILED, 'Unknown private key type');
     }
+    // Private key imports don't have a mnemonic to cache
+    mnemonicToCache = null;
   } else {
     const mnemonic = decryptedData;
     decryptedData = '';
@@ -1169,6 +1180,8 @@ export async function switchWallet(
 
     evmKeypair = deriveEVMKeypair(mnemonic);
     evmAddress = evmKeypair.address;
+    // Cache mnemonic for deriving addresses on other chains (Bitcoin, Tron, Monero, etc.)
+    mnemonicToCache = mnemonic;
   }
 
   if (!walletEntry.evmAddress) {
@@ -1189,6 +1202,7 @@ export async function switchWallet(
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletEntry.label;
   memoryState.sessionPassword = effectivePassword;
+  memoryState.cachedMnemonic = mnemonicToCache;
 
   await startAutoLockTimer();
 
@@ -1266,6 +1280,8 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
         let publicAddress: string;
         let evmAddress: string = '';
 
+        let mnemonicToCache: string | null = null;
+
         if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
           const parts = decryptedData.split(':');
           const storedChainType = parts[1];
@@ -1282,6 +1298,8 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
           } else {
             publicAddress = newActiveWallet.publicKey;
           }
+          // Private key imports don't have a mnemonic to cache
+          mnemonicToCache = null;
         } else {
           const mnemonic = decryptedData;
           decryptedData = '';
@@ -1289,6 +1307,8 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
           evmKeypair = deriveEVMKeypair(mnemonic);
           publicAddress = getPublicKeyBase58(keypair);
           evmAddress = evmKeypair.address;
+          // Cache mnemonic for deriving addresses on other chains (Bitcoin, Tron, Monero, etc.)
+          mnemonicToCache = mnemonic;
         }
 
         memoryState.activeWalletId = newActiveWallet.id;
@@ -1297,6 +1317,7 @@ export async function deleteOneWallet(walletId: string, password: string): Promi
         memoryState.publicAddress = publicAddress;
         memoryState.evmAddress = evmAddress;
         memoryState.walletLabel = newActiveWallet.label;
+        memoryState.cachedMnemonic = mnemonicToCache;
       }
     }
   }
@@ -2090,6 +2111,15 @@ export function getUnlockedEVMKeypair(): EVMKeypair | null {
 
 export function getEVMAddress(): string | null {
   return memoryState.evmAddress;
+}
+
+/**
+ * Get the cached mnemonic from the unlocked wallet.
+ * This is only available when the wallet is unlocked.
+ * @returns The mnemonic string or null if wallet is locked
+ */
+export function getUnlockedMnemonic(): string | null {
+  return memoryState.cachedMnemonic;
 }
 
 export function isWalletUnlocked(): boolean {

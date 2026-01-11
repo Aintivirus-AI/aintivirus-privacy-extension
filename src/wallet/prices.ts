@@ -17,9 +17,57 @@ const SOL_COINGECKO_ID = 'solana';
 
 const ETH_COINGECKO_ID = 'ethereum';
 
+const BNB_COINGECKO_ID = 'binancecoin';
+
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 const ETH_CACHE_KEY = 'ethereum-native';
+
+const BNB_CACHE_KEY = 'bnb-native';
+
+// Map of ALL chain IDs to their CoinGecko IDs (including non-EVM chains)
+const CHAIN_COINGECKO_IDS: Record<string, string> = {
+  // EVM chains
+  ethereum: 'ethereum',
+  bnb: 'binancecoin',
+  polygon: 'matic-network',
+  arbitrum: 'ethereum', // Arbitrum uses ETH
+  optimism: 'ethereum', // Optimism uses ETH
+  base: 'ethereum', // Base uses ETH
+  avalanche: 'avalanche-2',
+  // Bitcoin family
+  bitcoin: 'bitcoin',
+  bitcoincash: 'bitcoin-cash',
+  litecoin: 'litecoin',
+  zcash: 'zcash',
+  // Other chains
+  tron: 'tron',
+  monero: 'monero',
+};
+
+// Map of ALL chain IDs to their cache keys
+const CHAIN_CACHE_KEYS: Record<string, string> = {
+  // EVM chains
+  ethereum: ETH_CACHE_KEY,
+  bnb: BNB_CACHE_KEY,
+  polygon: 'polygon-native',
+  arbitrum: ETH_CACHE_KEY, // Arbitrum uses ETH
+  optimism: ETH_CACHE_KEY, // Optimism uses ETH
+  base: ETH_CACHE_KEY, // Base uses ETH
+  avalanche: 'avalanche-native',
+  // Bitcoin family
+  bitcoin: 'bitcoin-native',
+  bitcoincash: 'bitcoincash-native',
+  litecoin: 'litecoin-native',
+  zcash: 'zcash-native',
+  // Other chains
+  tron: 'tron-native',
+  monero: 'monero-native',
+};
+
+// Legacy aliases for backward compatibility
+const EVM_CHAIN_COINGECKO_IDS = CHAIN_COINGECKO_IDS;
+const EVM_CHAIN_CACHE_KEYS = CHAIN_CACHE_KEYS;
 
 const CACHE_DURATION = 30 * 1000;
 
@@ -76,10 +124,45 @@ export async function getSolPrice(): Promise<number | null> {
   return result?.price ?? null;
 }
 
+// Helper to store price in cache
+function storePriceInCache(
+  data: CoinGeckoPriceData,
+  coingeckoId: string,
+  cacheKey: string,
+  now: number
+): void {
+  if (data[coingeckoId]?.usd) {
+    priceCache.set(cacheKey, {
+      price: data[coingeckoId].usd,
+      timestamp: now,
+    });
+    if (data[coingeckoId].usd_24h_change !== undefined) {
+      priceCache.set(`${cacheKey}_24h`, {
+        price: data[coingeckoId].usd_24h_change,
+        timestamp: now,
+      });
+    }
+  }
+}
+
 async function fetchBatchedNativePrices(): Promise<void> {
   try {
+    // Fetch all native token prices in one request - includes all supported chains
+    const allIds = [
+      SOL_COINGECKO_ID,      // solana
+      ETH_COINGECKO_ID,      // ethereum
+      BNB_COINGECKO_ID,      // binancecoin
+      'matic-network',       // polygon
+      'avalanche-2',         // avalanche
+      'bitcoin',             // bitcoin
+      'bitcoin-cash',        // bitcoin cash
+      'litecoin',            // litecoin
+      'zcash',               // zcash
+      'tron',                // tron
+      'monero',              // monero
+    ];
     const response = await fetchWithTimeout(
-      `${COINGECKO_SIMPLE_PRICE_API}?ids=${SOL_COINGECKO_ID},${ETH_COINGECKO_ID}&vs_currencies=usd&include_24hr_change=true`,
+      `${COINGECKO_SIMPLE_PRICE_API}?ids=${allIds.join(',')}&vs_currencies=usd&include_24hr_change=true`,
     );
 
     if (!response.ok) {
@@ -89,31 +172,24 @@ async function fetchBatchedNativePrices(): Promise<void> {
     const data: CoinGeckoPriceData = await response.json();
     const now = Date.now();
 
-    if (data[SOL_COINGECKO_ID]?.usd) {
-      priceCache.set(SOL_MINT, {
-        price: data[SOL_COINGECKO_ID].usd,
-        timestamp: now,
-      });
-      if (data[SOL_COINGECKO_ID].usd_24h_change !== undefined) {
-        priceCache.set(`${SOL_MINT}_24h`, {
-          price: data[SOL_COINGECKO_ID].usd_24h_change,
-          timestamp: now,
-        });
-      }
-    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:fetchBatchedNativePrices:response',message:'CoinGecko batch response',data:{hasData:!!data,coins:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+    // #endregion
 
-    if (data[ETH_COINGECKO_ID]?.usd) {
-      priceCache.set(ETH_CACHE_KEY, {
-        price: data[ETH_COINGECKO_ID].usd,
-        timestamp: now,
-      });
-      if (data[ETH_COINGECKO_ID].usd_24h_change !== undefined) {
-        priceCache.set(`${ETH_CACHE_KEY}_24h`, {
-          price: data[ETH_COINGECKO_ID].usd_24h_change,
-          timestamp: now,
-        });
-      }
-    }
+    // Store SOL price (uses special mint address as key)
+    storePriceInCache(data, SOL_COINGECKO_ID, SOL_MINT, now);
+    
+    // Store all chain prices using the mapping
+    storePriceInCache(data, 'ethereum', ETH_CACHE_KEY, now);
+    storePriceInCache(data, 'binancecoin', BNB_CACHE_KEY, now);
+    storePriceInCache(data, 'matic-network', 'polygon-native', now);
+    storePriceInCache(data, 'avalanche-2', 'avalanche-native', now);
+    storePriceInCache(data, 'bitcoin', 'bitcoin-native', now);
+    storePriceInCache(data, 'bitcoin-cash', 'bitcoincash-native', now);
+    storePriceInCache(data, 'litecoin', 'litecoin-native', now);
+    storePriceInCache(data, 'zcash', 'zcash-native', now);
+    storePriceInCache(data, 'tron', 'tron-native', now);
+    storePriceInCache(data, 'monero', 'monero-native', now);
   } catch (error) {
     throw error;
   }
@@ -198,6 +274,92 @@ export async function getEthPriceWithChange(): Promise<PriceWithChange | null> {
 
         throw new Error('ETH price not in response');
       } catch (error) {
+        if (cached) {
+          return {
+            price: cached.price,
+            change24h: cached24h?.price ?? null,
+          };
+        }
+
+        throw error;
+      }
+    },
+    PRICE_CACHE_TTL,
+  );
+}
+
+/**
+ * Get native token price for any chain (EVM or non-EVM)
+ * @param chainId - The chain ID (e.g., 'bnb', 'polygon', 'ethereum', 'bitcoin', 'tron', 'monero')
+ */
+export async function getChainNativePriceWithChange(chainId: string): Promise<PriceWithChange | null> {
+  return getEvmNativePriceWithChange(chainId);
+}
+
+/**
+ * Get native token price for any EVM chain (legacy alias, now works for all chains)
+ * @param evmChainId - The chain ID (e.g., 'bnb', 'polygon', 'ethereum')
+ */
+export async function getEvmNativePriceWithChange(evmChainId: string): Promise<PriceWithChange | null> {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:entry',message:'Price fetch started',data:{evmChainId,hasCacheKey:!!EVM_CHAIN_CACHE_KEYS[evmChainId],cacheKey:EVM_CHAIN_CACHE_KEYS[evmChainId]||ETH_CACHE_KEY,hasCoingeckoId:!!EVM_CHAIN_COINGECKO_IDS[evmChainId]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+  // #endregion
+  const cacheKey = EVM_CHAIN_CACHE_KEYS[evmChainId] || ETH_CACHE_KEY;
+  const cached = priceCache.get(cacheKey);
+  const cached24h = priceCache.get(`${cacheKey}_24h`);
+  
+  if (isCacheValid(cached)) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:cached',message:'Returning cached price',data:{evmChainId,price:cached!.price,change24h:cached24h?.price},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+    // #endregion
+    return {
+      price: cached!.price,
+      change24h: cached24h?.price ?? null,
+    };
+  }
+
+  const dedupKey = priceKey(`evm-native-${evmChainId}`, 'usd');
+
+  return priceDedup.execute(
+    dedupKey,
+    async () => {
+      try {
+        await fetchBatchedNativePrices();
+
+        const newCached = priceCache.get(cacheKey);
+        const newCached24h = priceCache.get(`${cacheKey}_24h`);
+
+        if (newCached) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:success',message:'Price fetched successfully',data:{evmChainId,cacheKey,price:newCached.price,change24h:newCached24h?.price},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+          // #endregion
+          return {
+            price: newCached.price,
+            change24h: newCached24h?.price ?? null,
+          };
+        }
+
+        // Fall back to ETH price if chain-specific price not found
+        const ethCached = priceCache.get(ETH_CACHE_KEY);
+        const ethCached24h = priceCache.get(`${ETH_CACHE_KEY}_24h`);
+        if (ethCached) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:fallback',message:'Falling back to ETH price',data:{evmChainId,cacheKey,usingEthFallback:true},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+          // #endregion
+          return {
+            price: ethCached.price,
+            change24h: ethCached24h?.price ?? null,
+          };
+        }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:notFound',message:'Price not found in response',data:{evmChainId,cacheKey},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+        // #endregion
+        throw new Error(`Native price for ${evmChainId} not in response`);
+      } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:error',message:'Error fetching price',data:{evmChainId,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
+        // #endregion
         if (cached) {
           return {
             price: cached.price,

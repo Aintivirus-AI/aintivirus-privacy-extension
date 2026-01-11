@@ -393,6 +393,39 @@ export const KNOWN_SPENDERS: Record<EVMChainId, SpenderInfo[]> = {
       verified: true,
     },
   ],
+
+  bnb: [
+    {
+      address: '0x10ED43C718714eb63d5aA57B78B54704E256024E',
+      label: 'PancakeSwap V2 Router',
+      category: 'dex',
+      verified: true,
+    },
+    {
+      address: '0x13f4EA83D0bd40E75C8222255bc855a974568Dd4',
+      label: 'PancakeSwap V3 Smart Router',
+      category: 'dex',
+      verified: true,
+    },
+    {
+      address: '0x1111111254EEB25477B68fb85Ed929f73A960582',
+      label: '1inch V5 Router',
+      category: 'aggregator',
+      verified: true,
+    },
+    {
+      address: '0xDef1C0ded9bec7F1a1670819833240f027b25EfF',
+      label: '0x Exchange Proxy',
+      category: 'aggregator',
+      verified: true,
+    },
+    {
+      address: '0xc4f1a23e11D2d9d35cc83888a6E090E6e3e7D2f6',
+      label: 'Venus Protocol',
+      category: 'lending',
+      verified: true,
+    },
+  ],
 };
 
 export function getKnownSpenders(chainId: EVMChainId): SpenderInfo[] {

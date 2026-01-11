@@ -44,7 +44,7 @@ import {
   handleTxPollAlarm,
   setupTxPollingAlarm,
 } from '../wallet/chains/evm/pendingTxStore';
-import { getSolPriceWithChange, getEthPriceWithChange, getTokenPrices } from '../wallet/prices';
+import { getSolPriceWithChange, getEthPriceWithChange, getEvmNativePriceWithChange, getTokenPrices } from '../wallet/prices';
 
 import {
   initializeSecurityModule,
@@ -322,6 +322,7 @@ async function handleMessage(
     case 'WALLET_GET_EVM_HISTORY':
     case 'WALLET_ESTIMATE_EVM_FEE':
     case 'WALLET_GET_EVM_ADDRESS':
+    case 'WALLET_GET_CHAIN_ADDRESS':
     case 'EVM_GET_PENDING_TXS':
     case 'EVM_SPEED_UP_TX':
     case 'EVM_CANCEL_TX':
@@ -373,6 +374,9 @@ async function handleMessage(
 
     case 'GET_ETH_PRICE':
       return handleGetEthPrice();
+
+    case 'GET_EVM_NATIVE_PRICE':
+      return handleGetEvmNativePrice(extMessage.payload);
 
     case 'GET_TOKEN_PRICES':
       return handleGetTokenPrices(extMessage.payload);
@@ -668,6 +672,18 @@ async function handleGetSolPrice(): Promise<MessageResponse> {
 async function handleGetEthPrice(): Promise<MessageResponse> {
   try {
     const result = await getEthPriceWithChange();
+    return { success: true, data: result };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+async function handleGetEvmNativePrice(payload: { evmChainId: string }): Promise<MessageResponse> {
+  try {
+    const result = await getEvmNativePriceWithChange(payload.evmChainId);
     return { success: true, data: result };
   } catch (error) {
     return {

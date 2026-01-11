@@ -16,6 +16,7 @@ const EVM_CHAIN_IDS: Record<EVMChainId, number> = {
   arbitrum: 42161,
   optimism: 10,
   base: 8453,
+  bnb: 56,
 };
 
 export function buildChainId(

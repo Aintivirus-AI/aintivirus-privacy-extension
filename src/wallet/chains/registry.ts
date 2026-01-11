@@ -19,7 +19,7 @@
  * Chain family determines the underlying protocol and adapter to use.
  * Add new families here when supporting fundamentally different chains.
  */
-export type ChainFamily = 'evm' | 'solana' | 'bitcoin' | 'cosmos' | 'sui' | 'aptos';
+export type ChainFamily = 'evm' | 'solana' | 'bitcoin' | 'tron' | 'monero' | 'cosmos' | 'sui' | 'aptos';
 
 /**
  * Network environment for mainnet/testnet switching
@@ -596,6 +596,264 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
+  // ============ BNB Smart Chain ============
+  bnb: {
+    id: 'bnb',
+    family: 'evm',
+    name: 'BNB Smart Chain',
+    symbol: 'BNB',
+    decimals: 18,
+    chainId: 56,
+    rpcUrls: [
+      'https://bsc-dataseed.binance.org',
+      'https://bsc.publicnode.com',
+      'https://bsc-dataseed1.defibit.io',
+      'https://bsc-dataseed1.ninicoin.io',
+      'https://bsc.drpc.org',
+    ],
+    explorerUrl: 'https://bscscan.com',
+    explorerApiUrl: 'https://api.bscscan.com/api',
+    testnet: {
+      chainId: 97,
+      rpcUrls: ['https://bsc-testnet.publicnode.com', 'https://data-seed-prebsc-1-s1.binance.org:8545'],
+      explorerUrl: 'https://testnet.bscscan.com',
+      explorerApiUrl: 'https://api-testnet.bscscan.com/api',
+    },
+    isL2: false,
+    supportsEIP1559: false,
+    coinType: 60,
+    derivationPath: "m/44'/60'/0'/0/{index}",
+    iconId: 'bnb',
+    color: '#F0B90B',
+    description: 'Binance Smart Chain',
+    nativeTokenAddress: EVM_NATIVE_TOKEN_ADDRESS,
+    defaultGasLimit: BigInt(21000),
+    tokenGasLimit: BigInt(65000),
+    swapEnabled: true,
+    swapProvider: 'paraswap',
+    popularTokens: [
+      {
+        address: EVM_NATIVE_TOKEN_ADDRESS,
+        symbol: 'BNB',
+        name: 'BNB',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+        isNative: true,
+      },
+      {
+        address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+        symbol: 'BUSD',
+        name: 'Binance USD',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png',
+      },
+      {
+        address: '0x55d398326f99059fF775485246999027B3197955',
+        symbol: 'USDT',
+        name: 'Tether USD',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+      },
+      {
+        address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+        symbol: 'USDC',
+        name: 'USD Coin',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+      },
+      {
+        address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+        symbol: 'ETH',
+        name: 'Binance-Peg Ethereum',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+      },
+      {
+        address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+        symbol: 'CAKE',
+        name: 'PancakeSwap',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
+      },
+    ],
+  },
+
+  // ============ Bitcoin ============
+  bitcoin: {
+    id: 'bitcoin',
+    family: 'bitcoin',
+    name: 'Bitcoin',
+    symbol: 'BTC',
+    decimals: 8,
+    chainId: 0, // Bitcoin doesn't use numeric chain IDs like EVM
+    rpcUrls: ['https://blockstream.info/api', 'https://mempool.space/api'],
+    explorerUrl: 'https://blockstream.info',
+    explorerApiUrl: 'https://blockstream.info/api',
+    testnet: {
+      chainId: 0,
+      rpcUrls: ['https://blockstream.info/testnet/api'],
+      explorerUrl: 'https://blockstream.info/testnet',
+    },
+    coinType: 0,
+    derivationPath: "m/84'/0'/0'/0/{index}", // BIP-84 Native SegWit
+    alternativeDerivationPaths: {
+      legacy: "m/44'/0'/0'/0/{index}",
+      segwit: "m/49'/0'/0'/0/{index}",
+    },
+    iconId: 'bitcoin',
+    color: '#F7931A',
+    description: 'The original cryptocurrency',
+    nativeTokenAddress: 'btc',
+    swapEnabled: false,
+  },
+
+  // ============ Bitcoin Cash ============
+  bitcoincash: {
+    id: 'bitcoincash',
+    family: 'bitcoin',
+    name: 'Bitcoin Cash',
+    symbol: 'BCH',
+    decimals: 8,
+    chainId: 0,
+    rpcUrls: ['https://api.blockchair.com/bitcoin-cash'],
+    explorerUrl: 'https://blockchair.com/bitcoin-cash',
+    coinType: 145,
+    derivationPath: "m/44'/145'/0'/0/{index}",
+    iconId: 'bitcoincash',
+    color: '#8DC351',
+    description: 'Fast, low-fee Bitcoin fork',
+    nativeTokenAddress: 'bch',
+    swapEnabled: false,
+  },
+
+  // ============ Litecoin ============
+  litecoin: {
+    id: 'litecoin',
+    family: 'bitcoin',
+    name: 'Litecoin',
+    symbol: 'LTC',
+    decimals: 8,
+    chainId: 0,
+    rpcUrls: ['https://api.blockchair.com/litecoin'],
+    explorerUrl: 'https://blockchair.com/litecoin',
+    coinType: 2,
+    derivationPath: "m/84'/2'/0'/0/{index}", // BIP-84 Native SegWit
+    alternativeDerivationPaths: {
+      legacy: "m/44'/2'/0'/0/{index}",
+    },
+    iconId: 'litecoin',
+    color: '#345D9D',
+    description: 'Silver to Bitcoin\'s gold',
+    nativeTokenAddress: 'ltc',
+    swapEnabled: false,
+  },
+
+  // ============ Zcash ============
+  zcash: {
+    id: 'zcash',
+    family: 'bitcoin',
+    name: 'Zcash',
+    symbol: 'ZEC',
+    decimals: 8,
+    chainId: 0,
+    rpcUrls: ['https://api.blockchair.com/zcash'],
+    explorerUrl: 'https://blockchair.com/zcash',
+    coinType: 133,
+    derivationPath: "m/44'/133'/0'/0/{index}",
+    iconId: 'zcash',
+    color: '#ECB244',
+    description: 'Privacy-focused cryptocurrency',
+    nativeTokenAddress: 'zec',
+    swapEnabled: false,
+  },
+
+  // ============ TRON ============
+  tron: {
+    id: 'tron',
+    family: 'tron',
+    name: 'TRON',
+    symbol: 'TRX',
+    decimals: 6,
+    chainId: 728126428, // TRON's chain ID
+    rpcUrls: ['https://api.trongrid.io'],
+    fallbackRpcUrls: ['https://api.shasta.trongrid.io'],
+    explorerUrl: 'https://tronscan.org',
+    testnet: {
+      chainId: 2494104990,
+      rpcUrls: ['https://nile.trongrid.io'],
+      explorerUrl: 'https://nile.tronscan.org',
+    },
+    coinType: 195,
+    derivationPath: "m/44'/195'/0'/0/{index}",
+    iconId: 'tron',
+    color: '#FF0013',
+    description: 'High-throughput blockchain',
+    nativeTokenAddress: 'trx',
+    swapEnabled: true,
+    swapProvider: '1inch', // Will use SunSwap
+    popularTokens: [
+      {
+        address: 'trx',
+        symbol: 'TRX',
+        name: 'TRON',
+        decimals: 6,
+        logoUri: 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+        isNative: true,
+      },
+      {
+        address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        symbol: 'USDT',
+        name: 'Tether USD',
+        decimals: 6,
+        logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+      },
+      {
+        address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+        symbol: 'USDC',
+        name: 'USD Coin',
+        decimals: 6,
+        logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+      },
+      {
+        address: 'TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S',
+        symbol: 'SUN',
+        name: 'Sun Token',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/12424/small/sun_logo.png',
+      },
+    ],
+  },
+
+  // ============ Monero (Watch-Only) ============
+  monero: {
+    id: 'monero',
+    family: 'monero',
+    name: 'Monero',
+    symbol: 'XMR',
+    decimals: 12,
+    chainId: 0, // Monero doesn't use chain IDs
+    rpcUrls: [
+      'https://node.moneroworld.com:18089',
+      'https://nodes.hashvault.pro:18081',
+      'https://xmr-node.cakewallet.com:18081',
+    ],
+    explorerUrl: 'https://xmrchain.net',
+    testnet: {
+      chainId: 0,
+      rpcUrls: ['https://stagenet.xmr-tw.org:38081'],
+      explorerUrl: 'https://stagenet.xmrchain.net',
+    },
+    coinType: 128,
+    derivationPath: '', // Not used for watch-only
+    iconId: 'monero',
+    color: '#FF6600',
+    description: 'Privacy-focused cryptocurrency (Watch-Only)',
+    nativeTokenAddress: 'xmr',
+    swapEnabled: false,
+    // Note: This is a watch-only implementation
+    // Users import their address and view key
+  },
+
   // ============================================================================
   // TEMPLATE: Add new chains below following this pattern
   // ============================================================================
@@ -889,7 +1147,7 @@ export function isSolanaChain(chainId: string): boolean {
  * Legacy type aliases for backward compatibility
  * @deprecated Use ChainConfig and registry functions instead
  */
-export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base';
+export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';
 export type ChainType = 'solana' | 'evm';
 
 /**
@@ -918,6 +1176,14 @@ export function chainIdToLegacy(chainId: string): { chainType: ChainType; evmCha
   if (chain.family === 'solana') {
     return { chainType: 'solana' };
   }
+  // Only EVM chains should return evmChainId
+  // For other chains (bitcoin, tron, monero), we return 'evm' type for backwards compatibility
+  // but the actual adapter selection is handled by getAdapterForChain using chain.family
+  if (chain.family === 'evm') {
+    return { chainType: 'evm', evmChainId: chainId as EVMChainId };
+  }
+  // For non-EVM, non-Solana chains, return 'evm' type with chain ID
+  // This maintains backwards compatibility while allowing proper adapter selection
   return { chainType: 'evm', evmChainId: chainId as EVMChainId };
 }
 

@@ -189,6 +189,8 @@ export function getFamilyDisplayName(family: ChainFamily): string {
     evm: 'EVM Compatible',
     solana: 'Solana',
     bitcoin: 'Bitcoin',
+    tron: 'TRON',
+    monero: 'Monero',
     cosmos: 'Cosmos',
     sui: 'Sui',
     aptos: 'Aptos',

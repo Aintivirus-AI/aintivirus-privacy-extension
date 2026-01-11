@@ -1229,6 +1229,18 @@ p {
   border-bottom-color: var(--accent-primary);
 }
 
+.wallet-tab.disabled,
+.wallet-tab:disabled {
+  color: var(--text-muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wallet-tab.disabled:hover,
+.wallet-tab:disabled:hover {
+  color: var(--text-muted);
+}
+
 /* Transaction History */
 .tx-list {
   display: flex;
@@ -4372,6 +4384,16 @@ img.tx-token-logo {
   color: var(--accent-primary);
 }
 
+.chain-watch-only-badge {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--text-warning);
+  background: rgba(251, 191, 36, 0.15);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  margin-left: auto;
+}
+
 /* =============================================
    Manage Wallets View Styles
    ============================================= */
@@ -6755,6 +6777,22 @@ img.tx-token-logo {
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  transition: background var(--transition-fast);
+}
+
+.partner-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  position: absolute;
+}
+
+.partner-logo-img.loaded {
+  opacity: 1;
 }
 
 .partner-logo-text {
@@ -6763,6 +6801,11 @@ img.tx-token-logo {
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   letter-spacing: var(--tracking-wide);
+  transition: opacity var(--transition-fast);
+}
+
+.partner-logo-img.loaded + .partner-logo-text {
+  opacity: 0;
 }
 
 .partner-info {
