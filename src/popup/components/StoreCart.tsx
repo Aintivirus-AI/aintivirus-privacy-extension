@@ -21,8 +21,8 @@ const StoreCart: React.FC<StoreCartProps> = ({
 }) => {
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Format price from cents to dollars
-  const formatPrice = (price: number) => `$${(price / 100).toFixed(2)}`;
+  // Format price (API returns price in dollars)
+  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
 
   return (
     <div className="store-cart">

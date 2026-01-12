@@ -146,7 +146,6 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
     );
     
     if (!response.ok) {
-      console.warn('DexScreener search returned non-OK status:', response.status);
       return [];
     }
 
@@ -175,10 +174,8 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
       }
     }
     
-    console.log(`DexScreener found ${tokens.length} tokens for query: ${query}`);
     return tokens.slice(0, 50);
-  } catch (error) {
-    console.error('DexScreener search failed:', error);
+  } catch {
     return [];
   }
 }
@@ -205,8 +202,6 @@ export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
 
   // Search using DexScreener only
   const dexScreenerTokens = await searchDexScreener(query);
-  
-  console.log(`DexScreener search found ${dexScreenerTokens.length} tokens for: ${query}`);
 
   // Sort: exact symbol match first, then by symbol starts with query
   return dexScreenerTokens.sort((a, b) => {
@@ -263,8 +258,8 @@ export async function fetchSolanaTokenByAddress(address: string): Promise<SwapTo
         }
       }
     }
-  } catch (error) {
-    console.warn('DexScreener token lookup failed for address:', address, error);
+  } catch {
+    // DexScreener lookup failed; return null to try other sources
   }
 
   return null;
@@ -387,8 +382,8 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
     tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
 
     return tokens;
-  } catch (error) {
-    console.error(`Failed to fetch ${chainId} tokens:`, error);
+  } catch {
+    // Fall back to default tokens on error
     return getDefaultEVMTokens(chainId);
   }
 }

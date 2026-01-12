@@ -1,36 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronIcon, CheckIcon, AlertIcon, CopyIcon, ExternalLinkIcon, RefreshIcon } from '../Icons';
-import type { WalletState, SendTransactionResult, EVMTransactionResult } from '@shared/types';
+import type { WalletState, SendTransactionResult } from '@shared/types';
 import { sendToBackground } from '@shared/messaging';
 import type { CartItem } from './StoreTab';
+import { getTreasuryAddress, getAintiTokenConfig, isPaymentProgramConfigured } from '../utils/solanaPayment';
 
-// API URLs - tries localhost first for development, then production
-const API_URLS = [
-  'http://localhost:3000',           // Local development
-  'https://api.aintivirus.ai',       // Production
-];
+// API URL
+const API_URL = 'https://api.v2.aintivirus.ai';
 const AINTIVIRUS_STORE_URL = 'https://aintivirus.ai/merch';
 
-// AINTI Token configuration
-// Solana: SPL Token mint address
-// EVM: ERC-20 token contract address
-const AINTI_TOKEN = {
-  solana: {
-    mint: process.env.AINTI_TOKEN_SOL_ADDRESS || 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW',
-    decimals: 9,
-  },
-  evm: {
-    address: process.env.AINTI_TOKEN_ETH_ADDRESS || '0x0000000000000000000000000000000000000000',
-    decimals: 18,
-  },
-};
+// AINTI Token configuration (loaded from solanaPayment utility)
+const AINTI_CONFIG = getAintiTokenConfig();
 
-// Merchant/Treasury addresses for AINTI token payments
-// These should match the backend's MERCHANT_SOL_ADDRESS and MERCHANT_ETH_ADDRESS
-const MERCHANT_ADDRESSES = {
-  solana: process.env.MERCHANT_SOL_ADDRESS || 'AintiMerchantSOLAddress', // Replace with actual treasury
-  evm: process.env.MERCHANT_ETH_ADDRESS || '0xAintiMerchantEVMAddress', // Replace with actual treasury
-};
+// Fallback merchant address if on-chain lookup fails
+const FALLBACK_MERCHANT_ADDRESS = process.env.MERCHANT_SOL_ADDRESS || '';
 
 interface StoreCheckoutProps {
   cart: CartItem[];
@@ -55,12 +38,22 @@ interface CheckoutFormData {
 type CheckoutStep = 'form' | 'payment' | 'confirming' | 'success' | 'error';
 type PaymentMethod = 'wallet' | 'manual';
 
-// Generate a unique order ID
+// Generate a UUID v4 for order ID
 const generateOrderId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 8);
-  return `ORD-${timestamp}-${randomPart}`.toUpperCase();
+  // Use native crypto.randomUUID if available (more secure)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback: Generate UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 };
+
+// Storage key for saved contact details
+const CHECKOUT_STORAGE_KEY = 'storeCheckoutDetails';
 
 const StoreCheckout: React.FC<StoreCheckoutProps> = ({
   cart,
@@ -94,8 +87,48 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const isWalletConnected = walletState?.lockState === 'unlocked' && walletState?.publicAddress;
-  const paymentNetwork = walletState?.activeChain === 'solana' ? 'solana' : 'evm';
-  const merchantAddress = MERCHANT_ADDRESSES[paymentNetwork];
+  // AINTI token is on Solana - always use Solana for payments
+  const paymentNetwork = 'solana' as const;
+  
+  // Treasury address state (loaded from on-chain payment vault)
+  const [treasuryAddress, setTreasuryAddress] = useState<string | null>(null);
+  const [loadingTreasury, setLoadingTreasury] = useState(true);
+
+  // Fetch treasury address from on-chain payment vault
+  useEffect(() => {
+    const fetchTreasury = async () => {
+      setLoadingTreasury(true);
+      try {
+        const address = await getTreasuryAddress();
+        setTreasuryAddress(address || FALLBACK_MERCHANT_ADDRESS || null);
+      } catch (err) {
+        console.error('Failed to fetch treasury:', err);
+        setTreasuryAddress(FALLBACK_MERCHANT_ADDRESS || null);
+      } finally {
+        setLoadingTreasury(false);
+      }
+    };
+    fetchTreasury();
+  }, []);
+
+  const merchantAddress = treasuryAddress || '';
+
+  // Load saved contact details from storage on mount
+  useEffect(() => {
+    chrome.storage.local.get([CHECKOUT_STORAGE_KEY], (result) => {
+      if (result[CHECKOUT_STORAGE_KEY]) {
+        setFormData((prev) => ({
+          ...prev,
+          ...result[CHECKOUT_STORAGE_KEY],
+        }));
+      }
+    });
+  }, []);
+
+  // Save contact details to storage when form data changes
+  const saveContactDetails = (data: CheckoutFormData) => {
+    chrome.storage.local.set({ [CHECKOUT_STORAGE_KEY]: data });
+  };
 
   // Fetch token price from backend API (same as website)
   useEffect(() => {
@@ -103,10 +136,8 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
       setLoadingPrice(true);
       const networkParam = paymentNetwork === 'solana' ? 'sol' : 'eth';
       
-      // Try each API URL
-      for (const baseUrl of API_URLS) {
         try {
-          const response = await fetch(`${baseUrl}/payment/token-price?network=${networkParam}`);
+        const response = await fetch(`${API_URL}/payment/token-price?network=${networkParam}`);
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.data?.priceUsd) {
@@ -116,22 +147,20 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
             }
           }
         } catch {
-          // Continue to next URL
-        }
+        // Fallback on error
       }
       
-      // Fallback price if all API calls fail (matches backend fallback of $0.02)
+      // Fallback price if API call fails (matches backend fallback of $0.02)
       setTokenPrice(0.02);
       setLoadingPrice(false);
     };
     fetchTokenPrice();
   }, [paymentNetwork]);
 
-  // Calculate token amount (price is in cents, convert to USD first)
-  const priceInUsd = totalPrice / 100;
-  const tokenAmount = tokenPrice ? priceInUsd / tokenPrice : null;
+  // Calculate token amount (price is in dollars)
+  const tokenAmount = tokenPrice ? totalPrice / tokenPrice : null;
 
-  const formatPrice = (price: number) => `$${(price / 100).toFixed(2)}`;
+  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
 
   const validateForm = (): boolean => {
     const newErrors: Partial<CheckoutFormData> = {};
@@ -153,7 +182,10 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const newFormData = { ...formData, [name]: value };
+    setFormData(newFormData);
+    // Save to storage for future use
+    saveContactDetails(newFormData);
     // Clear error when user starts typing
     if (errors[name as keyof CheckoutFormData]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
@@ -162,6 +194,8 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
 
   const handleSubmitForm = () => {
     if (validateForm()) {
+      // Save contact details before proceeding
+      saveContactDetails(formData);
       setOrderId(generateOrderId());
       setStep('payment');
     }
@@ -190,11 +224,8 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
       homeAddress: formData.homeAddress,
     };
 
-    // Try each API URL in order
-    for (const baseUrl of API_URLS) {
       try {
-        // Use the correct /public-orders/merch endpoint (same as website)
-        const response = await fetch(`${baseUrl}/public-orders/merch`, {
+      const response = await fetch(`${API_URL}/public-orders/merch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(orderPayload),
@@ -202,93 +233,74 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          // If it's a client error (4xx), return the error, don't try next URL
-          if (response.status >= 400 && response.status < 500) {
             return { success: false, message: errorData.message || 'Failed to place order' };
-          }
-          // Server error, try next URL
-          continue;
         }
 
         const data = await response.json();
         return { success: true, orderId: data.orderId || orderId };
       } catch (err) {
-        console.warn(`Failed to place order via ${baseUrl}:`, err);
-        // Continue to next URL
-      }
+      console.error('Failed to place order:', err);
+      return { success: false, message: 'Unable to connect to order service. Please try again.' };
     }
-
-    return { success: false, message: 'Unable to connect to order service. Please try again.' };
   };
 
   // Send payment via extension wallet
+  // NOTE: This sends a simple SPL token transfer. The website uses a Solana Anchor program
+  // for payment processing. If the backend requires smart contract payments, users should
+  // complete payment through the website for full functionality.
   const sendPayment = async (): Promise<{ success: boolean; signature?: string; error?: string }> => {
     if (!tokenAmount) {
       return { success: false, error: 'Token amount not calculated' };
     }
 
+    if (!treasuryAddress) {
+      return { success: false, error: 'Treasury address not loaded. Please try again or pay through the website.' };
+    }
+
     const amountRaw = tokenAmount; // Amount in whole tokens
 
-    if (paymentNetwork === 'solana') {
-      // Send SPL Token (AINTI on Solana)
-      const result = await sendToBackground<SendTransactionResult>({
-        type: 'WALLET_SEND_SPL_TOKEN',
-        payload: {
-          recipient: MERCHANT_ADDRESSES.solana,
-          amount: amountRaw,
-          mint: AINTI_TOKEN.solana.mint,
-          decimals: AINTI_TOKEN.solana.decimals,
-        },
-      });
+    // AINTI is on Solana - send SPL Token
+    const result = await sendToBackground<SendTransactionResult>({
+      type: 'WALLET_SEND_SPL_TOKEN',
+      payload: {
+        recipient: treasuryAddress,
+        amount: amountRaw,
+        mint: AINTI_CONFIG.mint,
+        decimals: AINTI_CONFIG.decimals,
+      },
+    });
 
-      if (result.success && result.data) {
-        return { success: true, signature: result.data.signature };
-      } else {
-        return { success: false, error: result.error || 'Failed to send SPL token' };
-      }
+    if (result.success && result.data) {
+      return { success: true, signature: result.data.signature };
     } else {
-      // Send ERC-20 Token (AINTI on EVM)
-      const result = await sendToBackground<EVMTransactionResult>({
-        type: 'WALLET_SEND_ERC20',
-        payload: {
-          recipient: MERCHANT_ADDRESSES.evm,
-          tokenAddress: AINTI_TOKEN.evm.address,
-          amount: amountRaw.toString(),
-          decimals: AINTI_TOKEN.evm.decimals,
-        },
-      });
-
-      if (result.success && result.data) {
-        return { success: true, signature: result.data.hash };
-      } else {
-        return { success: false, error: result.error || 'Failed to send ERC-20 token' };
-      }
+      return { success: false, error: result.error || 'Failed to send AINTI token' };
     }
   };
 
   // Confirm payment with backend
   const confirmPayment = async (orderIdToConfirm: string, txHash: string): Promise<boolean> => {
-    for (const baseUrl of API_URLS) {
       try {
-        const response = await fetch(`${baseUrl}/public-orders/${orderIdToConfirm}/confirm-payment`, {
+      const response = await fetch(`${API_URL}/public-orders/${orderIdToConfirm}/confirm-payment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paymentTxHash: txHash }),
         });
 
-        if (response.ok) {
-          return true;
-        }
+      return response.ok;
       } catch (err) {
-        console.warn(`Failed to confirm payment via ${baseUrl}:`, err);
-      }
+      console.error('Failed to confirm payment:', err);
+      return false;
     }
-    return false;
   };
 
   const handlePlaceOrder = async () => {
     if (!isWalletConnected || !tokenAmount) {
       setPaymentError('Wallet not connected or price unavailable');
+      return;
+    }
+    
+    if (paymentMethod === 'wallet' && !treasuryAddress) {
+      setPaymentError('Treasury address not loaded. Please wait or try again.');
       return;
     }
 
@@ -515,7 +527,7 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
                 <span>Wallet: {walletState?.publicAddress?.slice(0, 6)}...{walletState?.publicAddress?.slice(-4)}</span>
               </div>
               <div className="store-payment-network">
-                Network: {paymentNetwork === 'solana' ? 'Solana' : 'Ethereum'}
+                Network: Solana (AINTI)
               </div>
             </div>
             
@@ -706,13 +718,20 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
             <button
               className="store-pay-btn"
               onClick={handlePlaceOrder}
-              disabled={!isWalletConnected || loadingPrice || !tokenAmount || isPlacingOrder || isProcessingPayment}
+              disabled={
+                !isWalletConnected || 
+                loadingPrice || 
+                !tokenAmount || 
+                isPlacingOrder || 
+                isProcessingPayment ||
+                (paymentMethod === 'wallet' && (loadingTreasury || !treasuryAddress))
+              }
             >
               {isProcessingPayment 
                 ? 'Processing Payment...' 
                 : isPlacingOrder 
                   ? 'Placing Order...' 
-                  : loadingPrice 
+                  : loadingPrice || (paymentMethod === 'wallet' && loadingTreasury)
                     ? 'Loading...' 
                     : paymentMethod === 'wallet' 
                       ? `Pay ${tokenAmount?.toFixed(2)} AINTI` 

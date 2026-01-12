@@ -172,10 +172,6 @@ async function fetchBatchedNativePrices(): Promise<void> {
     const data: CoinGeckoPriceData = await response.json();
     const now = Date.now();
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:fetchBatchedNativePrices:response',message:'CoinGecko batch response',data:{hasData:!!data,coins:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-    // #endregion
-
     // Store SOL price (uses special mint address as key)
     storePriceInCache(data, SOL_COINGECKO_ID, SOL_MINT, now);
     
@@ -190,8 +186,8 @@ async function fetchBatchedNativePrices(): Promise<void> {
     storePriceInCache(data, 'zcash', 'zcash-native', now);
     storePriceInCache(data, 'tron', 'tron-native', now);
     storePriceInCache(data, 'monero', 'monero-native', now);
-  } catch (error) {
-    throw error;
+  } catch {
+    // Batch price fetch failed; caller will handle missing prices
   }
 }
 
@@ -301,17 +297,11 @@ export async function getChainNativePriceWithChange(chainId: string): Promise<Pr
  * @param evmChainId - The chain ID (e.g., 'bnb', 'polygon', 'ethereum')
  */
 export async function getEvmNativePriceWithChange(evmChainId: string): Promise<PriceWithChange | null> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:entry',message:'Price fetch started',data:{evmChainId,hasCacheKey:!!EVM_CHAIN_CACHE_KEYS[evmChainId],cacheKey:EVM_CHAIN_CACHE_KEYS[evmChainId]||ETH_CACHE_KEY,hasCoingeckoId:!!EVM_CHAIN_COINGECKO_IDS[evmChainId]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-  // #endregion
   const cacheKey = EVM_CHAIN_CACHE_KEYS[evmChainId] || ETH_CACHE_KEY;
   const cached = priceCache.get(cacheKey);
   const cached24h = priceCache.get(`${cacheKey}_24h`);
   
   if (isCacheValid(cached)) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:cached',message:'Returning cached price',data:{evmChainId,price:cached!.price,change24h:cached24h?.price},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-    // #endregion
     return {
       price: cached!.price,
       change24h: cached24h?.price ?? null,
@@ -330,9 +320,6 @@ export async function getEvmNativePriceWithChange(evmChainId: string): Promise<P
         const newCached24h = priceCache.get(`${cacheKey}_24h`);
 
         if (newCached) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:success',message:'Price fetched successfully',data:{evmChainId,cacheKey,price:newCached.price,change24h:newCached24h?.price},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-          // #endregion
           return {
             price: newCached.price,
             change24h: newCached24h?.price ?? null,
@@ -343,23 +330,14 @@ export async function getEvmNativePriceWithChange(evmChainId: string): Promise<P
         const ethCached = priceCache.get(ETH_CACHE_KEY);
         const ethCached24h = priceCache.get(`${ETH_CACHE_KEY}_24h`);
         if (ethCached) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:fallback',message:'Falling back to ETH price',data:{evmChainId,cacheKey,usingEthFallback:true},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-          // #endregion
           return {
             price: ethCached.price,
             change24h: ethCached24h?.price ?? null,
           };
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:notFound',message:'Price not found in response',data:{evmChainId,cacheKey},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-        // #endregion
         throw new Error(`Native price for ${evmChainId} not in response`);
       } catch (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'prices.ts:getEvmNativePriceWithChange:error',message:'Error fetching price',data:{evmChainId,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H3'})}).catch(()=>{});
-        // #endregion
         if (cached) {
           return {
             price: cached.price,
@@ -418,7 +396,9 @@ async function getJupiterTokenPrices(mints: string[]): Promise<Map<string, numbe
         }
       }
     }
-  } catch (error) {}
+  } catch {
+    // Jupiter API errors are non-fatal; return partial results
+  }
 
   return result;
 }
@@ -474,7 +454,9 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
         }
       }
     }
-  } catch (error) {}
+  } catch {
+    // DexScreener API errors are non-fatal; return partial results
+  }
 
   return result;
 }
@@ -569,7 +551,9 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
                 }
               }
             }
-          } catch (error) {}
+          } catch {
+            // CoinGecko Solana API errors are non-fatal; continue with other sources
+          }
         }
       }
 
@@ -609,7 +593,9 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
                 }
               }
             }
-          } catch (error) {}
+          } catch {
+            // CoinGecko Ethereum API errors are non-fatal; return partial results
+          }
         }
       }
 

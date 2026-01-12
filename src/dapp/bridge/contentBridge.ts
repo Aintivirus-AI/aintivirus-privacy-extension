@@ -230,7 +230,7 @@ function sendResponseToInpage(
       type: success ? 'DAPP_RESPONSE' : 'DAPP_ERROR',
       payload: response,
     },
-    '*',
+    window.location.origin,
   );
 }
 
@@ -280,7 +280,7 @@ function broadcastEventToInpage(event: {
       type: event.type,
       payload: event.data,
     },
-    '*',
+    window.location.origin,
   );
 }
 

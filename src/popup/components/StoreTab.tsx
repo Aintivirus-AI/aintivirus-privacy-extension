@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { WalletState } from '@shared/types';
-import { SearchIcon, CartIcon, CloseIcon, RefreshIcon } from '../Icons';
+import { sendToBackground } from '@shared/messaging';
+import { SearchIcon, CartIcon, CloseIcon, RefreshIcon, EyeIcon, EyeOffIcon, LockIcon } from '../Icons';
 import StoreProductCard from './StoreProductCard';
 import StoreCart from './StoreCart';
 import StoreCheckout from './StoreCheckout';
@@ -9,11 +10,8 @@ import StoreMixer from './StoreMixer';
 import StoreGiftCards from './StoreGiftCards';
 import StoreESim from './StoreESim';
 
-// API URLs - tries localhost first for development, then production
-const API_URLS = [
-  'http://localhost:3000',           // Local development
-  'https://api.aintivirus.ai',       // Production
-];
+// API URL
+const API_URL = 'https://api.v2.aintivirus.ai';
 
 export interface ProductVariant {
   Size?: string[];
@@ -42,12 +40,12 @@ export interface CartItem {
 
 interface StoreTabProps {
   walletState: WalletState | null;
-  onUnlockWallet?: () => void;
+  onWalletStateChange?: () => void;
 }
 
 type MerchView = 'products' | 'cart' | 'checkout';
 
-const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
+const StoreTab: React.FC<StoreTabProps> = ({ walletState, onWalletStateChange }) => {
   // Sub-tab state
   const [activeSubTab, setActiveSubTab] = useState<StoreSubTab>('merch');
   
@@ -58,6 +56,44 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [merchView, setMerchView] = useState<MerchView>('products');
+
+  // Unlock modal state
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState('');
+
+  const handleUnlock = async () => {
+    if (!unlockPassword) return;
+    setUnlocking(true);
+    setUnlockError('');
+
+    try {
+      const response = await sendToBackground({
+        type: 'WALLET_UNLOCK',
+        payload: { password: unlockPassword },
+      });
+
+      if (response.success) {
+        setUnlockPassword('');
+        setShowUnlockModal(false);
+        onWalletStateChange?.();
+      } else {
+        setUnlockError(response.error || 'Failed to unlock');
+      }
+    } catch {
+      setUnlockError('Failed to unlock wallet');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const handleShowUnlockModal = () => {
+    setUnlockPassword('');
+    setUnlockError('');
+    setShowUnlockModal(true);
+  };
 
   // Load cart from chrome storage on mount
   useEffect(() => {
@@ -77,13 +113,11 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
     setLoading(true);
     setError(null);
     
-    // Try each API URL in order until one works
-    for (const baseUrl of API_URLS) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout per URL
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const response = await fetch(`${baseUrl}/public-products`, {
+      const response = await fetch(`${API_URL}/public-products`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -94,36 +128,28 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          console.warn(`API ${baseUrl} returned ${response.status}, trying next...`);
-          continue;
+        throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
         
         if (!Array.isArray(data) || data.length === 0) {
-          console.warn(`API ${baseUrl} returned empty/invalid data, trying next...`);
-          continue;
+        throw new Error('No products available');
         }
 
-        // Normalize products - API returns price in cents
+      // Normalize products - API returns price in dollars
         const normalizedProducts = data.map((p: Product) => ({
           ...p,
           price: typeof p.price === 'number' ? p.price : 0,
         }));
         
         setProducts(normalizedProducts);
-        console.log(`Successfully fetched ${normalizedProducts.length} products from ${baseUrl}`);
         setLoading(false);
-        return; // Success! Exit the function
       } catch (err) {
-        console.warn(`Failed to fetch from ${baseUrl}:`, err);
-        // Continue to next URL
-      }
-    }
-
-    // All URLs failed
-    setError('Unable to connect to store. Please ensure the API is running.');
+      console.error('Failed to fetch products:', err);
+      setError('Unable to connect to store. Please try again later.');
     setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -234,8 +260,20 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
             clearCart();
             setMerchView('products');
           }}
-          onUnlockWallet={onUnlockWallet}
+          onUnlockWallet={handleShowUnlockModal}
         />
+        {showUnlockModal && (
+          <UnlockModal
+            password={unlockPassword}
+            showPassword={showPassword}
+            unlocking={unlocking}
+            error={unlockError}
+            onPasswordChange={setUnlockPassword}
+            onToggleShowPassword={() => setShowPassword(!showPassword)}
+            onUnlock={handleUnlock}
+            onClose={() => setShowUnlockModal(false)}
+        />
+        )}
       </div>
     );
   }
@@ -322,7 +360,7 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
         return (
           <StoreMixer 
             walletState={walletState} 
-            onUnlockWallet={onUnlockWallet}
+            onUnlockWallet={handleShowUnlockModal}
           />
         );
 
@@ -330,7 +368,7 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
         return (
           <StoreGiftCards 
             walletState={walletState} 
-            onUnlockWallet={onUnlockWallet}
+            onUnlockWallet={handleShowUnlockModal}
           />
         );
 
@@ -338,7 +376,7 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
         return (
           <StoreESim 
             walletState={walletState} 
-            onUnlockWallet={onUnlockWallet}
+            onUnlockWallet={handleShowUnlockModal}
           />
         );
 
@@ -351,6 +389,111 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onUnlockWallet }) => {
     <div className="store-tab">
       <StoreSubTabs activeTab={activeSubTab} onTabChange={handleSubTabChange} />
       {renderContent()}
+      {showUnlockModal && (
+        <UnlockModal
+          password={unlockPassword}
+          showPassword={showPassword}
+          unlocking={unlocking}
+          error={unlockError}
+          onPasswordChange={setUnlockPassword}
+          onToggleShowPassword={() => setShowPassword(!showPassword)}
+          onUnlock={handleUnlock}
+          onClose={() => setShowUnlockModal(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// Unlock Modal Component
+interface UnlockModalProps {
+  password: string;
+  showPassword: boolean;
+  unlocking: boolean;
+  error: string;
+  onPasswordChange: (password: string) => void;
+  onToggleShowPassword: () => void;
+  onUnlock: () => void;
+  onClose: () => void;
+}
+
+const UnlockModal: React.FC<UnlockModalProps> = ({
+  password,
+  showPassword,
+  unlocking,
+  error,
+  onPasswordChange,
+  onToggleShowPassword,
+  onUnlock,
+  onClose,
+}) => {
+  return (
+    <div className="store-unlock-modal-overlay" onClick={onClose}>
+      <div className="store-unlock-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="store-unlock-modal-header">
+          <div className="store-unlock-icon">
+            <LockIcon size={24} />
+          </div>
+          <h3 className="store-unlock-title">Unlock Wallet</h3>
+          <p className="store-unlock-subtitle">Enter your password to continue</p>
+        </div>
+        <form
+          className="store-unlock-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onUnlock();
+          }}
+        >
+          <div className="store-unlock-input-group">
+            <label className="store-unlock-label">Password</label>
+            <div className="store-unlock-input-wrapper">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="store-unlock-input"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => onPasswordChange(e.target.value)}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="store-unlock-toggle-btn"
+                onClick={onToggleShowPassword}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div className="store-unlock-error">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {error}
+            </div>
+          )}
+          <div className="store-unlock-actions">
+            <button
+              type="button"
+              className="store-unlock-cancel-btn"
+              onClick={onClose}
+              disabled={unlocking}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="store-unlock-submit-btn"
+              disabled={!password || unlocking}
+            >
+              {unlocking ? 'Unlocking...' : 'Unlock'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

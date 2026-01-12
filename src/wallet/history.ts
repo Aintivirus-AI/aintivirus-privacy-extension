@@ -138,7 +138,9 @@ async function fetchHistoryInternal(
         limit: Math.min(limit, MAX_LIMIT),
         before: before || undefined,
       });
-    } catch (error) {}
+    } catch {
+      // RPC call failed; continue with empty signatures
+    }
 
     let tokenAccountSignatures: ConfirmedSignatureInfo[] = [];
     try {
@@ -152,9 +154,13 @@ async function fetchHistoryInternal(
         try {
           const sigs = await connection.getSignaturesForAddress(account.pubkey, { limit: 10 });
           tokenAccountSignatures.push(...sigs);
-        } catch {}
+        } catch {
+          // Skip this account on error
+        }
       }
-    } catch (error) {}
+    } catch {
+      // Token account history is supplementary; continue without it
+    }
 
     const allSignatures = [...walletSignatures];
     const seenSignatures = new Set(walletSignatures.map((s) => s.signature));

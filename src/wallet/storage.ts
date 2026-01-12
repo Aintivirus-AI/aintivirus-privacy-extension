@@ -138,7 +138,9 @@ async function loadRateLimitState(): Promise<RateLimitState> {
     if (state && typeof state.failedAttempts === 'number') {
       return state;
     }
-  } catch (error) {}
+  } catch {
+    // Storage read failed; return default state to allow unlock attempts
+  }
 
   return {
     failedAttempts: 0,
@@ -150,7 +152,9 @@ async function loadRateLimitState(): Promise<RateLimitState> {
 async function saveRateLimitState(state: RateLimitState): Promise<void> {
   try {
     await chrome.storage.local.set({ [RATE_LIMIT_STORAGE_KEY]: state });
-  } catch (error) {}
+  } catch {
+    // Rate limit state save is best-effort; security remains via in-memory checks
+  }
 }
 
 // Inspects previous failures and computes whether the next unlock is blocked.

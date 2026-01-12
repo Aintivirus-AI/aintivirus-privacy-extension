@@ -184,16 +184,13 @@ export async function getBlockHeight(testnet: boolean = false): Promise<number> 
 // ============================================================================
 
 /**
- * Note: Getting balance for a watch-only wallet without a wallet daemon
- * is not straightforward. The Monero daemon RPC doesn't directly support
- * querying balances by address without a wallet.
+ * Monero balance lookup for watch-only wallets.
  * 
- * Options for implementation:
- * 1. Use a Monero wallet RPC (requires running monerod + monero-wallet-rpc)
- * 2. Use a blockchain explorer API
- * 3. Scan the blockchain manually (complex, requires view key cryptography)
- * 
- * This implementation uses the Monero blockchain explorer API as a fallback.
+ * The Monero daemon RPC requires a wallet instance to query balances.
+ * Available approaches:
+ * 1. Monero wallet RPC (requires monerod + monero-wallet-rpc)
+ * 2. Blockchain explorer API (used here)
+ * 3. Manual blockchain scanning with view key cryptography
  */
 
 interface ExplorerBalanceResponse {

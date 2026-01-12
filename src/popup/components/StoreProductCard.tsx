@@ -45,9 +45,9 @@ const StoreProductCard: React.FC<StoreProductCardProps> = ({ product, onAddToCar
     }
   };
 
-  // Format price from cents to dollars
+  // Format price (API returns price in dollars)
   const formattedPrice = typeof product.price === 'number' 
-    ? `$${(product.price / 100).toFixed(2)}`
+    ? `$${product.price.toFixed(2)}`
     : `$${product.price}`;
 
   return (

@@ -22,7 +22,8 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
   const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
-  const [selectedCurrency, setSelectedCurrency] = useState<'eth' | 'sol'>('eth');
+  // AINTI is on Solana - always use Solana for payments
+  const [selectedCurrency] = useState<'sol'>('sol');
 
   // Fetch gift card types on mount
   useEffect(() => {
@@ -63,14 +64,13 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
     }
   }, [selectedGiftCard]);
 
-  const handleBuy = (currency: 'eth' | 'sol') => {
+  const handleBuy = () => {
     if (!selectedName || !selectedGiftCard || !amount) return;
     
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) return;
     if (amountNum < selectedGiftCard.minAmount || amountNum > selectedGiftCard.maxAmount) return;
 
-    setSelectedCurrency(currency);
     setView('payment');
   };
 
@@ -175,20 +175,56 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
       {/* Amount Input */}
       <div className="giftcard-select-group">
         <label className="giftcard-label">Amount (USD)</label>
-        <input
-          type="number"
-          className="giftcard-amount-input"
-          placeholder={
-            selectedGiftCard
-              ? `Enter amount ($${selectedGiftCard.minAmount} - $${selectedGiftCard.maxAmount})`
-              : 'Select a gift card first'
-          }
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          disabled={!selectedGiftCard}
-          min={selectedGiftCard?.minAmount || 0}
-          max={selectedGiftCard?.maxAmount || 0}
-        />
+        <div className="giftcard-amount-wrapper">
+          <input
+            type="number"
+            className="giftcard-amount-input"
+            placeholder={
+              selectedGiftCard
+                ? `$${selectedGiftCard.minAmount} - $${selectedGiftCard.maxAmount}`
+                : 'Select a gift card first'
+            }
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={!selectedGiftCard}
+            min={selectedGiftCard?.minAmount || 0}
+            max={selectedGiftCard?.maxAmount || 0}
+          />
+          <div className="giftcard-amount-buttons">
+            <button
+              type="button"
+              className="giftcard-amount-btn"
+              onClick={() => {
+                const current = parseFloat(amount) || selectedGiftCard?.minAmount || 0;
+                const max = selectedGiftCard?.maxAmount || 1000;
+                const newVal = Math.min(current + 10, max);
+                setAmount(String(newVal));
+              }}
+              disabled={!selectedGiftCard}
+              aria-label="Increase amount"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="giftcard-amount-btn"
+              onClick={() => {
+                const current = parseFloat(amount) || selectedGiftCard?.minAmount || 0;
+                const min = selectedGiftCard?.minAmount || 0;
+                const newVal = Math.max(current - 10, min);
+                setAmount(String(newVal));
+              }}
+              disabled={!selectedGiftCard}
+              aria-label="Decrease amount"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </div>
+        </div>
         {selectedGiftCard && (
           <span className="giftcard-amount-range">
             Range: ${selectedGiftCard.minAmount} - ${selectedGiftCard.maxAmount}
@@ -219,21 +255,14 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
         </div>
       )}
 
-      {/* Buy Buttons */}
+      {/* Buy Button - AINTI is on Solana */}
       <div className="giftcard-btn-group">
         <button
-          className="giftcard-buy-btn secondary"
-          onClick={() => handleBuy('eth')}
-          disabled={!selectedName || !isValidAmount || !walletState}
-        >
-          Buy with ETH-AINTI
-        </button>
-        <button
           className="giftcard-buy-btn primary"
-          onClick={() => handleBuy('sol')}
+          onClick={handleBuy}
           disabled={!selectedName || !isValidAmount || !walletState}
         >
-          Buy with SOL-AINTI
+          Buy with AINTI (Solana)
         </button>
       </div>
     </div>

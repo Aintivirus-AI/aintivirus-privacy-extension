@@ -9,11 +9,47 @@
     }
   },
   {
+    "id": 12,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||api.zcha.in^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||api.blockchair.com^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||zcashblockexplorer.com^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||chain.so^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
     "id": 9,
     "priority": 100,
     "action": { "type": "allow" },
     "condition": {
-      "urlFilter": "||api.aintivirus.ai^",
+      "urlFilter": "||api.v2.aintivirus.ai^",
       "resourceTypes": ["xmlhttprequest", "other"]
     }
   },
@@ -95,6 +131,24 @@
     "action": { "type": "allow" },
     "condition": {
       "urlFilter": "||api.helius.xyz^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||zecbook.nownodes.io^",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 100,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||nownodes.io^",
       "resourceTypes": ["xmlhttprequest", "other"]
     }
   }

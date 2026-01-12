@@ -22,10 +22,48 @@ import type {
 import { ChainError, ChainErrorCode } from '../types';
 import type { BitcoinChainId, BitcoinKeypair } from './types';
 import { getBitcoinChainConfig, getBitcoinAddressExplorerUrl, getBitcoinTxExplorerUrl } from './config';
-import { deriveBitcoinKeypair, getBitcoinAddressFromMnemonic, isValidBitcoinAddress } from './addresses';
+import { deriveBitcoinKeypair, getBitcoinAddressFromMnemonic, isValidBitcoinAddress, cashAddrToLegacy } from './addresses';
 import { getBalance, getUtxos, getTransactions, getFeeEstimate, broadcastTransaction, getBlockHeight } from './client';
 import { createUnsignedTransaction, estimateTransactionFee, validateTransaction, signTransaction } from './transactions';
 import { validateMnemonic, normalizeMnemonic } from '../../keychain';
+
+/**
+ * Normalize a BCH address to legacy format for comparison.
+ * Handles both legacy (1...) and CashAddr (bitcoincash:q...) formats.
+ */
+function normalizeBchAddressToLegacy(address: string): string {
+  try {
+    // If it's already a legacy address (starts with 1 or 3), return as-is
+    if (address.match(/^[13]/)) {
+      return address;
+    }
+    // If it's a CashAddr, convert to legacy
+    if (address.startsWith('bitcoincash:') || address.match(/^[qp]/)) {
+      return cashAddrToLegacy(address);
+    }
+    return address;
+  } catch {
+    // If conversion fails, return original
+    return address;
+  }
+}
+
+/**
+ * Check if two BCH addresses match (handles CashAddr vs legacy format comparison)
+ * Converts both addresses to legacy format for comparison.
+ */
+function bchAddressesMatch(addr1: string, addr2: string, chainId: string): boolean {
+  // For non-BCH chains, just do case-insensitive comparison
+  if (chainId !== 'bitcoincash') {
+    return addr1.toLowerCase() === addr2.toLowerCase();
+  }
+  
+  // For BCH, normalize both to legacy format and compare
+  const legacy1 = normalizeBchAddressToLegacy(addr1);
+  const legacy2 = normalizeBchAddressToLegacy(addr2);
+  
+  return legacy1.toLowerCase() === legacy2.toLowerCase();
+}
 
 /**
  * Bitcoin-family chain adapter
@@ -223,8 +261,19 @@ export class BitcoinAdapter implements ChainAdapter {
       );
     }
 
+    // Validate transaction before signing (catches dust outputs, etc.)
+    const validation = validateTransaction(rawData.bitcoinTx, this.bitcoinChainId);
+    if (!validation.valid) {
+      throw new ChainError(
+        ChainErrorCode.TRANSACTION_FAILED,
+        validation.error || 'Transaction validation failed',
+        'evm',
+      );
+    }
+
     try {
-      const signedTx = signTransaction(rawData.bitcoinTx, bitcoinKeypair, this.bitcoinChainId);
+      const testnet = this._network === 'testnet';
+      const signedTx = await signTransaction(rawData.bitcoinTx, bitcoinKeypair, this.bitcoinChainId, testnet);
 
       return {
         chainType: 'evm',
@@ -282,22 +331,21 @@ export class BitcoinAdapter implements ChainAdapter {
         let amount = BigInt(0);
         let counterparty: string | null = null;
 
+        // Use address-format-aware comparison for BCH (CashAddr vs legacy)
+        const addressMatches = (addr: string) => bchAddressesMatch(addr, address, this.bitcoinChainId);
+
         // Check inputs for outgoing
         const isOutgoing = tx.vin.some(
-          vin => vin.addresses?.some(addr => addr.toLowerCase() === address.toLowerCase())
+          vin => vin.addresses?.some(addressMatches)
         );
 
         // Check outputs for incoming
         const ourOutputs = tx.vout.filter(
-          vout => vout.scriptPubKey.addresses?.some(
-            addr => addr.toLowerCase() === address.toLowerCase()
-          )
+          vout => vout.scriptPubKey.addresses?.some(addressMatches)
         );
 
         const theirOutputs = tx.vout.filter(
-          vout => !vout.scriptPubKey.addresses?.some(
-            addr => addr.toLowerCase() === address.toLowerCase()
-          )
+          vout => !vout.scriptPubKey.addresses?.some(addressMatches)
         );
 
         if (isOutgoing && theirOutputs.length > 0) {
@@ -313,14 +361,18 @@ export class BitcoinAdapter implements ChainAdapter {
           amount = BigInt(ourOutputs.reduce((sum, out) => sum + out.value, 0));
         }
 
+        // For pending transactions without a block time, use current time
+        const isPending = tx.confirmations === 0;
+        const timestamp = tx.time || tx.blocktime || (isPending ? Math.floor(Date.now() / 1000) : null);
+
         return {
           hash: tx.txid,
-          timestamp: tx.time || tx.blocktime || null,
+          timestamp,
           direction,
           amount,
           amountFormatted: Number(amount) / Math.pow(10, this.config.decimals),
           symbol: this.nativeSymbol,
-          status: tx.confirmations > 0 ? 'confirmed' as const : 'pending' as const,
+          status: isPending ? 'pending' as const : 'confirmed' as const,
           fee: BigInt(tx.fees || 0),
           counterparty,
           type: direction === 'sent' ? `Sent ${this.nativeSymbol}` : `Received ${this.nativeSymbol}`,

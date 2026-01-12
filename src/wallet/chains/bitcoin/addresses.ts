@@ -98,11 +98,18 @@ function hash160(data: Uint8Array): Uint8Array {
 
 /**
  * Encode bytes to Base58Check
+ * Supports both single-byte and multi-byte version prefixes (e.g., Zcash uses 2 bytes)
  */
 function toBase58Check(data: Uint8Array, version: number | number[]): string {
-  const versionBytes = typeof version === 'number' 
-    ? new Uint8Array([version])
-    : new Uint8Array(version.length === 1 ? [version[0]] : [(version[0] >> 8) & 0xff, version[0] & 0xff]);
+  // Convert version to bytes array
+  let versionBytes: Uint8Array;
+  if (typeof version === 'number') {
+    // Single-byte version (Bitcoin, Litecoin, etc.)
+    versionBytes = new Uint8Array([version]);
+  } else {
+    // Multi-byte version (Zcash uses 2 bytes: [0x1c, 0xb8] for t1, [0x1c, 0xbd] for t3)
+    versionBytes = new Uint8Array(version);
+  }
   
   const payload = new Uint8Array(versionBytes.length + data.length);
   payload.set(versionBytes);
@@ -118,8 +125,9 @@ function toBase58Check(data: Uint8Array, version: number | number[]): string {
 
 /**
  * Create a P2PKH (Pay-to-Public-Key-Hash) address - Legacy
+ * Supports both single-byte and multi-byte version prefixes (e.g., Zcash uses 2 bytes)
  */
-function createP2PKHAddress(publicKey: Uint8Array, pubKeyHash: number): string {
+function createP2PKHAddress(publicKey: Uint8Array, pubKeyHash: number | number[]): string {
   const pubKeyHashBytes = hash160(publicKey);
   return toBase58Check(pubKeyHashBytes, pubKeyHash);
 }
@@ -135,8 +143,9 @@ function createP2WPKHAddress(publicKey: Uint8Array, hrp: string): string {
 
 /**
  * Create a P2SH-P2WPKH address - SegWit wrapped in P2SH
+ * Supports both single-byte and multi-byte version prefixes (e.g., Zcash uses 2 bytes)
  */
-function createP2SHP2WPKHAddress(publicKey: Uint8Array, scriptHash: number): string {
+function createP2SHP2WPKHAddress(publicKey: Uint8Array, scriptHash: number | number[]): string {
   const pubKeyHashBytes = hash160(publicKey);
   // Create witness script: OP_0 <20 bytes pubkey hash>
   const witnessScript = new Uint8Array(22);
@@ -173,7 +182,9 @@ export function deriveBitcoinKeypair(
   const type = addressType || config.defaultAddressType;
   
   // Derive seed from mnemonic
-  const seed = bip39.mnemonicToSeedSync(mnemonic.trim().toLowerCase());
+  const seedBuffer = bip39.mnemonicToSeedSync(mnemonic.trim().toLowerCase());
+  // Convert Buffer to Uint8Array for HDKey
+  const seed = new Uint8Array(seedBuffer);
   
   // Create HD wallet from seed
   const hdKey = HDKey.fromMasterSeed(seed);
@@ -299,10 +310,24 @@ export function isValidBitcoinAddress(
     }
     
     // Check version byte(s)
-    const version = payload[0];
+    // Support both single-byte (Bitcoin, Litecoin) and multi-byte (Zcash) versions
+    const checkVersionMatch = (version: number | number[]): boolean => {
+      if (typeof version === 'number') {
+        // Single-byte version
+        return payload[0] === version;
+      } else {
+        // Multi-byte version (e.g., Zcash uses 2 bytes)
+        if (payload.length < version.length) return false;
+        for (let i = 0; i < version.length; i++) {
+          if (payload[i] !== version[i]) return false;
+        }
+        return true;
+      }
+    };
+    
     const isValidVersion = 
-      version === network.pubKeyHash || 
-      version === network.scriptHash;
+      checkVersionMatch(network.pubKeyHash) || 
+      checkVersionMatch(network.scriptHash);
     
     return isValidVersion;
   } catch {
@@ -331,4 +356,223 @@ export function getAllBitcoinAddresses(
   }
   
   return result as Record<BitcoinAddressType, string>;
+}
+
+// ============================================================================
+// Bitcoin Cash CashAddr Format Support
+// ============================================================================
+
+// CashAddr uses a custom Base32 encoding with this alphabet
+const CASHADDR_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+/**
+ * Polymod for BCH checksum calculation (CashAddr uses BCH error-correcting code)
+ */
+function cashAddrPolymod(values: number[]): bigint {
+  const GENERATORS = [
+    BigInt('0x98f2bc8e61'),
+    BigInt('0x79b76d99e2'),
+    BigInt('0xf33e5fb3c4'),
+    BigInt('0xae2eabe2a8'),
+    BigInt('0x1e4f43e470'),
+  ];
+  
+  let chk = BigInt(1);
+  for (const value of values) {
+    const top = chk >> BigInt(35);
+    chk = ((chk & BigInt(0x07ffffffff)) << BigInt(5)) ^ BigInt(value);
+    for (let i = 0; i < 5; i++) {
+      if ((top >> BigInt(i)) & BigInt(1)) {
+        chk ^= GENERATORS[i];
+      }
+    }
+  }
+  return chk ^ BigInt(1);
+}
+
+/**
+ * Expand the human-readable prefix for checksum computation
+ */
+function expandPrefix(prefix: string): number[] {
+  const result: number[] = [];
+  for (const char of prefix) {
+    result.push(char.charCodeAt(0) & 0x1f);
+  }
+  result.push(0); // Separator
+  return result;
+}
+
+/**
+ * Convert data bytes to 5-bit groups for CashAddr encoding
+ */
+function convertBits(data: Uint8Array, fromBits: number, toBits: number, pad: boolean): number[] {
+  let acc = 0;
+  let bits = 0;
+  const result: number[] = [];
+  const maxv = (1 << toBits) - 1;
+
+  for (const value of data) {
+    acc = (acc << fromBits) | value;
+    bits += fromBits;
+    while (bits >= toBits) {
+      bits -= toBits;
+      result.push((acc >> bits) & maxv);
+    }
+  }
+
+  if (pad && bits > 0) {
+    result.push((acc << (toBits - bits)) & maxv);
+  } else if (!pad && (bits >= fromBits || ((acc << (toBits - bits)) & maxv))) {
+    throw new Error('Invalid bit conversion');
+  }
+
+  return result;
+}
+
+/**
+ * Convert a legacy Bitcoin/BCH address to CashAddr format
+ * @param legacyAddress - The legacy address starting with '1' (P2PKH) or '3' (P2SH)
+ * @param prefix - The CashAddr prefix (default: 'bitcoincash' for mainnet)
+ * @returns The CashAddr formatted address (e.g., 'bitcoincash:qp...')
+ */
+export function legacyToCashAddr(legacyAddress: string, prefix: string = 'bitcoincash'): string {
+  // Decode the legacy Base58Check address
+  const decoded = fromBase58(legacyAddress);
+  
+  // Verify checksum
+  if (decoded.length < 25) {
+    throw new Error('Invalid legacy address: too short');
+  }
+  
+  const payload = decoded.slice(0, -4);
+  const checksum = decoded.slice(-4);
+  const expectedChecksum = doubleSha256(payload).slice(0, 4);
+  
+  for (let i = 0; i < 4; i++) {
+    if (checksum[i] !== expectedChecksum[i]) {
+      throw new Error('Invalid legacy address: checksum mismatch');
+    }
+  }
+  
+  // Extract version byte and hash
+  const version = payload[0];
+  const hash = payload.slice(1);
+  
+  if (hash.length !== 20) {
+    throw new Error('Invalid legacy address: wrong hash length');
+  }
+  
+  // Determine CashAddr version byte based on legacy version
+  // Legacy P2PKH (version 0x00) -> CashAddr type 0 (P2PKH)
+  // Legacy P2SH (version 0x05) -> CashAddr type 1 (P2SH)
+  let cashAddrVersion: number;
+  if (version === 0x00) {
+    cashAddrVersion = 0x00; // P2PKH, 160 bits
+  } else if (version === 0x05) {
+    cashAddrVersion = 0x08; // P2SH, 160 bits
+  } else {
+    throw new Error(`Unsupported legacy address version: ${version}`);
+  }
+  
+  // Create payload: version byte + hash
+  const payloadBytes = new Uint8Array(21);
+  payloadBytes[0] = cashAddrVersion;
+  payloadBytes.set(hash, 1);
+  
+  // Convert to 5-bit groups
+  const payloadData = convertBits(payloadBytes, 8, 5, true);
+  
+  // Calculate checksum
+  const prefixData = expandPrefix(prefix);
+  const checksumInput = [...prefixData, ...payloadData, 0, 0, 0, 0, 0, 0, 0, 0];
+  const polymod = cashAddrPolymod(checksumInput);
+  
+  // Extract 8 5-bit checksum values from the 40-bit polymod result
+  const checksumData: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    checksumData.push(Number((polymod >> BigInt(5 * (7 - i))) & BigInt(31)));
+  }
+  
+  // Encode to CashAddr string
+  const combined = [...payloadData, ...checksumData];
+  let result = prefix + ':';
+  for (const value of combined) {
+    result += CASHADDR_CHARSET[value];
+  }
+  
+  return result;
+}
+
+/**
+ * Decode a CashAddr address to get the hash and type
+ * @param cashAddr - The CashAddr address (with or without prefix)
+ * @returns Object containing the hash bytes and address type
+ */
+export function decodeCashAddr(cashAddr: string): { hash: Uint8Array; type: 'P2PKH' | 'P2SH'; prefix: string } {
+  // Normalize to lowercase
+  const addr = cashAddr.toLowerCase();
+  
+  // Split prefix and payload
+  let prefix: string;
+  let payload: string;
+  
+  if (addr.includes(':')) {
+    const parts = addr.split(':');
+    prefix = parts[0];
+    payload = parts[1];
+  } else {
+    // Default to bitcoincash if no prefix
+    prefix = 'bitcoincash';
+    payload = addr;
+  }
+  
+  // Decode the Base32 payload
+  const payloadData: number[] = [];
+  for (const char of payload) {
+    const index = CASHADDR_CHARSET.indexOf(char);
+    if (index < 0) {
+      throw new Error(`Invalid CashAddr character: ${char}`);
+    }
+    payloadData.push(index);
+  }
+  
+  // Verify checksum
+  const prefixData = expandPrefix(prefix);
+  const checksumInput = [...prefixData, ...payloadData];
+  const polymod = cashAddrPolymod(checksumInput);
+  
+  if (polymod !== BigInt(0)) {
+    throw new Error('Invalid CashAddr checksum');
+  }
+  
+  // Remove checksum (last 8 values)
+  const dataWithoutChecksum = payloadData.slice(0, -8);
+  
+  // Convert back to 8-bit bytes
+  const bytes = new Uint8Array(convertBits(new Uint8Array(dataWithoutChecksum), 5, 8, false));
+  
+  // Extract version and hash
+  const version = bytes[0];
+  const hash = bytes.slice(1);
+  
+  // Determine address type
+  const typeBits = version >> 3;
+  const type = typeBits === 0 ? 'P2PKH' : 'P2SH';
+  
+  return { hash, type, prefix };
+}
+
+/**
+ * Convert a CashAddr address back to legacy format
+ * @param cashAddr - The CashAddr address (with or without prefix)
+ * @returns The legacy address (starting with '1' for P2PKH or '3' for P2SH)
+ */
+export function cashAddrToLegacy(cashAddr: string): string {
+  const { hash, type } = decodeCashAddr(cashAddr);
+  
+  // Determine legacy version byte
+  const version = type === 'P2PKH' ? 0x00 : 0x05;
+  
+  // Encode to legacy Base58Check
+  return toBase58Check(hash, version);
 }

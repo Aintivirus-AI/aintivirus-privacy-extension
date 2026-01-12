@@ -117,16 +117,12 @@ export function validateAmount(
 
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const totalRequired = amountLamports + feeLamports;
-  const remainingBalance = balanceLamports - totalRequired;
 
   if (totalRequired > balanceLamports) {
     return {
       valid: false,
       error: `Insufficient balance. Need ${(totalRequired / LAMPORTS_PER_SOL).toFixed(6)} SOL`,
     };
-  }
-
-  if (remainingBalance < MIN_RENT_EXEMPT_BALANCE && remainingBalance > 0) {
   }
 
   return { valid: true };

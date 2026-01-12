@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { WalletState } from '@shared/types';
+import type { WalletState, SendTransactionResult } from '@shared/types';
+import { sendToBackground } from '@shared/messaging';
 import {
   generateOrderId,
   createGiftCardOrder,
@@ -8,7 +9,11 @@ import {
   getAintiTokenPrice,
   convertUsdToAintiTokens,
 } from '../utils/storeApi';
+import { getTreasuryAddress, getAintiTokenConfig } from '../utils/solanaPayment';
 import StoreOrderModal from './StoreOrderModal';
+
+// AINTI Token configuration (loaded from solanaPayment utility)
+const AINTI_CONFIG = getAintiTokenConfig();
 
 interface StorePaymentProps {
   type: 'giftcard' | 'esim';
@@ -41,6 +46,24 @@ const StorePayment: React.FC<StorePaymentProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [tokenPrice, setTokenPrice] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(true);
+  const [treasuryAddress, setTreasuryAddress] = useState<string | null>(null);
+  const [loadingTreasury, setLoadingTreasury] = useState(true);
+
+  // Fetch treasury address from on-chain payment vault
+  useEffect(() => {
+    const fetchTreasury = async () => {
+      setLoadingTreasury(true);
+      try {
+        const address = await getTreasuryAddress();
+        setTreasuryAddress(address);
+      } catch (err) {
+        console.error('Failed to fetch treasury:', err);
+      } finally {
+        setLoadingTreasury(false);
+      }
+    };
+    fetchTreasury();
+  }, []);
 
   // Fetch token price
   useEffect(() => {
@@ -61,6 +84,12 @@ const StorePayment: React.FC<StorePaymentProps> = ({
 
   const handlePayment = useCallback(async () => {
     if (!walletState || tokenAmount === null) return;
+    
+    if (!treasuryAddress) {
+      setError('Treasury address not loaded. Please try again.');
+      setStep('error');
+      return;
+    }
 
     setStep('processing');
     setError(null);
@@ -71,44 +100,63 @@ const StorePayment: React.FC<StorePaymentProps> = ({
       setOrderId(newOrderId);
 
       // Create order in backend
+      // AINTI is on Solana, so always use 'solana' network
       if (type === 'giftcard') {
         await createGiftCardOrder({
           orderId: newOrderId,
           giftCardTypeId: itemId,
           amount,
-          network: currency === 'eth' ? 'evm' : 'solana',
+          network: 'solana',
         });
       } else {
         await createESimOrder({
           orderId: newOrderId,
           eSimPlanTypeId: itemId,
-          network: currency === 'eth' ? 'evm' : 'solana',
+          network: 'solana',
         });
       }
 
-      // In production, this would:
-      // 1. Check/request token approval
-      // 2. Call the payment contract
-      // For now, we simulate the payment
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Send actual payment via wallet (AINTI is on Solana)
+      const result = await sendToBackground<SendTransactionResult>({
+        type: 'WALLET_SEND_SPL_TOKEN',
+        payload: {
+          recipient: treasuryAddress,
+          amount: tokenAmount,
+          mint: AINTI_CONFIG.mint,
+          decimals: AINTI_CONFIG.decimals,
+        },
+      });
 
-      // Generate mock transaction hash
-      const mockTxHash = '0x' + Array.from({ length: 64 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join('');
-
-      setTxHash(mockTxHash);
+      if (!result.success || !result.data?.signature) {
+        throw new Error(result.error || 'Failed to send AINTI token. Please check your balance.');
+      }
+      
+      const paymentTxHash = result.data.signature;
+      setTxHash(paymentTxHash);
 
       // Confirm payment with backend
-      await confirmOrderPayment(newOrderId, mockTxHash);
+      try {
+        await confirmOrderPayment(newOrderId, paymentTxHash);
+      } catch (confirmErr) {
+        // Payment was sent but confirmation failed - still show success
+        console.warn('Payment sent but backend confirmation failed:', confirmErr);
+      }
 
       setStep('success');
     } catch (err) {
       console.error('Payment failed:', err);
-      setError(err instanceof Error ? err.message : 'Payment failed');
+      const errorMessage = err instanceof Error ? err.message : 'Payment failed';
+      // Make error messages more user-friendly
+      if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
+        setError('Insufficient AINTI balance. Please ensure you have enough tokens.');
+      } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
+        setError('Transaction was rejected. Please try again.');
+      } else {
+        setError(errorMessage);
+      }
       setStep('error');
     }
-  }, [walletState, tokenAmount, type, itemId, amount, currency]);
+  }, [walletState, tokenAmount, treasuryAddress, type, itemId, amount]);
 
   // Success modal
   if (step === 'success') {
@@ -164,12 +212,12 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         <h3 className="payment-title">Confirm Payment</h3>
       </div>
 
-      {/* Wallet Status */}
+      {/* Wallet Status - AINTI is on Solana, always show Solana address */}
       {walletState && (
         <div className="payment-wallet-status">
           <span className="payment-wallet-text">
-            Wallet: {(walletState.activeChain === 'solana' ? walletState.publicAddress : walletState.evmAddress)?.slice(0, 6)}...
-            {(walletState.activeChain === 'solana' ? walletState.publicAddress : walletState.evmAddress)?.slice(-4)}
+            Wallet: {walletState.publicAddress?.slice(0, 6)}...
+            {walletState.publicAddress?.slice(-4)}
           </span>
         </div>
       )}
@@ -188,9 +236,7 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         </div>
         <div className="payment-detail-row">
           <span className="payment-detail-label">Network</span>
-          <span className="payment-detail-value">
-            {currency === 'eth' ? 'Ethereum' : 'Solana'}
-          </span>
+          <span className="payment-detail-value">Solana (AINTI)</span>
         </div>
       </div>
 
@@ -240,14 +286,33 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         </div>
       )}
 
+      {/* Treasury Status */}
+      {loadingTreasury && (
+        <div className="payment-warning" style={{ marginBottom: '8px' }}>
+          <span className="payment-warning-icon">⏳</span>
+          <span className="payment-warning-text">
+            Loading treasury address from chain...
+          </span>
+        </div>
+      )}
+      
+      {!loadingTreasury && !treasuryAddress && (
+        <div className="payment-warning" style={{ marginBottom: '8px', color: '#ff6b6b' }}>
+          <span className="payment-warning-icon">⚠️</span>
+          <span className="payment-warning-text">
+            Treasury address not available. Payment program may not be configured.
+          </span>
+        </div>
+      )}
+
       {/* Pay Button */}
       <button
         className="payment-btn"
         onClick={handlePayment}
-        disabled={!walletState || loadingPrice || tokenAmount === null}
+        disabled={!walletState || loadingPrice || loadingTreasury || !treasuryAddress || tokenAmount === null}
       >
-        {loadingPrice 
-          ? 'Loading price...' 
+        {loadingPrice || loadingTreasury
+          ? 'Loading...' 
           : `Pay ${tokenAmount?.toFixed(6) || ''} AINTI`
         }
       </button>

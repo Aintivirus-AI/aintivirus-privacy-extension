@@ -22,8 +22,10 @@ export interface BitcoinChainConfig {
       public: number;
       private: number;
     };
-    pubKeyHash: number;
-    scriptHash: number;
+    /** Version byte(s) for P2PKH addresses - single byte or array for multi-byte prefixes (e.g., Zcash) */
+    pubKeyHash: number | number[];
+    /** Version byte(s) for P2SH addresses - single byte or array for multi-byte prefixes (e.g., Zcash) */
+    scriptHash: number | number[];
     wif: number;
   };
   /** Testnet network parameters */
@@ -34,8 +36,10 @@ export interface BitcoinChainConfig {
       public: number;
       private: number;
     };
-    pubKeyHash: number;
-    scriptHash: number;
+    /** Version byte(s) for P2PKH addresses - single byte or array for multi-byte prefixes (e.g., Zcash) */
+    pubKeyHash: number | number[];
+    /** Version byte(s) for P2SH addresses - single byte or array for multi-byte prefixes (e.g., Zcash) */
+    scriptHash: number | number[];
     wif: number;
   };
   /** Default address type to use */

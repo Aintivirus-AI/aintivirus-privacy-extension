@@ -23,7 +23,8 @@ const StoreESim: React.FC<StoreESimProps> = ({ walletState, onUnlockWallet }) =>
   const [error, setError] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string>('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-  const [selectedCurrency, setSelectedCurrency] = useState<'eth' | 'sol'>('eth');
+  // AINTI is on Solana - always use Solana for payments
+  const [selectedCurrency] = useState<'sol'>('sol');
 
   // Fetch eSIM names on mount
   useEffect(() => {
@@ -78,9 +79,8 @@ const StoreESim: React.FC<StoreESimProps> = ({ walletState, onUnlockWallet }) =>
     return planTypes.find((p) => p.id === selectedPlanId) || null;
   }, [planTypes, selectedPlanId]);
 
-  const handleBuy = (currency: 'eth' | 'sol') => {
+  const handleBuy = () => {
     if (!selectedName || !selectedPlan) return;
-    setSelectedCurrency(currency);
     setView('payment');
   };
 
@@ -230,21 +230,14 @@ const StoreESim: React.FC<StoreESimProps> = ({ walletState, onUnlockWallet }) =>
         </div>
       )}
 
-      {/* Buy Buttons */}
+      {/* Buy Button - AINTI is on Solana */}
       <div className="esim-btn-group">
         <button
-          className="esim-buy-btn secondary"
-          onClick={() => handleBuy('eth')}
-          disabled={!selectedName || !selectedPlan || !walletState}
-        >
-          Buy with ETH-AINTI
-        </button>
-        <button
           className="esim-buy-btn primary"
-          onClick={() => handleBuy('sol')}
+          onClick={handleBuy}
           disabled={!selectedName || !selectedPlan || !walletState}
         >
-          Buy with SOL-AINTI
+          Buy with AINTI (Solana)
         </button>
       </div>
     </div>

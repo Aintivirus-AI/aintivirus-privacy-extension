@@ -43,6 +43,7 @@ export {
   getFeeEstimate,
   broadcastTransaction,
   getBlockHeight,
+  clearBitcoinCache,
 } from './client';
 
 // Transaction utilities

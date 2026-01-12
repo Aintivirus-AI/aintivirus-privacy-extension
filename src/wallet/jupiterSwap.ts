@@ -202,8 +202,9 @@ export interface SwapResult {
 function parseSwapSimulationError(errorMsg: string): string {
   const lowerError = errorMsg.toLowerCase();
   
-  // Log the raw error for debugging
-  console.log('Raw simulation error:', errorMsg);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Raw simulation error:', errorMsg);
+  }
   
   // Check for slippage errors first (more specific)
   // 0x1771 (6001) = Jupiter SlippageToleranceExceeded
@@ -287,8 +288,6 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
 
     const response = await fetch(url, fetchOptions);
     return response;
-  } catch (error) {
-    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -489,7 +488,9 @@ export async function getSwapTransaction(
           ? swapResponse.simulationError
           : JSON.stringify(swapResponse.simulationError);
       
-      console.warn('Swap simulation error (first attempt):', errorMsg);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Swap simulation error (first attempt):', errorMsg);
+      }
       
       // If simulation failed, try with shared accounts enabled
       const retryParams = { ...baseParams, useSharedAccounts: true };
@@ -501,7 +502,9 @@ export async function getSwapTransaction(
             ? retryResponse.simulationError
             : JSON.stringify(retryResponse.simulationError);
         
-        console.error('Swap simulation error (retry with shared accounts):', retryErrorMsg);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Swap simulation error (retry with shared accounts):', retryErrorMsg);
+        }
         
         // Parse common error codes for user-friendly messages
         const userFriendlyError = parseSwapSimulationError(retryErrorMsg);

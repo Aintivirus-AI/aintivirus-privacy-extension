@@ -24,6 +24,11 @@ module.exports = (env, argv) => {
     'AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT',
     'AINTIVIRUS_JUPITER_REFERRAL_FEE_BPS',
     'AINTIVIRUS_JUPITER_REFERRAL_ENABLED',
+    'AINTIVIRUS_NOWNODES_API_KEY',
+    // Payment configuration (matches website's NEXT_PUBLIC_* vars)
+    'SOLANA_PAYMENT_PROGRAM_ID',
+    'MERCHANT_SOL_ADDRESS',
+    'MERCHANT_ETH_ADDRESS',
   ];
   const injectedEnv = INJECTED_ENV_KEYS.reduce((acc, key) => {
     acc[`process.env.${key}`] = JSON.stringify(process.env[key] ?? '');

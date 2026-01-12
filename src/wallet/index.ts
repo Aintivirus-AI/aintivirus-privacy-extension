@@ -27,6 +27,8 @@ import {
   EVMPendingTxInfo,
   EVMGasPresets,
   EVMReplacementFeeEstimate,
+  BTCTransactionResult,
+  BTCFeeEstimate,
 } from './types';
 import {
   walletExists,
@@ -312,6 +314,13 @@ export async function handleWalletMessage(
 
     case 'WALLET_SEND_ERC20':
       return handleSendERC20(payload as WalletMessagePayloads['WALLET_SEND_ERC20']);
+
+    // Bitcoin-family chains
+    case 'WALLET_SEND_BTC':
+      return handleSendBTC(payload as WalletMessagePayloads['WALLET_SEND_BTC']);
+
+    case 'WALLET_ESTIMATE_BTC_FEE':
+      return handleEstimateBTCFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE']);
 
     case 'WALLET_GET_EVM_TOKENS':
       return handleGetEVMTokens(payload as WalletMessagePayloads['WALLET_GET_EVM_TOKENS']);
@@ -872,7 +881,9 @@ async function handleGetTokenMetadata(
           logoUri: logoUri,
         };
       }
-    } catch (error) {}
+    } catch {
+      // Token metadata lookup is non-critical; fall through to other sources
+    }
     return null;
   }
 
@@ -958,29 +969,17 @@ async function handleGetEVMBalance(
   const testnet = settings.networkEnvironment === 'testnet';
   const network = testnet ? 'testnet' : 'mainnet';
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMBalance:entry',message:'Balance request received',data:{chainId,testnet,isEVM:isEVMChain(chainId)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H5'})}).catch(()=>{});
-  // #endregion
-  
   // Check if this is actually an EVM chain or a different chain family
   const chainConfig = getChain(chainId);
   
   if (chainConfig && !isEVMChain(chainId)) {
-    // This is a non-EVM chain (Bitcoin, TRON, Monero, etc.)
-    // Use the appropriate adapter for this chain
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMBalance:nonEVM',message:'Non-EVM chain detected',data:{chainId,chainFamily:chainConfig.family,symbol:chainConfig.symbol},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H5'})}).catch(()=>{});
-    // #endregion
+    // Non-EVM chain (Bitcoin, TRON, Monero, etc.) - use the appropriate adapter
     try {
       const adapter = getAdapterForChain(chainId, network);
       
-      // For non-EVM chains, we need to derive the address from mnemonic
-      // Get the mnemonic from the unlocked wallet
+      // Derive address from mnemonic for non-EVM chains
       const mnemonic = getUnlockedMnemonic();
       if (!mnemonic) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMBalance:noMnemonic',message:'No mnemonic available',data:{chainId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H5'})}).catch(()=>{});
-        // #endregion
         return {
           wei: '0',
           formatted: 0,
@@ -992,10 +991,6 @@ async function handleGetEVMBalance(
       const address = await adapter.deriveAddress(mnemonic, 0);
       const balance = await adapter.getBalance(address);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMBalance:success',message:'Non-EVM balance fetched',data:{chainId,address,formatted:balance.formatted,symbol:balance.symbol},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H5'})}).catch(()=>{});
-      // #endregion
-      
       return {
         wei: balance.raw.toString(),
         formatted: balance.formatted,
@@ -1003,10 +998,8 @@ async function handleGetEVMBalance(
         lastUpdated: balance.lastUpdated,
       };
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMBalance:error',message:'Failed to get non-EVM balance',data:{chainId,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-H5'})}).catch(()=>{});
-      // #endregion
-      console.error(`Failed to get balance for ${chainId}:`, error);
+      // Always log balance fetch errors for debugging
+      console.warn(`[Wallet] Failed to get balance for ${chainId}:`, error instanceof Error ? error.message : String(error));
       return {
         wei: '0',
         formatted: 0,
@@ -1127,7 +1120,9 @@ async function handleSendETH(
           testnet: testnet,
         }),
       );
-    } catch (err) {}
+    } catch {
+      // Pending tx tracking is non-critical; transaction was still successful
+    }
 
     return {
       hash: txResponse.hash,
@@ -1168,7 +1163,9 @@ async function handleSendETH(
           }),
         );
       }
-    } catch (err) {}
+    } catch {
+      // Pending tx tracking is non-critical; transaction was still successful
+    }
   }
 
   return {
@@ -1235,7 +1232,9 @@ async function handleSendERC20(
           }),
         );
       }
-    } catch (err) {}
+    } catch {
+      // Pending tx tracking is non-critical; transaction was still successful
+    }
   }
 
   return {
@@ -1285,7 +1284,9 @@ async function handleGetEVMTokens(
         isCustom: false,
       }));
     } catch (error) {
-      console.error(`Failed to get tokens for ${chainId}:`, error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Failed to get tokens for ${chainId}:`, error);
+      }
       return [];
     }
   }
@@ -1375,17 +1376,10 @@ async function handleGetEVMHistory(
   const testnet = settings.networkEnvironment === 'testnet';
   const network = testnet ? 'testnet' : 'mainnet';
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMHistory:entry',message:'History request received',data:{chainId,testnet,isEVM:isEVMChain(chainId),limit:payload?.limit},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4-H5'})}).catch(()=>{});
-  // #endregion
-
   // Check if this is actually an EVM chain
   const chainConfig = getChain(chainId);
   if (chainConfig && !isEVMChain(chainId)) {
     // Non-EVM chains: get history using the chain's adapter
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMHistory:nonEVM',message:'Non-EVM history fetch',data:{chainId,chainFamily:chainConfig.family},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4-H5'})}).catch(()=>{});
-    // #endregion
     try {
       const adapter = getAdapterForChain(chainId, network);
       
@@ -1397,10 +1391,6 @@ async function handleGetEVMHistory(
       
       const address = await adapter.deriveAddress(mnemonic, 0);
       const result = await adapter.getTransactionHistory(address, payload?.limit || 20);
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMHistory:result',message:'Non-EVM history result',data:{chainId,txCount:result.transactions.length,hasMore:result.hasMore,sampleTx:result.transactions[0]?{hash:result.transactions[0].hash,direction:result.transactions[0].direction,amount:result.transactions[0].amountFormatted}:null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4-H5'})}).catch(()=>{});
-      // #endregion
       
       // Map to serializable format for the UI
       const serializableTransactions = result.transactions.map((tx) => ({
@@ -1424,10 +1414,8 @@ async function handleGetEVMHistory(
         hasMore: result.hasMore,
       };
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'wallet/index.ts:handleGetEVMHistory:error',message:'Failed to get non-EVM history',data:{chainId,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4-H5'})}).catch(()=>{});
-      // #endregion
-      console.error(`Failed to get history for ${chainId}:`, error);
+      // Always log history fetch errors for debugging
+      console.warn(`[Wallet] Failed to get history for ${chainId}:`, error instanceof Error ? error.message : String(error));
       return { transactions: [], hasMore: false };
     }
   }
@@ -1586,7 +1574,9 @@ async function handleGetChainAddress(
       symbol: chainConfig.symbol,
     };
   } catch (error) {
-    console.error(`Failed to derive address for ${chainId}:`, error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`Failed to derive address for ${chainId}:`, error);
+    }
     return {
       address: '',
       chainId,
@@ -1825,6 +1815,142 @@ async function handleEstimateReplacementFee(
     warning: fees.exceedsWarning
       ? 'Gas fee is higher than normal. Consider waiting for lower fees.'
       : undefined,
+  };
+}
+
+// ============================================================================
+// Bitcoin Handlers
+// ============================================================================
+
+/**
+ * Send Bitcoin (or other Bitcoin-family coin)
+ */
+async function handleSendBTC(
+  payload: WalletMessagePayloads['WALLET_SEND_BTC'],
+): Promise<BTCTransactionResult> {
+  const { chainId, recipient, amountSatoshis } = payload;
+
+  // Validate chain is a Bitcoin-family chain
+  const chainConfig = getChain(chainId);
+  if (!chainConfig || chainConfig.family !== 'bitcoin') {
+    throw new WalletError(
+      WalletErrorCode.NETWORK_ERROR,
+      `Chain ${chainId} is not a Bitcoin-family chain`,
+    );
+  }
+
+  // Get mnemonic to derive Bitcoin keypair
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock to send transactions.',
+    );
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  // Import Bitcoin functions dynamically
+  const { deriveBitcoinKeypair, isValidBitcoinAddress } = await import('./chains/bitcoin/addresses');
+  const { createUnsignedTransaction, signTransaction } = await import('./chains/bitcoin/transactions');
+  const { broadcastTransaction: broadcastBtcTx, getBitcoinTxExplorerUrl } = await import('./chains/bitcoin');
+  type BitcoinChainId = import('./chains/bitcoin/types').BitcoinChainId;
+
+  // Derive keypair - cast chainId to BitcoinChainId type
+  const bitcoinChainId = chainId as BitcoinChainId;
+  const keypair = deriveBitcoinKeypair(mnemonic, bitcoinChainId, 0, undefined, testnet);
+
+  // Validate recipient address
+  if (!isValidBitcoinAddress(recipient, bitcoinChainId, testnet)) {
+    throw new WalletError(
+      WalletErrorCode.INVALID_RECIPIENT,
+      `Invalid ${chainConfig.name} address: ${recipient}`,
+    );
+  }
+
+  // Create unsigned transaction
+  const { tx: unsignedTx, fee } = await createUnsignedTransaction(
+    bitcoinChainId,
+    keypair.address,
+    recipient,
+    amountSatoshis,
+    testnet,
+  );
+
+  // Sign transaction
+  const signedTx = await signTransaction(unsignedTx, keypair, bitcoinChainId, testnet);
+
+  // Broadcast transaction
+  const txid = await broadcastBtcTx(bitcoinChainId, signedTx.hex, testnet);
+
+  // Clear cache for this address so balance updates immediately
+  const { clearBitcoinCache } = await import('./chains/bitcoin');
+  clearBitcoinCache(bitcoinChainId, keypair.address);
+
+  // Get explorer URL
+  const explorerUrl = getBitcoinTxExplorerUrl(bitcoinChainId, txid, testnet);
+
+  return {
+    txid,
+    explorerUrl,
+    confirmed: false, // Bitcoin transactions need confirmations
+  };
+}
+
+/**
+ * Estimate fee for a Bitcoin transaction
+ */
+async function handleEstimateBTCFee(
+  payload: WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE'],
+): Promise<BTCFeeEstimate> {
+  const { chainId, recipient, amountSatoshis } = payload;
+
+  // Validate chain is a Bitcoin-family chain
+  const chainConfig = getChain(chainId);
+  if (!chainConfig || chainConfig.family !== 'bitcoin') {
+    throw new WalletError(
+      WalletErrorCode.NETWORK_ERROR,
+      `Chain ${chainId} is not a Bitcoin-family chain`,
+    );
+  }
+
+  // Get mnemonic to derive Bitcoin address
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    // Return a default estimate if wallet is locked
+    return {
+      feeRate: 10,
+      totalFeeSatoshis: 1500, // Approximate for a typical tx
+      totalFeeBTC: 0.000015,
+      estimatedBlocks: 6,
+    };
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  // Import Bitcoin functions dynamically
+  const { deriveBitcoinKeypair } = await import('./chains/bitcoin/addresses');
+  const { estimateTransactionFee } = await import('./chains/bitcoin/transactions');
+  type BitcoinChainIdType = import('./chains/bitcoin/types').BitcoinChainId;
+
+  const bitcoinChainId = chainId as BitcoinChainIdType;
+  const keypair = deriveBitcoinKeypair(mnemonic, bitcoinChainId, 0, undefined, testnet);
+
+  const feeEstimate = await estimateTransactionFee(
+    bitcoinChainId,
+    keypair.address,
+    recipient,
+    amountSatoshis,
+    testnet,
+  );
+
+  return {
+    feeRate: feeEstimate.feeRate,
+    totalFeeSatoshis: feeEstimate.totalFee,
+    totalFeeBTC: feeEstimate.totalFee / 100000000, // Convert satoshis to BTC
+    estimatedBlocks: feeEstimate.estimatedBlocks,
   };
 }
 

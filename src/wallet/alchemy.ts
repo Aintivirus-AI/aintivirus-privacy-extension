@@ -411,16 +411,19 @@ export async function getAlchemyEVMHistory(
       transactions,
       pageKey: undefined,
     };
-  } catch (error) {
-    throw error;
+  } catch {
+    // If the entire fetch fails, return empty results
+    return {
+      transactions: [],
+      pageKey: undefined,
+    };
   }
 }
 
 /**
- * Note: Alchemy for Solana doesn't offer enhanced transaction history APIs like ETH
- * Solana transaction history is fetched using standard RPC methods in history.ts
- * Alchemy's benefit for Solana is providing a reliable RPC endpoint (configured in network settings)
- * This function is kept for potential future use if Alchemy adds enhanced Solana APIs
+ * Alchemy Solana support is limited to RPC endpoints (configured in network settings).
+ * Enhanced APIs like transaction history are not yet available for Solana.
+ * Solana history is fetched via standard RPC methods in history.ts.
  */
 
 /**

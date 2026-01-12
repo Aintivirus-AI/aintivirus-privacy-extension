@@ -69,6 +69,7 @@ import {
   formatHiddenTxAmount,
   HIDDEN_BALANCE,
 } from './utils/balancePrivacy';
+import { isSwapAvailableForChain } from './utils/chainDisplay';
 import {
   filterSPLTokens,
   filterEVMTokens,
@@ -2110,15 +2111,25 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           setTokens(tokensRes.data as SPLTokenBalance[]);
         }
       } else if (chainFamily === 'bitcoin' || chainFamily === 'tron') {
-        // Auto-refresh for Bitcoin/Tron chains
+        // Auto-refresh for Bitcoin/Tron chains - fetch both balance AND history
         const chainId = activeChainId || 'bitcoin';
-        const evmBalanceRes = await sendToBackground({
-          type: 'WALLET_GET_EVM_BALANCE',
-          payload: { evmChainId: chainId },
-        });
+        const [evmBalanceRes, historyRes] = await Promise.all([
+          sendToBackground({
+            type: 'WALLET_GET_EVM_BALANCE',
+            payload: { evmChainId: chainId },
+          }),
+          sendToBackground({
+            type: 'WALLET_GET_EVM_HISTORY',
+            payload: { evmChainId: chainId, limit: 50 },
+          }),
+        ]);
 
         if (evmBalanceRes.success && evmBalanceRes.data) {
           setEvmBalance(evmBalanceRes.data as EVMBalance);
+        }
+        if (historyRes.success && historyRes.data) {
+          const result = historyRes.data as { transactions: EVMHistoryItem[] };
+          setEvmHistory(result.transactions || []);
         }
       } else if (chainFamily === 'evm' && evmAddress) {
         // Auto-refresh for actual EVM chains
@@ -2452,10 +2463,12 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           <ReceiveIcon size={20} />
           <span className="action-label">Receive</span>
         </button>
-        <button className="wallet-action-btn" onClick={() => onSwap(tokens, evmTokens, balance, evmBalance)}>
-          <SwapIcon size={20} />
-          <span className="action-label">Swap</span>
-        </button>
+        {activeChainId && isSwapAvailableForChain(activeChainId) && (
+          <button className="wallet-action-btn" onClick={() => onSwap(tokens, evmTokens, balance, evmBalance)}>
+            <SwapIcon size={20} />
+            <span className="action-label">Swap</span>
+          </button>
+        )}
       </div>
 
       <div className="wallet-tabs">
@@ -2465,20 +2478,20 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         >
           Activity
         </button>
-        <button
-          className={`wallet-tab ${activeTab === 'tokens' ? 'active' : ''} ${!isActuallySolana && !isActuallyEVM ? 'disabled' : ''}`}
-          onClick={() => (isActuallySolana || isActuallyEVM) && setActiveTab('tokens')}
-          disabled={!isActuallySolana && !isActuallyEVM}
-          title={!isActuallySolana && !isActuallyEVM ? 'Tokens not supported for this chain' : undefined}
-        >
-          Tokens{isActuallySolana || isActuallyEVM ? ` (${
-            debouncedSearchQuery.trim()
-              ? visibleTokenCount
-              : isActuallySolana
-                ? 1 + tokens.length
-                : 1 + evmTokens.length
-          })` : ''}
-        </button>
+        {supportsTokens && (
+          <button
+            className={`wallet-tab ${activeTab === 'tokens' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tokens')}
+          >
+            Tokens ({
+              debouncedSearchQuery.trim()
+                ? visibleTokenCount
+                : isActuallySolana
+                  ? 1 + tokens.length
+                  : 1 + evmTokens.length
+            })
+          </button>
+        )}
         <button
           className={`wallet-tab ${activeTab === 'security' ? 'active' : ''}`}
           onClick={() => setActiveTab('security')}
@@ -3494,15 +3507,17 @@ const SendForm: React.FC<SendFormProps> = ({
     return SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
   }, [activeChain, activeEVMChain, activeChainId]);
   
-  // Only Solana and EVM chains support sending for now
-  const isSendingSupported = activeChain === 'solana' || currentChainInfo?.family === 'evm';
+  // Solana, EVM, and Bitcoin-family chains support sending
+  const isSendingSupported = activeChain === 'solana' || currentChainInfo?.family === 'evm' || currentChainInfo?.family === 'bitcoin';
   const isWatchOnlyChain = currentChainInfo?.family === 'monero';
+  const isBitcoinFamily = currentChainInfo?.family === 'bitcoin';
 
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [feeEstimate, setFeeEstimate] = useState<FeeEstimate | null>(null);
   const [evmFeeEstimate, setEvmFeeEstimate] = useState<EVMFeeEstimate | null>(null);
+  const [btcFeeEstimate, setBtcFeeEstimate] = useState<{ feeRate: number; totalFeeSatoshis: number; totalFeeBTC: number; estimatedBlocks: number } | null>(null);
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
   const [sending, setSending] = useState(false);
@@ -3547,10 +3562,11 @@ const SendForm: React.FC<SendFormProps> = ({
             setNativeTokenPrice(data.price);
           }
         } else {
-          const evmChainId = activeEVMChain || 'ethereum';
+          // Use activeChainId for Bitcoin-family chains, otherwise use activeEVMChain
+          const chainId = activeChainId || activeEVMChain || 'ethereum';
           const nativePriceRes = await sendToBackground({ 
             type: 'GET_EVM_NATIVE_PRICE', 
-            payload: { evmChainId } 
+            payload: { evmChainId: chainId } 
           });
           if (nativePriceRes.success && nativePriceRes.data) {
             const data = nativePriceRes.data as { price: number; change24h: number | null };
@@ -3581,10 +3597,12 @@ const SendForm: React.FC<SendFormProps> = ({
             setTokenPrice(data.price);
           }
         } else {
-          const evmChainId = activeEVMChain || 'ethereum';
+          // Use activeChainId for Bitcoin-family chains (litecoin, bitcoin, etc.)
+          // Fall back to activeEVMChain for actual EVM chains
+          const chainId = activeChainId || activeEVMChain || 'ethereum';
           const priceRes = await sendToBackground({ 
             type: 'GET_EVM_NATIVE_PRICE', 
-            payload: { evmChainId } 
+            payload: { evmChainId: chainId } 
           });
           if (priceRes.success && priceRes.data) {
             const data = priceRes.data as { price: number; change24h: number | null };
@@ -3594,7 +3612,7 @@ const SendForm: React.FC<SendFormProps> = ({
       } catch (e) {}
     };
     loadData();
-  }, [activeChain, activeEVMChain, selectedToken]);
+  }, [activeChain, activeEVMChain, activeChainId, selectedToken]);
 
   // Calculate USD value of the transfer
   const getTransferUsdValue = (tokenAmount: number): number => {
@@ -3655,6 +3673,8 @@ const SendForm: React.FC<SendFormProps> = ({
   // Get native symbol for current chain
   const getNativeSymbol = () => {
     if (activeChain === 'solana') return 'SOL';
+    // For Bitcoin and other chains, use currentChainInfo which is already computed
+    if (currentChainInfo) return currentChainInfo.symbol;
     const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
     return chain?.symbol || 'ETH';
   };
@@ -3672,6 +3692,8 @@ const SendForm: React.FC<SendFormProps> = ({
   // Get chain name for display
   const getChainName = () => {
     if (activeChain === 'solana') return 'Solana';
+    // For Bitcoin and other chains, use currentChainInfo which is already computed
+    if (currentChainInfo) return currentChainInfo.name;
     const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
     return chain?.name || 'Ethereum';
   };
@@ -3707,9 +3729,11 @@ const SendForm: React.FC<SendFormProps> = ({
         setBalance(res.data as WalletBalance);
       }
     } else {
+      // Use activeChainId for Bitcoin-family chains, otherwise use activeEVMChain
+      const chainId = isBitcoinFamily && activeChainId ? activeChainId : activeEVMChain;
       const res = await sendToBackground({
         type: 'WALLET_GET_EVM_BALANCE',
-        payload: { evmChainId: activeEVMChain },
+        payload: { evmChainId: chainId },
       });
       if (res.success && res.data) {
         setEvmBalance(res.data as EVMBalance);
@@ -3727,6 +3751,20 @@ const SendForm: React.FC<SendFormProps> = ({
         });
         if (res.success && res.data) {
           setFeeEstimate(res.data as FeeEstimate);
+        }
+      } else if (isBitcoinFamily && activeChainId) {
+        // Bitcoin fee estimation
+        const amountSatoshis = Math.floor(tokenAmount * 100000000); // Convert BTC to satoshis
+        const res = await sendToBackground({
+          type: 'WALLET_ESTIMATE_BTC_FEE',
+          payload: {
+            chainId: activeChainId,
+            recipient,
+            amountSatoshis,
+          },
+        });
+        if (res.success && res.data) {
+          setBtcFeeEstimate(res.data as { feeRate: number; totalFeeSatoshis: number; totalFeeBTC: number; estimatedBlocks: number });
         }
       } else {
         const res = await sendToBackground({
@@ -3768,8 +3806,41 @@ const SendForm: React.FC<SendFormProps> = ({
             balance.sol - estimatedFee - SOLANA_RENT_EXEMPT_MIN - 0.000005,
           );
         }
+      } else if (isBitcoinFamily && evmBalance) {
+        // Bitcoin-family chains - estimate fee and deduct from balance
+        let estimatedFee = btcFeeEstimate?.totalFeeBTC || 0.00002; // Default ~2000 satoshis
+
+        if (recipient && activeChainId) {
+          try {
+            // Estimate fee for Bitcoin transfer
+            const amountSatoshis = Math.floor(evmBalance.formatted * 100000000 * 0.9); // 90% of balance for estimation
+            const res = await sendToBackground({
+              type: 'WALLET_ESTIMATE_BTC_FEE',
+              payload: {
+                chainId: activeChainId,
+                recipient,
+                amountSatoshis,
+              },
+            });
+            
+            if (res.success && res.data) {
+              const feeData = res.data as { feeRate: number; totalFeeSatoshis: number; totalFeeBTC: number; estimatedBlocks: number };
+              estimatedFee = feeData.totalFeeBTC;
+              setBtcFeeEstimate(feeData);
+            }
+          } catch {
+            // Keep existing estimate or default
+          }
+        }
+
+        // Add safety buffer for fee rate fluctuations (20% buffer)
+        const safetyBuffer = Math.max(estimatedFee * 0.2, 0.00001);
+        maxTokenAmount = Math.max(0, evmBalance.formatted - estimatedFee - safetyBuffer);
+        
+        // Store the fee used for validation consistency
+        maxFeeUsedRef.current = estimatedFee;
       } else {
-        // For ERC20 tokens, use the token balance directly
+        // EVM chains - For ERC20 tokens, use the token balance directly
         if (isSendingEvmToken && selectedToken) {
           maxTokenAmount = selectedToken.uiBalance;
         } else if (evmBalance) {
@@ -3823,8 +3894,10 @@ const SendForm: React.FC<SendFormProps> = ({
             ? selectedToken.decimals
             : activeChain === 'solana'
               ? 9
-              : 18;
-        formattedAmount = maxTokenAmount.toFixed(Math.min(decimals, 6)).replace(/\.?0+$/, '');
+              : isBitcoinFamily
+                ? 8
+                : 18;
+        formattedAmount = maxTokenAmount.toFixed(Math.min(decimals, 8)).replace(/\.?0+$/, '');
       }
       
       // Store the max amount for validation consistency
@@ -3847,12 +3920,19 @@ const SendForm: React.FC<SendFormProps> = ({
     }
 
     // Validate address format before proceeding
-    const isValidAddress =
-      activeChain === 'solana' ? isValidSolanaAddress(recipient) : isValidEVMAddress(recipient);
+    let isValidAddress = false;
+    if (activeChain === 'solana') {
+      isValidAddress = isValidSolanaAddress(recipient);
+    } else if (isBitcoinFamily) {
+      // For Bitcoin addresses, we'll validate on the backend
+      // Basic check: must not be empty and have reasonable length
+      isValidAddress = recipient.length >= 26 && recipient.length <= 90;
+    } else {
+      isValidAddress = isValidEVMAddress(recipient);
+    }
 
     if (!isValidAddress) {
-      const chainName = activeChain === 'solana' ? 'Solana' : getChainName();
-      setError(`Invalid ${chainName} address. Please check and try again.`);
+      setError(`Invalid ${getChainName()} address. Please check and try again.`);
       return;
     }
 
@@ -3888,7 +3968,6 @@ const SendForm: React.FC<SendFormProps> = ({
 
     // For native currency, account for fees and rent-exempt minimum (Solana only)
     let effectiveMax: number;
-    let evmFeeForValidation = evmFeeEstimate?.totalFeeEth;
     
     if (isSendingToken) {
       effectiveMax = availableBalance;
@@ -3896,6 +3975,20 @@ const SendForm: React.FC<SendFormProps> = ({
       // Solana: deduct fee + rent-exempt minimum
       const fee = feeEstimate?.feeSol || 0.000015;
       effectiveMax = Math.max(0, availableBalance - fee - SOLANA_RENT_EXEMPT_MIN - 0.000005);
+    } else if (isBitcoinFamily) {
+      // Bitcoin: Use stored MAX fee if amount matches MAX, otherwise use current estimate
+      let fee: number;
+      
+      // If user is sending the exact MAX amount we calculated, use the same fee
+      if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
+        fee = maxFeeUsedRef.current;
+      } else {
+        fee = btcFeeEstimate?.totalFeeBTC || 0.00002; // ~2000 satoshis default
+      }
+      
+      // Use same buffer formula as MAX calculation (20% buffer)
+      const safetyBuffer = Math.max(fee * 0.2, 0.00001);
+      effectiveMax = Math.max(0, availableBalance - fee - safetyBuffer);
     } else {
       // EVM: Use stored MAX fee if amount matches MAX, otherwise use current estimate
       // This ensures consistency between MAX click and Send validation
@@ -3905,7 +3998,7 @@ const SendForm: React.FC<SendFormProps> = ({
       if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
         fee = maxFeeUsedRef.current;
       } else {
-        fee = evmFeeForValidation || 0.002;
+        fee = evmFeeEstimate?.totalFeeEth || 0.002;
       }
       
       // Use same buffer formula as MAX calculation (30% or minimum 0.00002)
@@ -3979,8 +4072,15 @@ const SendForm: React.FC<SendFormProps> = ({
     setSending(true);
     setSendStatus('Preparing transaction...');
 
-    // Status update intervals for user feedback (EVM takes longer)
-    const statusUpdates = activeChain === 'evm'
+    // Status update intervals for user feedback (EVM and Bitcoin take longer)
+    const statusUpdates = isBitcoinFamily
+      ? [
+          { delay: 1500, status: 'Signing transaction...' },
+          { delay: 3000, status: 'Broadcasting to network...' },
+          { delay: 5000, status: 'Waiting for confirmation...' },
+          { delay: 15000, status: 'Transaction broadcast. Confirmations may take 10+ minutes.' },
+        ]
+      : activeChain === 'evm'
       ? [
           { delay: 1500, status: 'Signing transaction...' },
           { delay: 3000, status: 'Broadcasting to network...' },
@@ -4044,6 +4144,25 @@ const SendForm: React.FC<SendFormProps> = ({
             type: 'WALLET_SEND_SOL',
             payload: { recipient, amountSol: tokenAmountToSend },
           });
+        }
+      } else if (isBitcoinFamily && activeChainId) {
+        // Bitcoin-family chain - send native coin
+        const amountSatoshis = Math.floor(tokenAmountToSend * 100000000); // Convert BTC to satoshis
+        res = await sendToBackground({
+          type: 'WALLET_SEND_BTC',
+          payload: {
+            chainId: activeChainId,
+            recipient,
+            amountSatoshis,
+          },
+        });
+        // Map BTC result to SendTransactionResult format
+        if (res.success && res.data) {
+          const btcResult = res.data as { txid: string; explorerUrl: string; confirmed: boolean; error?: string };
+          res.data = {
+            signature: btcResult.txid,
+            explorerUrl: btcResult.explorerUrl,
+          };
         }
       } else {
         // EVM chain - check if we're sending an ERC20 token or native ETH
@@ -4181,14 +4300,23 @@ const SendForm: React.FC<SendFormProps> = ({
 
   // Transaction Review Screen
   if (showReview && !success) {
-    const chain = SUPPORTED_CHAINS.find((c) =>
-      activeChain === 'solana'
-        ? c.type === 'solana'
-        : c.type === 'evm' && c.evmChainId === activeEVMChain,
-    );
+    const chain = SUPPORTED_CHAINS.find((c) => {
+      if (activeChain === 'solana') {
+        return c.type === 'solana';
+      }
+      // Check for Bitcoin-family chains first (using activeChainId)
+      if (activeChainId && c.chainId === activeChainId) {
+        return true;
+      }
+      // Fall back to EVM chain matching
+      return c.type === 'evm' && c.evmChainId === activeEVMChain;
+    });
 
-    const fee =
-      activeChain === 'solana' ? feeEstimate?.feeSol || 0 : evmFeeEstimate?.totalFeeEth || 0;
+    const fee = activeChain === 'solana' 
+      ? feeEstimate?.feeSol || 0 
+      : isBitcoinFamily 
+        ? btcFeeEstimate?.totalFeeBTC || 0 
+        : evmFeeEstimate?.totalFeeEth || 0;
 
     const reviewTokenAmount = getTokenAmountToSend();
     const reviewUsdValue = getTransferUsdValue(reviewTokenAmount);
@@ -4221,7 +4349,7 @@ const SendForm: React.FC<SendFormProps> = ({
           ) : (
             // Show chain icon and name for native currency
             <>
-              <ChainIcon chain={activeChain} evmChainId={activeEVMChain || undefined} size={20} />
+              <ChainIcon chain={activeChain} evmChainId={activeChainId || activeEVMChain || undefined} size={20} />
               <span>{chain?.name || 'Unknown Chain'}</span>
             </>
           )}
@@ -4352,7 +4480,9 @@ const SendForm: React.FC<SendFormProps> = ({
             </div>
             <div className="swap-processing-text">{sendStatus}</div>
             <div className="swap-processing-hint">
-              {activeChain === 'evm'
+              {isBitcoinFamily
+                ? `${currentChainInfo?.name || 'Bitcoin'} transactions may take 10+ minutes to confirm`
+                : activeChain === 'evm'
                 ? 'EVM transactions may take 15-60 seconds to confirm'
                 : 'Solana transactions typically confirm in a few seconds'}
             </div>
@@ -4420,6 +4550,11 @@ const SendForm: React.FC<SendFormProps> = ({
       const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
       return `~${evmFeeEstimate.totalFeeEth.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
     }
+    if (isBitcoinFamily && btcFeeEstimate) {
+      const feeUsd = nativeTokenPrice ? btcFeeEstimate.totalFeeBTC * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      return `~${btcFeeEstimate.totalFeeBTC.toFixed(8)} ${getNativeSymbol()} (${btcFeeEstimate.feeRate} sat/vB)${usdPart}`;
+    }
     return null;
   };
 
@@ -4436,6 +4571,8 @@ const SendForm: React.FC<SendFormProps> = ({
       fee = feeEstimate.feeSol;
     } else if (activeChain === 'evm' && evmFeeEstimate) {
       fee = evmFeeEstimate.totalFeeEth;
+    } else if (isBitcoinFamily && btcFeeEstimate) {
+      fee = btcFeeEstimate.totalFeeBTC;
     }
     
     if (fee === 0) return null;
@@ -4444,7 +4581,8 @@ const SendForm: React.FC<SendFormProps> = ({
     const totalUsd = nativeTokenPrice ? total * nativeTokenPrice : null;
     const usdPart = totalUsd !== null ? ` ($${totalUsd.toFixed(2)})` : '';
     
-    return `~${total.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
+    const decimals = isBitcoinFamily ? 8 : 6;
+    return `~${total.toFixed(decimals)} ${getNativeSymbol()}${usdPart}`;
   };
 
   const feeDisplay = getFeeDisplay();
@@ -6961,7 +7099,7 @@ const App: React.FC = () => {
       {activeTab === 'store' && (
         <StoreTab 
           walletState={walletState} 
-          onUnlockWallet={() => setActiveTab('wallet')}
+          onWalletStateChange={fetchWalletState}
         />
       )}
 

@@ -113,21 +113,12 @@ export async function getBalance(
   address: string,
   testnet: boolean = false
 ): Promise<TronBalance> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getBalance:entry',message:'Getting TRON balance',data:{address,testnet},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   const account = await getAccount(address, testnet);
   
   if (!account) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getBalance:noAccount',message:'TRON account not found',data:{address},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     return { balance: 0, trxBalance: 0 };
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getBalance:success',message:'TRON balance fetched',data:{address,balance:account.balance,trxBalance:sunToTrx(account.balance)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   return {
     balance: account.balance,
     trxBalance: sunToTrx(account.balance),
@@ -199,33 +190,19 @@ export async function getTransactions(
 ): Promise<TronTransaction[]> {
   const baseUrl = getApiBaseUrl(testnet);
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getTransactions:entry',message:'Getting TRON transactions',data:{address,testnet,limit,baseUrl},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
-  
   const response = await fetchWithTimeout(
     `${baseUrl}/v1/accounts/${address}/transactions?limit=${limit}`
   );
   
   if (!response.ok) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getTransactions:error',message:'TRON transactions request failed',data:{address,status:response.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     throw new Error(`Failed to get transactions: ${response.status}`);
   }
 
   const data = await response.json();
   
   if (!data.data || data.data.length === 0) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getTransactions:empty',message:'No TRON transactions found',data:{address},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     return [];
   }
-
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a703f37f-90e8-40d1-9473-330bf66f7908',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tron/client.ts:getTransactions:success',message:'TRON transactions fetched',data:{address,count:data.data.length,sampleTx:data.data[0]?{txID:data.data[0].txID,blockNumber:data.data[0].blockNumber}:null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
 
   return data.data.map((tx: any) => {
     // Parse the transaction

@@ -397,6 +397,15 @@ export type WalletSendERC20Message = BaseMessage<
   'WALLET_SEND_ERC20',
   WalletMessagePayloads['WALLET_SEND_ERC20']
 >;
+// Bitcoin-family chain messages
+export type WalletSendBTCMessage = BaseMessage<
+  'WALLET_SEND_BTC',
+  WalletMessagePayloads['WALLET_SEND_BTC']
+>;
+export type WalletEstimateBTCFeeMessage = BaseMessage<
+  'WALLET_ESTIMATE_BTC_FEE',
+  WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE']
+>;
 export type WalletGetEVMTokensMessage = BaseMessage<
   'WALLET_GET_EVM_TOKENS',
   WalletMessagePayloads['WALLET_GET_EVM_TOKENS']
@@ -721,6 +730,9 @@ export type ExtensionMessage =
   | WalletGetEVMBalanceMessage
   | WalletSendETHMessage
   | WalletSendERC20Message
+  // Bitcoin-family chains
+  | WalletSendBTCMessage
+  | WalletEstimateBTCFeeMessage
   | WalletGetEVMTokensMessage
   | WalletGetEVMHistoryMessage
   | WalletEstimateEVMFeeMessage

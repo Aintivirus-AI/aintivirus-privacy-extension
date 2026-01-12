@@ -2,11 +2,8 @@
  * Store API utilities for gift cards, eSIMs, and payment processing
  */
 
-// API URLs - tries localhost first for development, then production
-const API_URLS = [
-  'http://localhost:3000',
-  'https://api.aintivirus.ai',
-];
+// API URL
+const API_URL = 'https://api.v2.aintivirus.ai';
 
 // Contract addresses (should match website configuration)
 export const AINTIVIRUS_PAYMENT_ADDRESS = '0x0000000000000000000000000000000000000000'; // TODO: Set from env
@@ -62,40 +59,37 @@ export interface TokenPriceResult {
 // API Helper
 // ============================================================================
 
-async function fetchWithFallback<T>(
+async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  for (const baseUrl of API_URLS) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...options?.headers,
-        },
-      });
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...options?.headers,
+      },
+    });
 
-      clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (err) {
-      console.warn(`Failed to fetch from ${baseUrl}:`, err);
-      continue;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP ${response.status}`);
     }
-  }
 
-  throw new Error('Unable to connect to API. Please try again later.');
+    return await response.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error('API request failed:', err);
+    throw new Error('Unable to connect to API. Please try again later.');
+  }
 }
 
 // ============================================================================
@@ -106,7 +100,7 @@ async function fetchWithFallback<T>(
  * Fetch all active gift card types
  */
 export async function getAllGiftCardTypes(): Promise<GiftCardType[]> {
-  const data = await fetchWithFallback<GiftCardType[] | { giftCardTypes?: GiftCardType[]; items?: GiftCardType[] }>(
+  const data = await fetchApi<GiftCardType[] | { giftCardTypes?: GiftCardType[]; items?: GiftCardType[] }>(
     '/public-gift-card-types'
   );
 
@@ -182,7 +176,7 @@ export function getMergedGiftCardData(
  * Fetch unique eSIM names
  */
 export async function getUniqueESimNames(): Promise<ESimNamesResponse> {
-  return fetchWithFallback<ESimNamesResponse>('/public-esims/names');
+  return fetchApi<ESimNamesResponse>('/public-esims/names');
 }
 
 /**
@@ -196,7 +190,7 @@ export async function getPlanTypesByName(name: string): Promise<PlanTypesRespons
   const params = new URLSearchParams();
   params.append('name', name);
 
-  return fetchWithFallback<PlanTypesResponse>(`/public-esims/plan-types?${params.toString()}`);
+  return fetchApi<PlanTypesResponse>(`/public-esims/plan-types?${params.toString()}`);
 }
 
 // ============================================================================
@@ -227,7 +221,7 @@ export async function createGiftCardOrder(params: {
   amount: number;
   network: 'evm' | 'solana';
 }): Promise<OrderResult> {
-  return fetchWithFallback<OrderResult>('/public-orders/gift-card', {
+  return fetchApi<OrderResult>('/public-orders/gift-card', {
     method: 'POST',
     body: JSON.stringify({
       orderId: params.orderId,
@@ -246,7 +240,7 @@ export async function createESimOrder(params: {
   eSimPlanTypeId: string;
   network: 'evm' | 'solana';
 }): Promise<OrderResult> {
-  return fetchWithFallback<OrderResult>('/public-orders/esim', {
+  return fetchApi<OrderResult>('/public-orders/esim', {
     method: 'POST',
     body: JSON.stringify({
       orderId: params.orderId,
@@ -263,7 +257,7 @@ export async function confirmOrderPayment(
   orderId: string,
   paymentTxHash: string
 ): Promise<{ orderId: string; status: string; message: string }> {
-  return fetchWithFallback(`/public-orders/${orderId}/confirm-payment`, {
+  return fetchApi(`/public-orders/${orderId}/confirm-payment`, {
     method: 'POST',
     body: JSON.stringify({ paymentTxHash }),
   });
@@ -280,7 +274,7 @@ export async function getOrderById(orderId: string): Promise<{
   paymentNetwork?: string;
   productType?: string;
 }> {
-  return fetchWithFallback(`/public-orders/${orderId}`);
+  return fetchApi(`/public-orders/${orderId}`);
 }
 
 // ============================================================================
@@ -288,16 +282,49 @@ export async function getOrderById(orderId: string): Promise<{
 // ============================================================================
 
 /**
- * Fetch AINTI token price from DexScreener
+ * Fetch AINTI token price from backend API (matches website implementation)
  */
 export async function getAintiTokenPrice(network: 'eth' | 'sol'): Promise<TokenPriceResult> {
   try {
-    const pairAddress = network === 'eth'
-      ? '0x...' // ETH pair address - TODO: configure
-      : 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW'; // SOL token mint
+    const response = await fetch(
+      `${API_URL}/payment/token-price?network=${network}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
 
-    const chain = network === 'eth' ? 'ethereum' : 'solana';
-    const url = `https://api.dexscreener.com/latest/dex/tokens/${pairAddress}`;
+    if (!response.ok) {
+      console.error('Failed to fetch token price from backend');
+      // Fallback to DexScreener if backend fails
+      return getAintiTokenPriceFallback(network);
+    }
+
+    const data = await response.json();
+    const price = data.data?.priceUsd;
+
+    if (price === null || price === undefined) {
+      return getAintiTokenPriceFallback(network);
+    }
+
+    return { price };
+  } catch (err) {
+    console.error('Failed to fetch token price:', err);
+    // Fallback to DexScreener
+    return getAintiTokenPriceFallback(network);
+  }
+}
+
+/**
+ * Fallback: Fetch AINTI token price from DexScreener
+ */
+async function getAintiTokenPriceFallback(network: 'eth' | 'sol'): Promise<TokenPriceResult> {
+  try {
+    const tokenAddress = network === 'eth'
+      ? AINTI_TOKEN_ETH_ADDRESS || '0x...'
+      : AINTI_TOKEN_SOL_MINT;
+
+    const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -319,7 +346,7 @@ export async function getAintiTokenPrice(network: 'eth' | 'sol'): Promise<TokenP
     const price = parseFloat(sortedPairs[0].priceUsd);
     return { price: isNaN(price) ? null : price };
   } catch (err) {
-    console.error('Failed to fetch token price:', err);
+    console.error('DexScreener fallback failed:', err);
     return { price: null, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }

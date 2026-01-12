@@ -789,8 +789,8 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     color: '#FF0013',
     description: 'High-throughput blockchain',
     nativeTokenAddress: 'trx',
-    swapEnabled: true,
-    swapProvider: '1inch', // Will use SunSwap
+    swapEnabled: false, // Disabled: SunSwap contract integration not yet implemented
+    // swapProvider: 'sunswap', // TODO: Enable when SunSwap integration is complete
     popularTokens: [
       {
         address: 'trx',

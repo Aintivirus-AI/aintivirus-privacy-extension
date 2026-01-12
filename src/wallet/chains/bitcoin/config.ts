@@ -70,6 +70,7 @@ const BITCOINCASH_MAINNET = {
 };
 
 // Zcash mainnet network parameters (transparent addresses only)
+// Zcash uses 2-byte version prefixes for addresses
 const ZCASH_MAINNET = {
   messagePrefix: '\x18Zcash Signed Message:\n',
   bech32: '', // Zcash transparent doesn't use bech32
@@ -77,8 +78,9 @@ const ZCASH_MAINNET = {
     public: 0x0488b21e,
     private: 0x0488ade4,
   },
-  pubKeyHash: 0x1cb8,
-  scriptHash: 0x1cbd,
+  // Zcash t-addresses use 2-byte prefixes (stored as arrays)
+  pubKeyHash: [0x1c, 0xb8], // 0x1CB8 - produces 't1' addresses
+  scriptHash: [0x1c, 0xbd],  // 0x1CBD - produces 't3' addresses
   wif: 0x80,
 };
 
@@ -133,9 +135,9 @@ export const BITCOIN_CHAINS: Record<BitcoinChainId, BitcoinChainConfig> = {
     apiUrls: [
       'https://api.blockchair.com/litecoin',
     ],
-    explorerUrl: 'https://blockchair.com/litecoin',
+    explorerUrl: 'https://litecoinspace.org',
     minRelayFee: 1,
-    dustThreshold: 546,
+    dustThreshold: 1000, // Increased from 546 for safety margin against network rejection
   },
 
   zcash: {

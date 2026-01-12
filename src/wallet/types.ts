@@ -415,6 +415,8 @@ export type WalletMessageType =
   | 'WALLET_GET_EVM_BALANCE'
   | 'WALLET_SEND_ETH'
   | 'WALLET_SEND_ERC20'
+  | 'WALLET_SEND_BTC'
+  | 'WALLET_ESTIMATE_BTC_FEE'
   | 'WALLET_GET_EVM_TOKENS'
   | 'WALLET_GET_EVM_HISTORY'
   | 'WALLET_ESTIMATE_EVM_FEE'
@@ -503,6 +505,26 @@ export interface WalletMessagePayloads {
   WALLET_GET_EVM_BALANCE: { evmChainId?: EVMChainId | string | null };
   WALLET_SEND_ETH: EVMSendParams;
   WALLET_SEND_ERC20: EVMTokenSendParams;
+  
+  /** Send native Bitcoin (or Bitcoin-family coin) */
+  WALLET_SEND_BTC: {
+    /** Bitcoin-family chain ID (bitcoin, bitcoincash, litecoin, zcash) */
+    chainId: string;
+    /** Recipient address */
+    recipient: string;
+    /** Amount in satoshis */
+    amountSatoshis: number;
+  };
+  
+  /** Estimate fee for a Bitcoin transaction */
+  WALLET_ESTIMATE_BTC_FEE: {
+    /** Bitcoin-family chain ID */
+    chainId: string;
+    /** Recipient address */
+    recipient: string;
+    /** Amount in satoshis */
+    amountSatoshis: number;
+  };
   WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | string | null; forceRefresh?: boolean };
   WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | string | null; limit?: number };
   WALLET_ESTIMATE_EVM_FEE: {
@@ -641,6 +663,8 @@ export interface WalletMessageResponses {
   WALLET_GET_EVM_BALANCE: EVMBalance;
   WALLET_SEND_ETH: EVMTransactionResult;
   WALLET_SEND_ERC20: EVMTransactionResult;
+  WALLET_SEND_BTC: BTCTransactionResult;
+  WALLET_ESTIMATE_BTC_FEE: BTCFeeEstimate;
   WALLET_GET_EVM_TOKENS: EVMTokenBalance[];
   WALLET_GET_EVM_HISTORY: { transactions: any[]; hasMore: boolean };
   WALLET_ESTIMATE_EVM_FEE: EVMFeeEstimate;
@@ -1070,6 +1094,36 @@ export interface EVMTransactionResult {
   error?: string;
 }
 
+/** Bitcoin transaction result */
+export interface BTCTransactionResult {
+  /** Transaction ID (hash) */
+  txid: string;
+
+  /** Block explorer URL */
+  explorerUrl: string;
+
+  /** Whether transaction is confirmed (Bitcoin needs ~6 confirmations) */
+  confirmed: boolean;
+
+  /** Error message if transaction failed */
+  error?: string;
+}
+
+/** Bitcoin fee estimate */
+export interface BTCFeeEstimate {
+  /** Fee rate in satoshis per virtual byte */
+  feeRate: number;
+
+  /** Total fee in satoshis */
+  totalFeeSatoshis: number;
+
+  /** Total fee in BTC (formatted) */
+  totalFeeBTC: number;
+
+  /** Estimated confirmation time in blocks */
+  estimatedBlocks: number;
+}
+
 export type ChainFamily = 'solana' | 'evm' | 'bitcoin' | 'tron' | 'monero';
 
 export interface ChainDisplayInfo {
@@ -1096,8 +1150,7 @@ export interface ChainDisplayInfo {
 
 /**
  * Dynamically generated list of supported chains from the registry.
- * To add a new chain, simply add it to CHAIN_REGISTRY in src/wallet/chains/registry.ts
- * and it will automatically appear here.
+ * New chains are added via CHAIN_REGISTRY in src/wallet/chains/registry.ts.
  */
 import { CHAIN_REGISTRY, type ChainFamily as RegistryChainFamily } from './chains/registry';
 

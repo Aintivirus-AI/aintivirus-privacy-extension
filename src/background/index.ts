@@ -318,6 +318,9 @@ async function handleMessage(
     case 'WALLET_GET_EVM_BALANCE':
     case 'WALLET_SEND_ETH':
     case 'WALLET_SEND_ERC20':
+    // Bitcoin-family chains
+    case 'WALLET_SEND_BTC':
+    case 'WALLET_ESTIMATE_BTC_FEE':
     case 'WALLET_GET_EVM_TOKENS':
     case 'WALLET_GET_EVM_HISTORY':
     case 'WALLET_ESTIMATE_EVM_FEE':
