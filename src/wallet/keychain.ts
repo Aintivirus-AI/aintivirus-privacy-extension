@@ -375,9 +375,7 @@ export function validatePrivateKey(privateKey: string): {
   chainType: 'solana' | 'evm' | 'unknown';
   error?: string;
 } {
-  const trimmed = privateKey.trim();
-
-  if (trimmed.startsWith('0x') || (/^[0-9a-fA-F]+$/.test(trimmed) && trimmed.length === 64)) {
+  const trimmed = privateKey.trim();  if (trimmed.startsWith('0x') || (/^[0-9a-fA-F]+$/.test(trimmed) && trimmed.length === 64)) {
     try {
       evmKeypairFromPrivateKey(trimmed);
       return { valid: true, chainType: 'evm' };
