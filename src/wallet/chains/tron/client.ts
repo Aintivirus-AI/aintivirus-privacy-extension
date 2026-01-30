@@ -16,22 +16,36 @@ import type {
 import { TRON_NETWORKS, TRON_CONSTANTS, COMMON_TRC20_TOKENS, sunToTrx } from './config';
 
 const API_TIMEOUT = 30000;
+const MIN_REQUEST_INTERVAL = 400; // 400ms between requests to stay under TronGrid's ~3 RPS limit
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+let lastRequestTime = 0;
+
+/**
+ * Fetch with timeout and rate limiting
+ */
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    await delay(MIN_REQUEST_INTERVAL - timeSinceLastRequest);
+  }
+  lastRequestTime = Date.now();
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
   try {
-    const response = await fetch(url, {
+    return await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
-        Accept: 'application/json',
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
         ...options.headers,
       },
     });
-    return response;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -42,24 +56,6 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
  */
 function getApiBaseUrl(testnet: boolean = false): string {
   return testnet ? TRON_NETWORKS.testnet.fullNode : TRON_NETWORKS.mainnet.fullNode;
-}
-
-/**
- * Convert base58 address to hex format
- */
-export function addressToHex(address: string): string {
-  // TRON addresses start with 'T' and are base58check encoded
-  // For API calls, we need the hex format (starting with 41)
-  const base58Chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  
-  let hex = BigInt(0);
-  for (const char of address) {
-    hex = hex * BigInt(58) + BigInt(base58Chars.indexOf(char));
-  }
-  
-  const hexStr = hex.toString(16);
-  // Remove checksum (last 8 hex chars)
-  return hexStr.slice(0, -8);
 }
 
 /**
@@ -274,7 +270,39 @@ export async function getTRC20Transfers(
 }
 
 /**
+ * Check if an account exists on TRON using wallet/getaccount endpoint
+ */
+export async function accountExists(
+  address: string,
+  testnet: boolean = false
+): Promise<boolean> {
+  const baseUrl = getApiBaseUrl(testnet);
+  
+  try {
+    // Use POST endpoint which is more reliable
+    const response = await fetchWithTimeout(`${baseUrl}/wallet/getaccount`, {
+      method: 'POST',
+      body: JSON.stringify({
+        address,
+        visible: true,
+      }),
+    });
+    
+    if (!response.ok) {
+      return false;
+    }
+    
+    const data = await response.json();
+    // Account exists if it has an address field in response
+    return !!(data && (data.address || data.account_name !== undefined || data.balance !== undefined));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Create a TRX transfer transaction
+ * For new accounts, TRON requires the transfer to include account creation
  */
 export async function createTransferTransaction(
   fromAddress: string,
@@ -284,6 +312,24 @@ export async function createTransferTransaction(
 ): Promise<UnsignedTronTransaction> {
   const baseUrl = getApiBaseUrl(testnet);
   
+  const senderAccount = await getAccount(fromAddress, testnet);
+  if (!senderAccount) {
+    throw new Error('SENDER_NOT_FOUND: Your TRON account was not found. Please ensure your wallet is properly set up.');
+  }
+  
+  // Verify sender has enough balance
+  if (senderAccount.balance < amount) {
+    throw new Error(`INSUFFICIENT_BALANCE: Your balance (${sunToTrx(senderAccount.balance)} TRX) is less than the amount you want to send.`);
+  }
+  
+  const receiverExists = await accountExists(toAddress, testnet);
+  
+  // New accounts require at least 1 TRX to activate
+  if (!receiverExists && amount < TRON_CONSTANTS.SUN_PER_TRX) {
+    throw new Error('RECEIVER_NOT_ACTIVATED: To send to a new address, you must send at least 1 TRX to activate it.');
+  }
+  
+  // Try creating the transfer transaction
   const response = await fetchWithTimeout(`${baseUrl}/wallet/createtransaction`, {
     method: 'POST',
     body: JSON.stringify({
@@ -304,36 +350,124 @@ export async function createTransferTransaction(
   if (tx.Error) {
     throw new Error(tx.Error);
   }
+  
+  // Check for transaction creation errors - handle various error response formats
+  if (tx.result && tx.result.result === false) {
+    // Error in result object
+    let errorMsg = 'Transaction creation failed';
+    if (tx.result.message) {
+      errorMsg = /^[0-9a-fA-F]+$/.test(tx.result.message) 
+        ? decodeHexMessage(tx.result.message)
+        : tx.result.message;
+    }
+    throw new Error(errorMsg);
+  }
+  
+  if (!tx.txID || !tx.raw_data_hex) {
+    // Missing required fields - check for error details
+    if (tx.message) {
+      const errorMsg = /^[0-9a-fA-F]+$/.test(tx.message)
+        ? decodeHexMessage(tx.message)
+        : tx.message;
+      throw new Error(errorMsg);
+    }
+    throw new Error('Failed to create transaction - invalid response from TRON network.');
+  }
 
   return tx;
 }
 
 /**
- * Broadcast a signed transaction
+ * Decode hex-encoded error messages from TRON API
+ */
+function decodeHexMessage(hex: string): string {
+  try {
+    if (!/^[0-9a-fA-F]+$/.test(hex)) {
+      return hex;
+    }
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return hex;
+  }
+}
+
+/**
+ * Broadcast a signed transaction with retry logic for rate limits
  */
 export async function broadcastTransaction(
   signedTx: SignedTronTransaction,
   testnet: boolean = false
 ): Promise<string> {
   const baseUrl = getApiBaseUrl(testnet);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000; // 2 seconds between retries
   
-  const response = await fetchWithTimeout(`${baseUrl}/wallet/broadcasttransaction`, {
-    method: 'POST',
-    body: JSON.stringify(signedTx),
-  });
+  let lastError: Error | null = null;
   
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to broadcast transaction: ${error}`);
-  }
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await delay(RETRY_DELAY * attempt); // Exponential backoff
+    }
+    
+    try {
+      const response = await fetchWithTimeout(`${baseUrl}/wallet/broadcasttransaction`, {
+        method: 'POST',
+        body: JSON.stringify(signedTx),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        // Check for rate limit error
+        if (error.includes('rate exceeded') || error.includes('suspended')) {
+          lastError = new Error(`Rate limited: ${error}`);
+          continue; // Retry
+        }
+        throw new Error(`Failed to broadcast transaction: ${error}`);
+      }
 
-  const result = await response.json();
+      const result = await response.json();
   
-  if (result.code && result.code !== 'SUCCESS') {
-    throw new Error(result.message || `Broadcast failed: ${result.code}`);
-  }
+      if (result.code && result.code !== 'SUCCESS') {
+        // Decode hex message if present
+        let errorMsg = result.message || `Broadcast failed: ${result.code}`;
+        if (result.message && /^[0-9a-fA-F]+$/.test(result.message)) {
+          errorMsg = decodeHexMessage(result.message);
+        }
+        // Check for rate limit in response
+        if (errorMsg.includes('rate exceeded') || errorMsg.includes('suspended')) {
+          lastError = new Error(errorMsg);
+          continue; // Retry
+        }
+        throw new Error(errorMsg);
+      }
+      
+      // Also check for result.result === false with a message
+      if (result.result === false && result.message) {
+        let errorMsg = result.message;
+        if (/^[0-9a-fA-F]+$/.test(result.message)) {
+          errorMsg = decodeHexMessage(result.message);
+        }
+        throw new Error(errorMsg);
+      }
 
-  return signedTx.txID;
+      return signedTx.txID;
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('rate exceeded') || errorMsg.includes('suspended') || errorMsg.includes('Rate limited')) {
+        lastError = error instanceof Error ? error : new Error(errorMsg);
+        continue; // Retry
+      }
+      throw error; // Re-throw non-rate-limit errors
+    }
+  }
+  
+  // All retries exhausted
+  throw lastError || new Error('Failed to broadcast transaction after multiple retries');
 }
 
 /**
@@ -364,11 +498,12 @@ export async function getNowBlock(testnet: boolean = false): Promise<{
  */
 export async function estimateFee(
   fromAddress: string,
-  toAddress: string,
-  amount: number,
+  _toAddress: string,
+  _amount: number,
   testnet: boolean = false
 ): Promise<TronFeeEstimate> {
-  // Get account to check available bandwidth
+  // Note: toAddress and amount could be used for more accurate estimates
+  // (e.g., new account activation costs) but aren't currently needed
   const account = await getAccount(fromAddress, testnet);
   
   // Basic TRX transfer uses ~270 bytes of bandwidth

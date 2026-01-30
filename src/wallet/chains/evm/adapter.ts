@@ -415,13 +415,22 @@ export class EVMAdapter implements ChainAdapter {
           let amountFormatted: number;
           let symbol: string;
           
-          if (isTokenTransfer && tx.tokenValue) {
+          if (isTokenTransfer) {
             // Token transfer - use the token's value and decimals
-            amount = BigInt(tx.tokenValue);
-            const decimals = tx.tokenDecimals || 18;
-            amountFormatted = Number(formatUnits(amount, decimals));
-            // Use the asset symbol from Alchemy, fallback to native symbol
-            symbol = tx.asset || this.nativeSymbol;
+            // tokenValue may be undefined for some contract interactions, fallback to value field
+            if (tx.tokenValue) {
+              amount = BigInt(tx.tokenValue);
+              const decimals = tx.tokenDecimals || 18;
+              amountFormatted = Number(formatUnits(amount, decimals));
+            } else {
+              // Fallback: try using the value field (might be in decimal format from Alchemy)
+              // or default to 0 if truly unavailable
+              amount = BigInt(tx.value || '0');
+              const decimals = tx.tokenDecimals || 18;
+              amountFormatted = Number(formatUnits(amount, decimals));
+            }
+            // Always use the asset symbol from Alchemy for token transfers, fallback to unknown
+            symbol = tx.asset || 'TOKEN';
           } else {
             // Native transfer - use native value
             amount = BigInt(tx.value || '0');
@@ -500,7 +509,7 @@ export class EVMAdapter implements ChainAdapter {
       }
     }
 
-    // Fallback to Etherscan-like APIs
+    // Fallback to Etherscan-like APIs (BscScan, PolygonScan, etc.)
     try {
       const apiUrl = this.getExplorerApiUrl(testnet);
       if (!apiUrl) {

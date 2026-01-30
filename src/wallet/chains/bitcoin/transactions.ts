@@ -360,9 +360,6 @@ export async function createUnsignedTransaction(
     }
   }
   
-  // Log transaction details for debugging
-  console.log(`[${chainId}] Transaction: inputs=${totalInput}, outputs=${totalOutput}, fee=${implicitFee}, ` +
-    `outputCount=${outputs.length}, change=${changeAmount >= effectiveDustThreshold ? changeAmount : 0}`);
   
   // Double-check: if we have change that's below threshold but above 0, something is wrong
   if (changeAmount > 0 && changeAmount < effectiveDustThreshold) {
@@ -1295,7 +1292,6 @@ export async function signTransaction(
       const { getBlockHeight } = await import('./client');
       const blockHeight = await getBlockHeight(chainId, testnet);
       consensusBranchId = getConsensusBranchId(blockHeight);
-      console.log(`[Zcash] Block height: ${blockHeight}, branch ID: 0x${consensusBranchId.toString(16)}`);
     } catch (error) {
       console.error('[Zcash Sign] Failed to fetch block height, using fallback (NU6):', error);
       // Fallback to NU6 if we can't fetch block height (activated November 2024)

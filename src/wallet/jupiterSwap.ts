@@ -202,58 +202,73 @@ export interface SwapResult {
 function parseSwapSimulationError(errorMsg: string): string {
   const lowerError = errorMsg.toLowerCase();
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Raw simulation error:', errorMsg);
-  }
-  
-  // Check for slippage errors first (more specific)
+  // Check for slippage errors - be VERY specific with error codes
   // 0x1771 (6001) = Jupiter SlippageToleranceExceeded
   // 0x1786 (6022) = Raydium slippage
-  // 0x1789 (6025) = AMM ExceededSlippage / price impact too high
-  if (lowerError.includes('0x1771') || lowerError.includes('6001') || 
-      lowerError.includes('0x1786') || lowerError.includes('6022') ||
-      lowerError.includes('0x1789') || lowerError.includes('6025') ||
-      lowerError.includes('slippage') || lowerError.includes('exceeds')) {
-    return 'Price impact or slippage too high. Try: 1) Increase slippage tolerance (e.g., 3-5%), 2) Use a smaller swap amount, or 3) Wait for better liquidity.';
+  if (lowerError.includes('0x1771') || lowerError.includes('error: 6001') ||
+      lowerError.includes('0x1786') || lowerError.includes('error: 6022') ||
+      lowerError.includes('slippagetoleranceexceeded') ||
+      lowerError.includes('slippage tolerance')) {
+    return 'Slippage tolerance exceeded - the price changed between quote and execution. Fix: Increase slippage to 2%, 5%, or even 10% for volatile tokens and retry.';
   }
   
   // Check for invalid amount errors
-  if (lowerError.includes('0x1772') || lowerError.includes('6002') ||
-      lowerError.includes('0x1773') || lowerError.includes('6003') ||
+  if (lowerError.includes('0x1772') || lowerError.includes('error: 6002') ||
+      lowerError.includes('0x1773') || lowerError.includes('error: 6003') ||
       lowerError.includes('invalid input') || lowerError.includes('invalid output')) {
     return 'Invalid swap amount. The amount may be too small or too large for this token pair.';
   }
   
-  // Check for insufficient funds - be careful, 0x1 is very generic
-  // Only match if it's specifically about insufficient funds
-  if (lowerError.includes('insufficient') || 
-      (lowerError.includes('0x1') && !lowerError.includes('0x1771') && !lowerError.includes('0x1772') && !lowerError.includes('0x1773') && !lowerError.includes('0x1786'))) {
+  // Check for insufficient funds - look for specific patterns
+  if (lowerError.includes('insufficient funds') || 
+      lowerError.includes('insufficient balance') ||
+      lowerError.includes('insufficient lamports') ||
+      (lowerError.includes('custom program error: 0x1') && !lowerError.includes('0x1771') && !lowerError.includes('0x1772') && !lowerError.includes('0x1773') && !lowerError.includes('0x1786'))) {
     return 'Insufficient balance. Please check that you have enough tokens to swap AND at least 0.01 SOL for transaction fees. If swapping SOL, leave some for fees.';
   }
   
+  // Token account issues
   if (lowerError.includes('account not found') || lowerError.includes('account does not exist') || lowerError.includes('owner does not match')) {
     return 'Token account issue. You may need to have a small SOL balance (at least 0.002 SOL) to create the token account for receiving the output token.';
   }
   
-  // Check for compute budget errors
-  if (lowerError.includes('compute') || lowerError.includes('budget') || lowerError.includes('exceeded')) {
+  // Compute budget errors - be more specific
+  if (lowerError.includes('computationalbudgetexceeded') || lowerError.includes('exceeded computational budget')) {
     return 'Transaction too complex. Try swapping a smaller amount or use a direct route.';
   }
   
-  if (lowerError.includes('0x0') || lowerError.includes('custom program error: 0x0')) {
-    return 'Transaction failed. This may be due to low liquidity or high network congestion. Try again with a smaller amount or different token pair.';
+  // Generic program error 0x0
+  if (lowerError.includes('custom program error: 0x0')) {
+    return 'Transaction failed (error 0x0). This may be due to low liquidity, pool state change, or network congestion. Try a smaller amount or try again in a moment.';
   }
   
+  // Blockhash/expiry issues
   if (lowerError.includes('blockhash') || lowerError.includes('expired')) {
     return 'Transaction expired. The network is congested. Please try again.';
   }
   
-  if (lowerError.includes('rent') || lowerError.includes('lamports')) {
+  // Rent issues
+  if (lowerError.includes('rent') && lowerError.includes('lamports')) {
     return 'Insufficient SOL for rent. You need at least 0.01 SOL to cover account creation fees.';
   }
   
+  // AMM/Pool specific errors
+  if (lowerError.includes('0x1789') || lowerError.includes('error: 6025') ||
+      lowerError.includes('price impact')) {
+    return 'Price impact too high. The swap amount is too large for the available liquidity. Try a smaller amount.';
+  }
+  
+  // If error contains specific numbers, show them
+  const hexMatch = errorMsg.match(/0x[0-9a-f]+/i);
+  const decimalMatch = errorMsg.match(/error[:\s]+(\d+)/i);
+  
+  if (hexMatch || decimalMatch) {
+    const code = hexMatch?.[0] || decimalMatch?.[1];
+    return `Swap failed with error code ${code}. This may be a liquidity or routing issue. Try: 1) Smaller amount, 2) Higher slippage (5-10%), 3) Wait and retry. Raw: ${errorMsg.slice(0, 200)}`;
+  }
+  
   // Return original error with context if no pattern matched
-  return `Swap simulation failed: ${errorMsg}. Try with a smaller amount or different slippage settings.`;
+  return `Swap simulation failed: ${errorMsg.slice(0, 300)}. Try with a smaller amount, higher slippage, or wait a moment and retry.`;
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
@@ -314,9 +329,10 @@ export function deriveReferralTokenAccount(referralAccount: string, tokenMint: s
 
 /**
  * Get the fee account for a swap (if referral is enabled)
+ * Returns undefined if referral is disabled or fee account can't be derived
  */
 function getFeeAccount(outputMint: string): string | undefined {
-  if (!JUPITER_REFERRAL_CONFIG.ENABLED) {
+  if (!JUPITER_REFERRAL_CONFIG.ENABLED || !JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT) {
     return undefined;
   }
 
@@ -327,9 +343,18 @@ function getFeeAccount(outputMint: string): string | undefined {
     );
     return feeAccount.toBase58();
   } catch {
-    // Referral fee account derivation failed - this is non-critical, swap will proceed without referral
     return undefined;
   }
+}
+
+/**
+ * Check if we should include platform fee in quote
+ * Only include if referral is enabled AND we have a valid referral account
+ */
+function shouldIncludePlatformFee(): boolean {
+  return JUPITER_REFERRAL_CONFIG.ENABLED && 
+         Boolean(JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT) &&
+         JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT.length > 0;
 }
 
 // ============================================================================
@@ -359,9 +384,13 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
     asLegacyTransaction: asLegacyTransaction.toString(),
   });
 
-  // Add referral fee if enabled
-  if (JUPITER_REFERRAL_CONFIG.ENABLED) {
-    queryParams.append('platformFeeBps', JUPITER_REFERRAL_CONFIG.FEE_BPS.toString());
+  // Only add platform fee if we have a valid referral setup and can derive fee account
+  // If we add platformFeeBps to quote, we MUST provide feeAccount when building swap
+  if (shouldIncludePlatformFee()) {
+    const feeAccount = getFeeAccount(outputMint);
+    if (feeAccount) {
+      queryParams.append('platformFeeBps', JUPITER_REFERRAL_CONFIG.FEE_BPS.toString());
+    }
   }
 
   const url = `${JUPITER_QUOTE_ENDPOINT}?${queryParams.toString()}`;
@@ -437,17 +466,16 @@ export async function getSwapTransaction(
     quoteResponse: quote.rawQuote,
     userPublicKey,
     wrapAndUnwrapSol: true,
-    // Disable shared accounts - can cause "0x1" errors on some tokens
+    // Disable shared accounts initially - can cause "0x1" errors on some tokens
     useSharedAccounts: false,
     dynamicComputeUnitLimit: true,
-    // Use a fixed priority fee for reliability
+    // Use higher priority fee for better success rate
     prioritizationFeeLamports: {
       priorityLevelWithMaxLamports: {
-        maxLamports: 1000000, // 0.001 SOL max priority fee
-        priorityLevel: 'medium',
+        maxLamports: 2000000, // 0.002 SOL max priority fee
+        priorityLevel: 'high', // Use high priority for better success
       },
     },
-    // Skip preflight to avoid false simulation errors
     skipUserAccountsRpcCalls: false,
     ...options,
   };
@@ -469,6 +497,16 @@ export async function getSwapTransaction(
 
     if (!response.ok) {
       const errorText = await response.text();
+      
+      // Check if error is about fee account - this means the quote has platformFee 
+      // but we couldn't provide a valid fee account
+      if (errorText.includes('feeAccount is required') || errorText.includes('NOT_SUPPORTED')) {
+        throw new WalletError(
+          WalletErrorCode.TRANSACTION_FAILED,
+          `PLATFORM_FEE_ERROR: ${errorText}`,
+        );
+      }
+      
       throw new WalletError(
         WalletErrorCode.TRANSACTION_FAILED,
         `Jupiter swap build failed: ${response.status} - ${errorText}`,
@@ -479,7 +517,7 @@ export async function getSwapTransaction(
   };
 
   try {
-    // First attempt without shared accounts
+    // First attempt: without shared accounts
     const swapResponse = await makeSwapRequest(baseParams);
 
     if (swapResponse.simulationError) {
@@ -488,11 +526,7 @@ export async function getSwapTransaction(
           ? swapResponse.simulationError
           : JSON.stringify(swapResponse.simulationError);
       
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Swap simulation error (first attempt):', errorMsg);
-      }
-      
-      // If simulation failed, try with shared accounts enabled
+      // Second attempt: with shared accounts enabled
       const retryParams = { ...baseParams, useSharedAccounts: true };
       const retryResponse = await makeSwapRequest(retryParams);
       
@@ -502,11 +536,28 @@ export async function getSwapTransaction(
             ? retryResponse.simulationError
             : JSON.stringify(retryResponse.simulationError);
         
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Swap simulation error (retry with shared accounts):', retryErrorMsg);
+        // Third attempt: without fee account (in case referral isn't initialized for this token)
+        if (baseParams.feeAccount) {
+          const noFeeParams = { ...retryParams };
+          delete noFeeParams.feeAccount;
+          const noFeeResponse = await makeSwapRequest(noFeeParams);
+          
+          if (noFeeResponse.simulationError) {
+            const noFeeErrorMsg =
+              typeof noFeeResponse.simulationError === 'string'
+                ? noFeeResponse.simulationError
+                : JSON.stringify(noFeeResponse.simulationError);
+            
+            const userFriendlyError = parseSwapSimulationError(noFeeErrorMsg);
+            throw new WalletError(
+              WalletErrorCode.SIMULATION_FAILED,
+              userFriendlyError,
+            );
+          }
+          
+          return noFeeResponse;
         }
         
-        // Parse common error codes for user-friendly messages
         const userFriendlyError = parseSwapSimulationError(retryErrorMsg);
         throw new WalletError(
           WalletErrorCode.SIMULATION_FAILED,
@@ -641,7 +692,7 @@ export async function getFormattedSwapQuote(
   inputAmount: string,
   inputDecimals: number,
   outputDecimals: number,
-  slippageBps: number = 50,
+  slippageBps: number = 100, // Default 1% for better success rate
 ): Promise<{
   quote: SwapQuote;
   inputAmountFormatted: string;
@@ -664,16 +715,17 @@ export async function getFormattedSwapQuote(
   });
 
   // Format amounts for display
+  // IMPORTANT: Use Number() instead of parseInt() to avoid precision loss with large numbers
   const outputAmountFormatted = (
-    parseInt(quote.outputAmount) / Math.pow(10, outputDecimals)
+    Number(quote.outputAmount) / Math.pow(10, outputDecimals)
   ).toFixed(outputDecimals);
 
   const minimumReceivedFormatted = (
-    parseInt(quote.minimumReceived) / Math.pow(10, outputDecimals)
+    Number(quote.minimumReceived) / Math.pow(10, outputDecimals)
   ).toFixed(outputDecimals);
 
   const platformFeeFormatted = quote.platformFee
-    ? (parseInt(quote.platformFee) / Math.pow(10, outputDecimals)).toFixed(outputDecimals)
+    ? (Number(quote.platformFee) / Math.pow(10, outputDecimals)).toFixed(outputDecimals)
     : null;
 
   return {
@@ -696,23 +748,43 @@ export async function performSwap(
   outputMint: string,
   inputAmount: string,
   inputDecimals: number,
-  slippageBps: number = 50,
+  slippageBps: number = 100,
 ): Promise<SwapResult> {
-  // Convert input amount to smallest units
   const inputAmountRaw = Math.floor(
     parseFloat(inputAmount) * Math.pow(10, inputDecimals),
   ).toString();
 
-  // Get quote
-  const quote = await getSwapQuote({
+  let quote = await getSwapQuote({
     inputMint,
     outputMint,
     amount: inputAmountRaw,
     slippageBps,
   });
 
-  // Execute swap
-  return executeSwap(quote, { slippageBps });
+  try {
+    return await executeSwap(quote, { slippageBps });
+  } catch (error) {
+    // If the error is about platform fee, retry without referral
+    if (error instanceof WalletError && error.message.includes('PLATFORM_FEE_ERROR')) {
+      const originalEnabled = JUPITER_REFERRAL_CONFIG.ENABLED;
+      (JUPITER_REFERRAL_CONFIG as { ENABLED: boolean }).ENABLED = false;
+      
+      try {
+        quote = await getSwapQuote({
+          inputMint,
+          outputMint,
+          amount: inputAmountRaw,
+          slippageBps,
+        });
+        
+        return await executeSwap(quote, { slippageBps });
+      } finally {
+        (JUPITER_REFERRAL_CONFIG as { ENABLED: boolean }).ENABLED = originalEnabled;
+      }
+    }
+    
+    throw error;
+  }
 }
 
 // ============================================================================

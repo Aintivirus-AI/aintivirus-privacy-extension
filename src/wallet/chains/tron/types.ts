@@ -92,6 +92,7 @@ export interface UnsignedTronTransaction {
   };
   raw_data_hex: string;
   txID: string;
+  visible?: boolean; // Whether addresses are in base58 format (true) or hex format (false)
 }
 
 export interface SignedTronTransaction {
@@ -99,6 +100,7 @@ export interface SignedTronTransaction {
   raw_data: UnsignedTronTransaction['raw_data'];
   raw_data_hex: string;
   signature: string[];
+  visible?: boolean; // Whether addresses are in base58 format (true) or hex format (false)
 }
 
 export interface TronKeypair {

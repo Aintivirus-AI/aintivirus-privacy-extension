@@ -15,6 +15,9 @@ import StoreOrderModal from './StoreOrderModal';
 // AINTI Token configuration (loaded from solanaPayment utility)
 const AINTI_CONFIG = getAintiTokenConfig();
 
+// Rate lock duration in seconds (10 minutes)
+const RATE_LOCK_DURATION = 10 * 60;
+
 interface StorePaymentProps {
   type: 'giftcard' | 'esim';
   itemId: string;
@@ -25,6 +28,7 @@ interface StorePaymentProps {
   onUnlockWallet?: () => void;
   onBack: () => void;
   onSuccess: () => void;
+  onBuyAinti?: () => void; // Navigate to swap to buy AINTI
 }
 
 type PaymentStep = 'confirm' | 'processing' | 'success' | 'error';
@@ -39,15 +43,22 @@ const StorePayment: React.FC<StorePaymentProps> = ({
   onUnlockWallet,
   onBack,
   onSuccess,
+  onBuyAinti,
 }) => {
   const [step, setStep] = useState<PaymentStep>('confirm');
   const [orderId, setOrderId] = useState<string>('');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isWalletLockedError, setIsWalletLockedError] = useState(false);
   const [tokenPrice, setTokenPrice] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(true);
   const [treasuryAddress, setTreasuryAddress] = useState<string | null>(null);
   const [loadingTreasury, setLoadingTreasury] = useState(true);
+  const [aintiBalance, setAintiBalance] = useState<number | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(true);
+  const [rateExpiresAt, setRateExpiresAt] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(RATE_LOCK_DURATION);
+  const [rateExpired, setRateExpired] = useState(false);
 
   // Fetch treasury address from on-chain payment vault
   useEffect(() => {
@@ -65,16 +76,75 @@ const StorePayment: React.FC<StorePaymentProps> = ({
     fetchTreasury();
   }, []);
 
-  // Fetch token price
+  // Fetch AINTI token balance
   useEffect(() => {
-    const fetchPrice = async () => {
-      setLoadingPrice(true);
-      const result = await getAintiTokenPrice(currency);
-      setTokenPrice(result.price);
-      setLoadingPrice(false);
+    const fetchAintiBalance = async () => {
+      if (!walletState) {
+        setAintiBalance(null);
+        setLoadingBalance(false);
+        return;
+      }
+      
+      setLoadingBalance(true);
+      try {
+        const result = await sendToBackground<{ mint: string; balance: number; uiBalance: number }[]>({
+          type: 'WALLET_GET_TOKENS',
+          payload: { forceRefresh: false },
+        });
+        
+        if (result.success && result.data) {
+          const aintiToken = result.data.find(
+            (token: { mint: string }) => token.mint === AINTI_CONFIG.mint
+          );
+          setAintiBalance(aintiToken?.uiBalance ?? 0);
+        } else {
+          setAintiBalance(0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch AINTI balance:', err);
+        setAintiBalance(0);
+      } finally {
+        setLoadingBalance(false);
+      }
     };
-    fetchPrice();
+    fetchAintiBalance();
+  }, [walletState]);
+
+  // Fetch token price and set rate lock timer
+  const fetchPrice = useCallback(async () => {
+    setLoadingPrice(true);
+    setRateExpired(false);
+    const result = await getAintiTokenPrice(currency);
+    setTokenPrice(result.price);
+    // Set rate expiry time
+    const expiresAt = Date.now() + RATE_LOCK_DURATION * 1000;
+    setRateExpiresAt(expiresAt);
+    setTimeRemaining(RATE_LOCK_DURATION);
+    setLoadingPrice(false);
   }, [currency]);
+
+  // Initial price fetch
+  useEffect(() => {
+    fetchPrice();
+  }, [fetchPrice]);
+
+  // Countdown timer for rate lock
+  useEffect(() => {
+    if (!rateExpiresAt || loadingPrice || step !== 'confirm') return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((rateExpiresAt - now) / 1000));
+      setTimeRemaining(remaining);
+      
+      if (remaining === 0) {
+        setRateExpired(true);
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [rateExpiresAt, loadingPrice, step]);
 
   // Calculate token amount
   const tokenAmount = useMemo(() => {
@@ -82,8 +152,31 @@ const StorePayment: React.FC<StorePaymentProps> = ({
     return convertUsdToAintiTokens(amount, tokenPrice);
   }, [amount, tokenPrice]);
 
+  // Check if user has sufficient AINTI balance
+  const hasInsufficientBalance = useMemo(() => {
+    if (tokenAmount === null || aintiBalance === null) return false;
+    return aintiBalance < tokenAmount;
+  }, [tokenAmount, aintiBalance]);
+
+  // Format time remaining as mm:ss
+  const formattedTimeRemaining = useMemo(() => {
+    const minutes = Math.floor(timeRemaining / 60);
+    const seconds = timeRemaining % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }, [timeRemaining]);
+
+  // Check if time is running low (less than 2 minutes)
+  const isTimeLow = timeRemaining > 0 && timeRemaining < 120;
+
   const handlePayment = useCallback(async () => {
     if (!walletState || tokenAmount === null) return;
+    
+    // Check if rate has expired
+    if (rateExpired) {
+      setError('Rate has expired. Please refresh to get a new quote.');
+      setStep('error');
+      return;
+    }
     
     if (!treasuryAddress) {
       setError('Treasury address not loaded. Please try again.');
@@ -116,14 +209,13 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         });
       }
 
-      // Send actual payment via wallet (AINTI is on Solana)
+      // Process payment through the AINTI Payment Program
+      // This creates an on-chain PaymentRecord that the backend uses to verify payments
       const result = await sendToBackground<SendTransactionResult>({
-        type: 'WALLET_SEND_SPL_TOKEN',
+        type: 'WALLET_PROCESS_STORE_PAYMENT',
         payload: {
-          recipient: treasuryAddress,
+          orderId: newOrderId,
           amount: tokenAmount,
-          mint: AINTI_CONFIG.mint,
-          decimals: AINTI_CONFIG.decimals,
         },
       });
 
@@ -134,21 +226,26 @@ const StorePayment: React.FC<StorePaymentProps> = ({
       const paymentTxHash = result.data.signature;
       setTxHash(paymentTxHash);
 
-      // Confirm payment with backend
-      try {
-        await confirmOrderPayment(newOrderId, paymentTxHash);
-      } catch (confirmErr) {
-        // Payment was sent but confirmation failed - still show success
-        console.warn('Payment sent but backend confirmation failed:', confirmErr);
-      }
+      // Confirm payment with backend (non-blocking - payment already sent on-chain)
+      // The backend will verify the payment from the blockchain even if this call fails
+      await confirmOrderPayment(newOrderId, paymentTxHash);
 
       setStep('success');
     } catch (err) {
       console.error('Payment failed:', err);
       const errorMessage = err instanceof Error ? err.message : 'Payment failed';
       // Make error messages more user-friendly
-      if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
+      setIsWalletLockedError(false); // Reset locked state
+      
+      if (errorMessage.toLowerCase().includes('locked') || errorMessage.toLowerCase().includes('unlock')) {
+        setError('Wallet is locked. Please unlock your wallet to complete the payment.');
+        setIsWalletLockedError(true);
+      } else if (errorMessage.includes('Insufficient token balance') || errorMessage.includes('Custom":1')) {
+        setError(`Insufficient AINTI balance. You need at least ${tokenAmount?.toFixed(6)} AINTI to complete this purchase.`);
+      } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
         setError('Insufficient AINTI balance. Please ensure you have enough tokens.');
+      } else if (errorMessage.includes('Insufficient funds for fee') || errorMessage.includes('Insufficient SOL')) {
+        setError('Insufficient SOL for transaction fees. Please add SOL to your wallet.');
       } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
         setError('Transaction was rejected. Please try again.');
       } else {
@@ -170,6 +267,17 @@ const StorePayment: React.FC<StorePaymentProps> = ({
     );
   }
 
+  // Handle unlock wallet from error screen
+  const handleUnlockFromError = () => {
+    if (onUnlockWallet) {
+      onUnlockWallet();
+      // Return to confirm step so user can retry after unlocking
+      setStep('confirm');
+      setError(null);
+      setIsWalletLockedError(false);
+    }
+  };
+
   // Error modal
   if (step === 'error') {
     return (
@@ -179,6 +287,8 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         error={error || 'Payment failed'}
         onClose={() => setStep('confirm')}
         onRetry={handlePayment}
+        onUnlockWallet={handleUnlockFromError}
+        isWalletLocked={isWalletLockedError}
       />
     );
   }
@@ -235,8 +345,8 @@ const StorePayment: React.FC<StorePaymentProps> = ({
           </span>
         </div>
         <div className="payment-detail-row">
-          <span className="payment-detail-label">Network</span>
-          <span className="payment-detail-value">Solana (AINTI)</span>
+          <span className="payment-detail-label">Payment Token</span>
+          <span className="payment-detail-value">AINTI (Solana SPL Token)</span>
         </div>
       </div>
 
@@ -263,13 +373,82 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         </div>
       </div>
 
+      {/* Rate Lock Timer */}
+      {!loadingPrice && tokenAmount !== null && (
+        <div className={`payment-rate-timer ${rateExpired ? 'expired' : ''} ${isTimeLow ? 'low' : ''}`}>
+          <div className="payment-rate-timer-content">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <div className="payment-rate-timer-text">
+              {rateExpired ? (
+                <>
+                  <strong>Rate Expired</strong>
+                  <span>Please refresh to get a new quote</span>
+                </>
+              ) : (
+                <>
+                  <strong>Rate locked for {formattedTimeRemaining}</strong>
+                  <span>Complete payment before the rate expires</span>
+                </>
+              )}
+            </div>
+          </div>
+          {rateExpired && (
+            <button className="payment-refresh-rate-btn" onClick={fetchPrice} type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Refresh Rate
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* AINTI Balance Info */}
+      {walletState && !loadingBalance && (
+        <div className="payment-balance-info">
+          <span className="payment-balance-label">Your AINTI Balance:</span>
+          <span className={`payment-balance-value ${hasInsufficientBalance ? 'insufficient' : ''}`}>
+            {aintiBalance?.toFixed(6) ?? '0'} AINTI
+          </span>
+        </div>
+      )}
+
+      {/* Insufficient Balance Warning */}
+      {hasInsufficientBalance && !loadingBalance && (
+        <div className="payment-insufficient-warning">
+          <div className="payment-insufficient-content">
+            <span className="payment-insufficient-icon">⚠️</span>
+            <div className="payment-insufficient-text">
+              <strong>Insufficient AINTI Balance</strong>
+              <span>
+                You need {tokenAmount?.toFixed(6)} AINTI but only have {aintiBalance?.toFixed(6)} AINTI.
+              </span>
+            </div>
+          </div>
+          {onBuyAinti && (
+            <button className="payment-buy-ainti-btn" onClick={onBuyAinti} type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+              Buy AINTI
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Warning */}
-      <div className="payment-warning">
-        <span className="payment-warning-icon">⚠️</span>
-        <span className="payment-warning-text">
-          Please confirm the transaction in your wallet when prompted
-        </span>
-      </div>
+      {!hasInsufficientBalance && (
+        <div className="payment-warning">
+          <span className="payment-warning-icon">⚠️</span>
+          <span className="payment-warning-text">
+            Please confirm the transaction in your wallet when prompted
+          </span>
+        </div>
+      )}
 
       {/* Wallet Lock Warning */}
       {!walletState && (
@@ -309,10 +488,14 @@ const StorePayment: React.FC<StorePaymentProps> = ({
       <button
         className="payment-btn"
         onClick={handlePayment}
-        disabled={!walletState || loadingPrice || loadingTreasury || !treasuryAddress || tokenAmount === null}
+        disabled={!walletState || loadingPrice || loadingTreasury || loadingBalance || !treasuryAddress || tokenAmount === null || hasInsufficientBalance || rateExpired}
       >
-        {loadingPrice || loadingTreasury
+        {loadingPrice || loadingTreasury || loadingBalance
           ? 'Loading...' 
+          : rateExpired
+          ? 'Rate Expired - Refresh Above'
+          : hasInsufficientBalance
+          ? 'Insufficient AINTI'
           : `Pay ${tokenAmount?.toFixed(6) || ''} AINTI`
         }
       </button>

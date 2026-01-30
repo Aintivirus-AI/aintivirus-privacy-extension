@@ -115,7 +115,7 @@ describe('Chain Registry', () => {
     it('should return true for swap-enabled chains', () => {
       expect(isSwapEnabled('ethereum')).toBe(true);
       expect(isSwapEnabled('bnb')).toBe(true);
-      expect(isSwapEnabled('tron')).toBe(true);
+      // TRON swap is disabled until SunSwap integration is complete
     });
 
     it('should return false for Bitcoin-family chains', () => {
@@ -127,6 +127,10 @@ describe('Chain Registry', () => {
 
     it('should return false for Monero', () => {
       expect(isSwapEnabled('monero')).toBe(false);
+    });
+
+    it('should return false for TRON (SunSwap not yet implemented)', () => {
+      expect(isSwapEnabled('tron')).toBe(false);
     });
   });
 
@@ -173,7 +177,8 @@ describe('Chain Registry', () => {
         expect(tron.symbol).toBe('TRX');
         expect(tron.decimals).toBe(6);
         expect(tron.coinType).toBe(195);
-        expect(tron.swapEnabled).toBe(true);
+        // Swap is disabled until SunSwap integration is complete
+        expect(tron.swapEnabled).toBe(false);
       });
 
       it('should have popular tokens', () => {

@@ -123,6 +123,9 @@ export async function fetchSolanaTokens(): Promise<SwapToken[]> {
 const DEXSCREENER_SEARCH_API = 'https://api.dexscreener.com/latest/dex/search';
 const DEXSCREENER_TOKEN_API = 'https://api.dexscreener.com/latest/dex/tokens';
 
+// Jupiter Token API for token metadata (decimals, name, etc.)
+const JUPITER_TOKEN_API = 'https://tokens.jup.ag/token';
+
 /**
  * Get token logo from DexScreener's info or fallback to Jupiter CDN
  */
@@ -136,7 +139,31 @@ function getDexScreenerLogo(pair: { info?: { imageUrl?: string }; baseToken: { a
 }
 
 /**
+ * Fetch token decimals from Jupiter API
+ * This is crucial for correct swap calculations
+ */
+async function getTokenDecimalsFromJupiter(address: string): Promise<number | null> {
+  try {
+    const response = await fetchWithTimeout(
+      `${JUPITER_TOKEN_API}/${address}`,
+      5000
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data && typeof data.decimals === 'number') {
+        return data.decimals;
+      }
+    }
+  } catch {
+    // Jupiter lookup failed
+  }
+  return null;
+}
+
+/**
  * Search tokens on DexScreener (finds any token with liquidity)
+ * Then enriches with correct decimals from Jupiter API
  */
 async function searchDexScreener(query: string): Promise<SwapToken[]> {
   try {
@@ -152,6 +179,10 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
     const data = await response.json();
     const pairs = data.pairs || [];
     
+    // Check if query looks like an address - if so, filter for exact match only
+    const isAddressQuery = isSolanaAddress(query.trim());
+    const normalizedQuery = query.trim().toLowerCase();
+    
     // Filter for Solana tokens and deduplicate by address
     const seenAddresses = new Set<string>();
     const tokens: SwapToken[] = [];
@@ -159,14 +190,55 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
     for (const pair of pairs) {
       if (pair.chainId !== 'solana') continue;
       
-      // Add base token if not seen
+      // If searching by address, only return exact matches
+      if (isAddressQuery) {
+        // Check both baseToken and quoteToken for exact address match
+        if (pair.baseToken?.address === query.trim()) {
+          if (!seenAddresses.has(pair.baseToken.address)) {
+            seenAddresses.add(pair.baseToken.address);
+            // Fetch correct decimals from Jupiter (pump.fun tokens are typically 6 decimals)
+            const decimals = await getTokenDecimalsFromJupiter(pair.baseToken.address) ?? 6;
+            tokens.push({
+              address: pair.baseToken.address,
+              symbol: pair.baseToken.symbol,
+              name: pair.baseToken.name || pair.baseToken.symbol,
+              decimals,
+              logoUri: getDexScreenerLogo(pair),
+              verified: false,
+              chainId: 'solana',
+            });
+            // For address search, we only need one exact match
+            return tokens;
+          }
+        }
+        if (pair.quoteToken?.address === query.trim()) {
+          if (!seenAddresses.has(pair.quoteToken.address)) {
+            seenAddresses.add(pair.quoteToken.address);
+            // Fetch correct decimals from Jupiter
+            const decimals = await getTokenDecimalsFromJupiter(pair.quoteToken.address) ?? 6;
+            tokens.push({
+              address: pair.quoteToken.address,
+              symbol: pair.quoteToken.symbol,
+              name: pair.quoteToken.name || pair.quoteToken.symbol,
+              decimals,
+              logoUri: getDexScreenerLogo(pair),
+              verified: false,
+              chainId: 'solana',
+            });
+            return tokens;
+          }
+        }
+        continue;
+      }
+      
+      // For non-address search, add base token if not seen
       if (pair.baseToken && !seenAddresses.has(pair.baseToken.address)) {
         seenAddresses.add(pair.baseToken.address);
         tokens.push({
           address: pair.baseToken.address,
           symbol: pair.baseToken.symbol,
           name: pair.baseToken.name || pair.baseToken.symbol,
-          decimals: 9, // Default, will be corrected when fetching
+          decimals: 6, // Default to 6 for pump.fun tokens, will be enriched below
           logoUri: getDexScreenerLogo(pair),
           verified: false, // DexScreener tokens are not verified by default
           chainId: 'solana',
@@ -174,10 +246,32 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
       }
     }
     
-    return tokens.slice(0, 50);
+    // Enrich tokens with correct decimals from Jupiter API (in parallel for speed)
+    const enrichedTokens = await Promise.all(
+      tokens.slice(0, 50).map(async (token) => {
+        const decimals = await getTokenDecimalsFromJupiter(token.address);
+        if (decimals !== null) {
+          return { ...token, decimals };
+        }
+        return token;
+      })
+    );
+    
+    return enrichedTokens;
   } catch {
     return [];
   }
+}
+
+/**
+ * Check if a string looks like a Solana address (base58 encoded, 32-44 chars)
+ * Solana addresses use base58 characters: 1-9, A-H, J-N, P-Z, a-k, m-z (no 0, I, O, l)
+ */
+function isSolanaAddress(str: string): boolean {
+  if (str.length < 32 || str.length > 44) return false;
+  // Base58 alphabet (no 0, I, O, l)
+  const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
+  return base58Regex.test(str);
 }
 
 /**
@@ -185,26 +279,60 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
  * Uses DexScreener exclusively for reliable token search
  */
 export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
-  const normalizedQuery = query.toLowerCase().trim();
+  const trimmedQuery = query.trim();
+  const normalizedQuery = trimmedQuery.toLowerCase();
   
-  if (!normalizedQuery) {
+  if (!trimmedQuery) {
     // Return default tokens when no query
     return getDefaultSolanaTokens();
   }
 
-  // Check if it's an address search (Solana addresses are 32-44 base58 chars)
-  if (normalizedQuery.length >= 32 && normalizedQuery.length <= 44) {
-    // Try to fetch token info for the address
-    const tokenInfo = await fetchSolanaTokenByAddress(normalizedQuery);
+  // Check if it's an address search (Solana addresses are base58, case-sensitive)
+  // IMPORTANT: Don't lowercase the address - Solana addresses are case-sensitive!
+  if (isSolanaAddress(trimmedQuery)) {
+    // Try to fetch token info for the address (use original case)
+    const tokenInfo = await fetchSolanaTokenByAddress(trimmedQuery);
     if (tokenInfo) return [tokenInfo];
+    
+    // If DexScreener didn't find it, try Jupiter API as fallback
+    const jupiterToken = await fetchTokenFromJupiter(trimmedQuery);
+    if (jupiterToken) return [jupiterToken];
+    
     return [];
   }
 
-  // Search using DexScreener only
+  // Check if searching for native SOL (DexScreener doesn't return native tokens)
+  const defaultTokens = getDefaultSolanaTokens();
+  const solToken = defaultTokens[0]; // SOL is first in the list
+  const solMatches = normalizedQuery === 'sol' || 
+                     normalizedQuery === 'solana' ||
+                     'solana'.startsWith(normalizedQuery) ||
+                     'sol'.startsWith(normalizedQuery);
+
+  // Search using DexScreener
   const dexScreenerTokens = await searchDexScreener(query);
 
+  // Combine results: add SOL if it matches the query
+  let results = [...dexScreenerTokens];
+  if (solMatches) {
+    // Check if SOL is already in results (shouldn't be, but be safe)
+    const hasSol = results.some(t => t.address === solToken.address);
+    if (!hasSol) {
+      results = [solToken, ...results];
+    }
+  }
+
+  // Also check for other default tokens (USDC, USDT, JUP, BONK) by name/symbol
+  for (const token of defaultTokens.slice(1)) { // Skip SOL, already handled
+    const matches = token.symbol.toLowerCase().startsWith(normalizedQuery) ||
+                    token.name.toLowerCase().startsWith(normalizedQuery);
+    if (matches && !results.some(t => t.address === token.address)) {
+      results.push(token);
+    }
+  }
+
   // Sort: exact symbol match first, then by symbol starts with query
-  return dexScreenerTokens.sort((a, b) => {
+  return results.sort((a, b) => {
     const aExact = a.symbol.toLowerCase() === normalizedQuery;
     const bExact = b.symbol.toLowerCase() === normalizedQuery;
     if (aExact && !bExact) return -1;
@@ -222,9 +350,16 @@ export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
 
 /**
  * Fetch a single Solana token by address (for custom token input)
- * Uses DexScreener exclusively
+ * Uses DexScreener for token info and Jupiter for decimals
  */
 export async function fetchSolanaTokenByAddress(address: string): Promise<SwapToken | null> {
+  // First try Jupiter API as it has correct decimals
+  const jupiterToken = await fetchTokenFromJupiter(address);
+  if (jupiterToken) {
+    return jupiterToken;
+  }
+
+  // Fallback to DexScreener if Jupiter doesn't have the token
   try {
     const dexResponse = await fetchWithTimeout(
       `${DEXSCREENER_TOKEN_API}/${address}`,
@@ -246,11 +381,14 @@ export async function fetchSolanaTokenByAddress(address: string): Promise<SwapTo
           // Get logo from DexScreener info if available
           const logoUri = solanaPair.info?.imageUrl || getTokenLogoUrl(tokenData.address, tokenData.symbol);
           
+          // Fetch correct decimals from Jupiter API (pump.fun tokens are typically 6 decimals)
+          const decimals = await getTokenDecimalsFromJupiter(tokenData.address) ?? 6;
+          
           return {
             address: tokenData.address,
             symbol: tokenData.symbol,
             name: tokenData.name || tokenData.symbol,
-            decimals: 9, // Default for Solana tokens
+            decimals,
             logoUri,
             verified: false,
             chainId: 'solana',
@@ -260,6 +398,39 @@ export async function fetchSolanaTokenByAddress(address: string): Promise<SwapTo
     }
   } catch {
     // DexScreener lookup failed; return null to try other sources
+  }
+
+  return null;
+}
+
+/**
+ * Fetch token metadata from Jupiter API (fallback for DexScreener)
+ * Jupiter has comprehensive token data for all tradeable Solana tokens
+ */
+async function fetchTokenFromJupiter(address: string): Promise<SwapToken | null> {
+  try {
+    const response = await fetchWithTimeout(
+      `${JUPITER_TOKEN_API}/${address}`,
+      10000
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data && data.address) {
+        return {
+          address: data.address,
+          symbol: data.symbol || 'UNKNOWN',
+          name: data.name || data.symbol || 'Unknown Token',
+          decimals: data.decimals || 9,
+          logoUri: data.logoURI || `https://img.jup.ag/tokens/${address}`,
+          verified: data.tags?.includes('verified') || data.tags?.includes('strict') || false,
+          chainId: 'solana',
+        };
+      }
+    }
+  } catch {
+    // Jupiter lookup failed
   }
 
   return null;

@@ -153,7 +153,6 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
     try {
       // On first attempt or after a failure, try to wake up the service worker
       if (attempt > 0) {
-        console.log(`[DApp Bridge] Attempt ${attempt + 1}: Waking up service worker...`);
         await ensureServiceWorkerAwake();
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
       }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aintivirus Privacy",
-  "version": "0.2.0",
+  "version": "2.0.0",
   "description": "Aintivirus security extension",
   "browser_specific_settings": {
     "gecko": {
@@ -14,7 +14,6 @@
     "activeTab",
     "scripting",
     "declarativeNetRequest",
-    "declarativeNetRequestFeedback",
     "cookies",
     "tabs",
     "webNavigation",
@@ -24,7 +23,63 @@
   ],
   "host_permissions": ["<all_urls>"],
   "declarative_net_request": {
-    "rule_resources": []
+    "rule_resources": [
+      {
+        "id": "ublock-filters",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/ublock-filters.json"
+      },
+      {
+        "id": "easylist",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/easylist.json"
+      },
+      {
+        "id": "easyprivacy",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/easyprivacy.json"
+      },
+      {
+        "id": "pgl",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/pgl.json"
+      },
+      {
+        "id": "ublock-badware",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/ublock-badware.json"
+      },
+      {
+        "id": "urlhaus-full",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/urlhaus-full.json"
+      },
+      {
+        "id": "annoyances-overlays",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-overlays.json"
+      },
+      {
+        "id": "annoyances-others",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/annoyances-others.json"
+      },
+      {
+        "id": "ublock-experimental",
+        "enabled": true,
+        "path": "aintivirusAdblocker/rulesets/main/ublock-experimental.json"
+      },
+      {
+        "id": "aintivirus-custom",
+        "enabled": true,
+        "path": "rules/static_ruleset_custom.json"
+      },
+      {
+        "id": "wallet-api-allowlist",
+        "enabled": true,
+        "path": "rules/wallet_api_allowlist.json"
+      }
+    ]
   },
   "web_accessible_resources": [
     {
@@ -33,7 +88,19 @@
         "securityInjected.js",
         "dappInpage.js",
         "popup.html",
-        "icons/ainti_l1.png"
+        "icons/ainti_l1.png",
+        "empty.js",
+        "noop.js",
+        "noop-sentry.js",
+        "noop-bugsnag.js"
+      ],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "aintivirusAdblocker/web_accessible_resources/*",
+        "aintivirusAdblocker/js/scripting/*",
+        "aintivirusAdblocker/rulesets/scripting/*"
       ],
       "matches": ["<all_urls>"]
     }
@@ -54,7 +121,17 @@
       "48": "icons/ainti_l1.png",
       "128": "icons/ainti_l1.png"
     },
-    "default_title": "AINTIVIRUS"
+    "default_title": "AINTIVIRUS",
+    "default_popup": "popup.html"
+  },
+  "sidebar_action": {
+    "default_icon": {
+      "16": "icons/ainti_l1.png",
+      "48": "icons/ainti_l1.png"
+    },
+    "default_title": "Aintivirus",
+    "default_panel": "popup.html",
+    "open_at_install": false
   },
   "options_ui": {
     "page": "settings.html",

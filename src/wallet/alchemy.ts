@@ -83,9 +83,8 @@ function getAlchemyEVMUrl(evmChainId: EVMChainId, testnet: boolean): string | nu
       testnet: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
     },
     bnb: {
-      // Alchemy doesn't support BNB Chain, use public RPC
-      mainnet: 'https://bsc-dataseed.binance.org',
-      testnet: 'https://bsc-testnet.publicnode.com',
+      mainnet: `https://bnb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      testnet: `https://bnb-testnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
     },
   };
 
@@ -156,10 +155,24 @@ export async function getAlchemyEVMHistory(
   }
 
   try {
+    // Note: 'internal' category is ONLY supported for ETH and MATIC (Polygon) in Alchemy
+    // All other chains will error if 'internal' is included
+    const supportedCategories: Record<EVMChainId, string[]> = {
+      ethereum: ['external', 'erc20', 'erc721', 'erc1155', 'internal'],
+      polygon: ['external', 'erc20', 'erc721', 'erc1155', 'internal'],
+      // Arbitrum, Optimism, Base, and BNB do NOT support 'internal' category
+      arbitrum: ['external', 'erc20', 'erc721', 'erc1155'],
+      optimism: ['external', 'erc20', 'erc721', 'erc1155'],
+      base: ['external', 'erc20', 'erc721', 'erc1155'],
+      bnb: ['external', 'erc20', 'erc721', 'erc1155'],
+    };
+
+    const categories = supportedCategories[evmChainId] || ['external', 'erc20', 'erc721', 'erc1155'];
+
     const baseParams = {
       fromBlock: '0x0',
       toBlock: 'latest',
-      category: ['external', 'erc20', 'erc721', 'erc1155', 'internal'],
+      category: categories,
       withMetadata: true,
       excludeZeroValue: false,
       maxCount: `0x${Math.min(limit, 1000).toString(16)}`,

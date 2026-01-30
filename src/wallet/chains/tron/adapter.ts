@@ -26,13 +26,13 @@ import {
   getTronAddressExplorerUrl,
   getTronTxExplorerUrl,
   sunToTrx,
-  trxToSun,
 } from './config';
 import {
   deriveTronKeypair,
   getTronAddressFromMnemonic,
   isValidTronAddress,
   signTransaction,
+  addressesEqual,
 } from './addresses';
 import {
   getBalance,
@@ -258,6 +258,7 @@ export class TronAdapter implements ChainAdapter {
         raw_data: tronTx.raw_data,
         raw_data_hex: tronTx.raw_data_hex,
         signature: [signature],
+        visible: tronTx.visible ?? true,
       };
 
       return {
@@ -317,11 +318,14 @@ export class TronAdapter implements ChainAdapter {
       const txs = await getTransactions(address, testnet, limit);
 
       const transactions: ChainTxHistoryItem[] = txs.map(tx => {
-        // Determine direction
+        // Determine direction - use addressesEqual to handle hex vs base58 formats
+        const isOwner = addressesEqual(tx.ownerAddress, address);
+        const isRecipient = addressesEqual(tx.toAddress || '', address);
+        
         let direction: TxDirection = 'unknown';
-        if (tx.ownerAddress.toLowerCase() === address.toLowerCase()) {
-          direction = tx.toAddress?.toLowerCase() === address.toLowerCase() ? 'self' : 'sent';
-        } else if (tx.toAddress?.toLowerCase() === address.toLowerCase()) {
+        if (isOwner) {
+          direction = isRecipient ? 'self' : 'sent';
+        } else if (isRecipient) {
           direction = 'received';
         }
 

@@ -31,7 +31,7 @@ export const EVM_CHAINS: Record<EVMChainId, EVMChainConfig> = {
   polygon: {
     chainId: 137,
     name: 'Polygon',
-    symbol: 'MATIC',
+    symbol: 'POL',
     decimals: 18,
     rpcUrls: [
       'https://polygon.llamarpc.com',

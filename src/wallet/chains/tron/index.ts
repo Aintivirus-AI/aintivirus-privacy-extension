@@ -34,6 +34,8 @@ export {
   isValidTronAddress,
   addressToHex,
   hexToAddress,
+  normalizeAddress,
+  addressesEqual,
   signMessage,
   signTransaction as signTronTransaction,
 } from './addresses';
@@ -50,6 +52,7 @@ export {
   getNowBlock,
   estimateFee,
   getAccountResources,
+  accountExists,
 } from './client';
 
 // Adapter

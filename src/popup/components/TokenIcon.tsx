@@ -41,27 +41,34 @@ function getJupiterLogoUrl(mint: string): string {
 }
 
 function getCoinGeckoUrl(symbol: string): string {
-  const coinGeckoIds: Record<string, string> = {
-    SOL: 'solana',
-    ETH: 'ethereum',
-    WETH: 'weth',
-    USDC: 'usd-coin',
-    USDT: 'tether',
-    DAI: 'dai',
-    WBTC: 'wrapped-bitcoin',
-    BTC: 'bitcoin',
-    MATIC: 'matic-network',
-    BONK: 'bonk',
-    JUP: 'jupiter-exchange-solana',
-    mSOL: 'marinade-staked-sol',
-    stSOL: 'lido-staked-sol',
-    ARB: 'arbitrum',
-    OP: 'optimism',
+  // CoinGecko uses numeric IDs and specific image filenames
+  // Format: https://assets.coingecko.com/coins/images/{numericId}/small/{filename}.png
+  const coinGeckoData: Record<string, { id: number; filename: string }> = {
+    SOL: { id: 4128, filename: 'solana' },
+    ETH: { id: 279, filename: 'ethereum' },
+    WETH: { id: 2518, filename: 'weth' },
+    USDC: { id: 6319, filename: 'usdc' },
+    USDT: { id: 325, filename: 'tether' },
+    DAI: { id: 9956, filename: 'dai-multi-collateral' },
+    WBTC: { id: 7598, filename: 'wrapped-bitcoin' },
+    BTC: { id: 1, filename: 'bitcoin' },
+    MATIC: { id: 4713, filename: 'matic-token-icon' },
+    BONK: { id: 28600, filename: 'bonk' },
+    JUP: { id: 17752, filename: 'jup' },
+    MSOL: { id: 15896, filename: 'msol' },
+    STSOL: { id: 18169, filename: 'stsol' },
+    ARB: { id: 16547, filename: 'photo_2023-03-29_21.47.00' },
+    OP: { id: 25244, filename: 'Optimism' },
+    BNB: { id: 825, filename: 'bnb-icon2_2x' },
+    AVAX: { id: 12559, filename: 'avalanche-2' },
+    LINK: { id: 877, filename: 'chainlink-new-logo' },
+    UNI: { id: 12504, filename: 'uniswap' },
+    AAVE: { id: 12645, filename: 'aave-token' },
   };
 
-  const id = coinGeckoIds[symbol.toUpperCase()];
-  if (!id) return '';
-  return `https://assets.coingecko.com/coins/images/${id}/small/${id}.png`;
+  const data = coinGeckoData[symbol.toUpperCase()];
+  if (!data) return '';
+  return `https://assets.coingecko.com/coins/images/${data.id}/small/${data.filename}.png`;
 }
 
 function getPlaceholderUrl(symbol: string, chain: string): string {

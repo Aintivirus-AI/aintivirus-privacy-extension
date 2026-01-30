@@ -2,13 +2,66 @@
  * Store API utilities for gift cards, eSIMs, and payment processing
  */
 
-// API URL
-const API_URL = 'https://api.v2.aintivirus.ai';
+// Environment configuration
+// Set STORE_ENVIRONMENT=staging in .env to use staging API for testing
+// Staging has a $1 test product and doesn't use real AINTI
+type StoreEnvironment = 'production' | 'staging';
 
-// Contract addresses (should match website configuration)
-export const AINTIVIRUS_PAYMENT_ADDRESS = '0x0000000000000000000000000000000000000000'; // TODO: Set from env
-export const SOLANA_PAYMENT_PROGRAM_ID = ''; // TODO: Set from env
-export const AINTI_TOKEN_ETH_ADDRESS = ''; // TODO: Set from env
+const STORE_ENVIRONMENT: StoreEnvironment = 
+  (process.env.STORE_ENVIRONMENT as StoreEnvironment) || 'production';
+
+const API_URLS: Record<StoreEnvironment, string> = {
+  production: 'https://api.v2.aintivirus.ai',
+  staging: 'https://stage.api.aintivirus.ai',
+};
+
+const API_URL = API_URLS[STORE_ENVIRONMENT];
+
+// Log environment in development for debugging
+if (process.env.NODE_ENV !== 'production') {
+  console.log(`[Store API] Environment: ${STORE_ENVIRONMENT}, URL: ${API_URL}`);
+}
+
+// ============================================================================
+// Environment Helpers
+// ============================================================================
+
+/**
+ * Check if the store is running in staging environment
+ * Useful for showing warnings in the UI
+ */
+export function isStoreStaging(): boolean {
+  return STORE_ENVIRONMENT === 'staging';
+}
+
+/**
+ * Get the current store environment
+ */
+export function getStoreEnvironment(): StoreEnvironment {
+  return STORE_ENVIRONMENT;
+}
+
+/**
+ * Get the current API URL
+ */
+export function getStoreApiUrl(): string {
+  return API_URL;
+}
+
+// Contract addresses (mainnet - GiftCard/Merch/Esim)
+// These match the website's NEXT_PUBLIC_* environment variables
+// Configure via .env: MERCHANT_ETH_ADDRESS, SOLANA_PAYMENT_PROGRAM_ID
+export const AINTIVIRUS_PAYMENT_ADDRESS = 
+  process.env.MERCHANT_ETH_ADDRESS || '';
+
+export const SOLANA_PAYMENT_PROGRAM_ID = 
+  process.env.SOLANA_PAYMENT_PROGRAM_ID || '';
+
+// AINTI token addresses
+export const AINTI_TOKEN_ETH_ADDRESS = 
+  process.env.AINTI_TOKEN_ETH_ADDRESS || 
+  ''; // Set when AINTI token launches on ETH
+
 export const AINTI_TOKEN_SOL_MINT = 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW';
 
 // Token decimals
@@ -252,15 +305,49 @@ export async function createESimOrder(params: {
 
 /**
  * Confirm payment for an order
+ * Uses a longer timeout since blockchain confirmation may take time
  */
 export async function confirmOrderPayment(
   orderId: string,
   paymentTxHash: string
 ): Promise<{ orderId: string; status: string; message: string }> {
-  return fetchApi(`/public-orders/${orderId}/confirm-payment`, {
-    method: 'POST',
-    body: JSON.stringify({ paymentTxHash }),
-  });
+  const controller = new AbortController();
+  // Use 30 second timeout for confirmation (blockchain verification can be slow)
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(`${API_URL}/public-orders/${orderId}/confirm-payment`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ paymentTxHash }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    
+    // Don't throw for network errors - payment was already sent
+    // The backend will pick up the payment from the blockchain
+    if (err instanceof Error && err.name === 'AbortError') {
+      console.warn('Payment confirmation timed out, but payment was sent on-chain');
+      return { orderId, status: 'pending_confirmation', message: 'Payment sent, awaiting blockchain confirmation' };
+    }
+    
+    console.warn('Payment confirmation failed:', err);
+    // Return a soft failure - payment was sent, just couldn't confirm with backend
+    return { orderId, status: 'pending_confirmation', message: 'Payment sent, backend confirmation pending' };
+  }
 }
 
 /**
@@ -339,7 +426,11 @@ async function getAintiTokenPriceFallback(network: 'eth' | 'sol'): Promise<Token
     }
 
     // Get the pair with highest liquidity
-    const sortedPairs = pairs.sort((a: any, b: any) => 
+    interface DexPair { 
+      priceUsd: string; 
+      liquidity?: { usd: number }; 
+    }
+    const sortedPairs = (pairs as DexPair[]).sort((a, b) => 
       (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
     );
 
@@ -365,113 +456,6 @@ export function convertUsdToAintiTokens(
 
   const tokenAmount = usdAmount / tokenPriceUsd;
   return Math.round(tokenAmount * 1000000) / 1000000;
-}
-
-// ============================================================================
-// Mixer Note Storage
-// ============================================================================
-
-export interface MixerNote {
-  id: string;
-  secret: string;
-  nullifier: string;
-  commitment: string;
-  amount: string;
-  mode: 'ETH' | 'SOL' | 'TOKEN';
-  sourceChain: 'evm' | 'solana';
-  targetChain: 'evm' | 'solana';
-  depositTxHash: string;
-  createdAt: number;
-  withdrawn: boolean;
-  withdrawTxHash?: string;
-  withdrawnAt?: number;
-}
-
-const MIXER_NOTES_KEY = 'mixerNotes';
-
-/**
- * Save a mixer note to storage
- */
-export async function saveMixerNote(note: MixerNote): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get([MIXER_NOTES_KEY], (result) => {
-      const notes: MixerNote[] = result[MIXER_NOTES_KEY] || [];
-      notes.push(note);
-      chrome.storage.local.set({ [MIXER_NOTES_KEY]: notes }, () => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve();
-        }
-      });
-    });
-  });
-}
-
-/**
- * Get all mixer notes from storage
- */
-export async function getMixerNotes(): Promise<MixerNote[]> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([MIXER_NOTES_KEY], (result) => {
-      resolve(result[MIXER_NOTES_KEY] || []);
-    });
-  });
-}
-
-/**
- * Mark a note as withdrawn
- */
-export async function markNoteWithdrawn(
-  noteId: string,
-  withdrawTxHash: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get([MIXER_NOTES_KEY], (result) => {
-      const notes: MixerNote[] = result[MIXER_NOTES_KEY] || [];
-      const noteIndex = notes.findIndex((n) => n.id === noteId);
-      
-      if (noteIndex === -1) {
-        reject(new Error('Note not found'));
-        return;
-      }
-
-      notes[noteIndex] = {
-        ...notes[noteIndex],
-        withdrawn: true,
-        withdrawTxHash,
-        withdrawnAt: Date.now(),
-      };
-
-      chrome.storage.local.set({ [MIXER_NOTES_KEY]: notes }, () => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve();
-        }
-      });
-    });
-  });
-}
-
-/**
- * Delete a mixer note
- */
-export async function deleteMixerNote(noteId: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get([MIXER_NOTES_KEY], (result) => {
-      const notes: MixerNote[] = result[MIXER_NOTES_KEY] || [];
-      const filteredNotes = notes.filter((n) => n.id !== noteId);
-
-      chrome.storage.local.set({ [MIXER_NOTES_KEY]: filteredNotes }, () => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve();
-        }
-      });
-    });
-  });
 }
 
 // ============================================================================

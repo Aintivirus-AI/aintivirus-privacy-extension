@@ -4283,7 +4283,7 @@ const App: React.FC = () => {
                 <div className="about-logo">
                   <img src="icons/ainti_l1.png" alt="AINTIVIRUS" className="logo-icon" />
                   <h3>Aintivirus</h3>
-                  <span className="version-badge">Version 0.2.0</span>
+                  <span className="version-badge">Version 2.0.0</span>
                 </div>
 
                 <p className="about-desc">

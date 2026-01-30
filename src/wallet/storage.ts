@@ -329,7 +329,12 @@ export async function getWalletState(): Promise<WalletState> {
     const legacyVault = versionInfo.legacyVault!;
     if (memoryState.keypair) {
       lockState = 'unlocked';
-      publicAddress = memoryState.publicAddress;
+      // Derive address from keypair if not cached (ensures address is always available when unlocked)
+      publicAddress = memoryState.publicAddress || getPublicKeyBase58(memoryState.keypair);
+      // Update cache if it was missing
+      if (!memoryState.publicAddress) {
+        memoryState.publicAddress = publicAddress;
+      }
     } else {
       lockState = 'locked';
       publicAddress = legacyVault.publicKey;
@@ -347,13 +352,36 @@ export async function getWalletState(): Promise<WalletState> {
       lockState = 'uninitialized';
     } else if (memoryState.keypair) {
       lockState = 'unlocked';
-      publicAddress = memoryState.publicAddress;
+      // Derive address from keypair if not cached (ensures address is always available when unlocked)
+      publicAddress = memoryState.publicAddress || getPublicKeyBase58(memoryState.keypair);
       activeWalletId = memoryState.activeWalletId;
       activeWalletLabel = memoryState.walletLabel;
       activeAccountId = memoryState.activeAccountId;
       activeAccountName = memoryState.accountName || 'Account 1';
       evmAddress = memoryState.evmAddress;
       isWatchOnly = memoryState.isWatchOnly;
+      
+      // Update cache if address was missing
+      if (!memoryState.publicAddress) {
+        memoryState.publicAddress = publicAddress;
+      }
+      
+      // If activeWalletId is missing but we have a keypair, try to find matching wallet from vault
+      if (!activeWalletId && publicAddress) {
+        const matchingWallet = vault.wallets.find((w) => w.publicKey === publicAddress);
+        if (matchingWallet) {
+          activeWalletId = matchingWallet.id;
+          activeWalletLabel = matchingWallet.label;
+          evmAddress = evmAddress || matchingWallet.evmAddress || null;
+          // Update memory state
+          memoryState.activeWalletId = activeWalletId;
+          memoryState.walletLabel = activeWalletLabel;
+          if (!memoryState.evmAddress && matchingWallet.evmAddress) {
+            memoryState.evmAddress = matchingWallet.evmAddress;
+            evmAddress = matchingWallet.evmAddress;
+          }
+        }
+      }
     } else {
       lockState = 'locked';
 
@@ -384,6 +412,10 @@ export async function getWalletState(): Promise<WalletState> {
       lockState = 'uninitialized';
     } else if (memoryState.keypair || memoryState.isWatchOnly) {
       lockState = 'unlocked';
+      // Derive address from keypair if not cached (ensures address is always available when unlocked)
+      if (memoryState.keypair && !memoryState.publicAddress) {
+        memoryState.publicAddress = getPublicKeyBase58(memoryState.keypair);
+      }
       publicAddress = memoryState.publicAddress;
       activeWalletId = memoryState.activeWalletId;
       activeWalletLabel = memoryState.walletLabel;
@@ -396,6 +428,35 @@ export async function getWalletState(): Promise<WalletState> {
         const activeWallet = vault.wallets.find((w) => w.id === activeWalletId);
         if (activeWallet) {
           accountCount = activeWallet.accounts.length;
+          // Fill in missing label from vault
+          if (!activeWalletLabel) {
+            activeWalletLabel = activeWallet.label;
+            memoryState.walletLabel = activeWalletLabel;
+          }
+        }
+      }
+      
+      // If activeWalletId is missing but we have a keypair, try to find matching wallet from vault
+      if (!activeWalletId && publicAddress) {
+        for (const wallet of vault.wallets) {
+          const matchingAccount = wallet.accounts.find((a) => a.solanaAddress === publicAddress);
+          if (matchingAccount) {
+            activeWalletId = wallet.id;
+            activeWalletLabel = wallet.label;
+            activeAccountId = matchingAccount.id;
+            activeAccountName = matchingAccount.name;
+            evmAddress = evmAddress || matchingAccount.evmAddress;
+            accountCount = wallet.accounts.length;
+            // Update memory state
+            memoryState.activeWalletId = activeWalletId;
+            memoryState.walletLabel = activeWalletLabel;
+            memoryState.activeAccountId = activeAccountId;
+            memoryState.accountName = activeAccountName;
+            if (!memoryState.evmAddress) {
+              memoryState.evmAddress = matchingAccount.evmAddress;
+            }
+            break;
+          }
         }
       }
     } else {

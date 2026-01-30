@@ -289,6 +289,7 @@ async function handleMessage(
     case 'WALLET_SET_SETTINGS':
     case 'WALLET_SEND_SOL':
     case 'WALLET_SEND_SPL_TOKEN':
+    case 'WALLET_PROCESS_STORE_PAYMENT':
     case 'WALLET_ESTIMATE_FEE':
     case 'WALLET_GET_HISTORY':
     case 'WALLET_GET_TOKENS':
@@ -321,6 +322,9 @@ async function handleMessage(
     // Bitcoin-family chains
     case 'WALLET_SEND_BTC':
     case 'WALLET_ESTIMATE_BTC_FEE':
+    // TRON
+    case 'WALLET_SEND_TRX':
+    case 'WALLET_ESTIMATE_TRX_FEE':
     case 'WALLET_GET_EVM_TOKENS':
     case 'WALLET_GET_EVM_HISTORY':
     case 'WALLET_ESTIMATE_EVM_FEE':
@@ -395,7 +399,6 @@ async function handleMessage(
     case 'DAPP_GET_PROVIDER_STATE':
     case 'DAPP_PAGE_UNLOAD':
     case 'GET_TAB_ID':
-      console.log('[Background] Handling dApp message:', extMessage.type, extMessage.payload);
       return handleDAppMessageWrapper(extMessage.type, extMessage.payload, sender);
 
     default:

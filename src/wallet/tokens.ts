@@ -672,19 +672,23 @@ async function fetchTokenBalancesInternal(address: string): Promise<SPLTokenBala
       }
     }
 
-    tokens.sort((a, b) => {
+    // Sort tokens by balance (highest first), then by zero balance
+    const finalTokens = tokens;
+    finalTokens.sort((a, b) => {
+      // Tokens with balance come first
       if (a.uiBalance > 0 && b.uiBalance === 0) return -1;
       if (a.uiBalance === 0 && b.uiBalance > 0) return 1;
+      // Sort by balance descending
       return b.uiBalance - a.uiBalance;
     });
 
     tokenCache = {
-      tokens,
+      tokens: finalTokens,
       fetchedAt: Date.now(),
       address,
     };
 
-    return tokens;
+    return finalTokens;
   } catch (error) {
     if (tokenCache && tokenCache.address === address) {
       return tokenCache.tokens;
@@ -725,7 +729,8 @@ function parseTokenAccount(account: {
   try {
     const data = account.account.data;
 
-    if (data.program !== 'spl-token') {
+    // Accept both standard SPL tokens and Token2022 (used by pump.fun and many newer tokens)
+    if (data.program !== 'spl-token' && data.program !== 'spl-token-2022') {
       return null;
     }
 

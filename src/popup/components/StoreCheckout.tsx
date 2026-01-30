@@ -85,6 +85,7 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('wallet');
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isWalletLockedError, setIsWalletLockedError] = useState(false);
 
   const isWalletConnected = walletState?.lockState === 'unlocked' && walletState?.publicAddress;
   // AINTI token is on Solana - always use Solana for payments
@@ -172,6 +173,7 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
+    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.homeAddress.trim()) newErrors.homeAddress = 'Address is required';
     if (!formData.country.trim()) newErrors.country = 'Country is required';
     if (!formData.postalCode.trim()) newErrors.postalCode = 'Postal code is required';
@@ -245,35 +247,31 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
   };
 
   // Send payment via extension wallet
-  // NOTE: This sends a simple SPL token transfer. The website uses a Solana Anchor program
-  // for payment processing. If the backend requires smart contract payments, users should
-  // complete payment through the website for full functionality.
-  const sendPayment = async (): Promise<{ success: boolean; signature?: string; error?: string }> => {
+  // Process payment through the AINTI Payment Program
+  // This creates an on-chain PaymentRecord that the backend uses to verify payments
+  const sendPayment = async (paymentOrderId: string): Promise<{ success: boolean; signature?: string; error?: string }> => {
     if (!tokenAmount) {
       return { success: false, error: 'Token amount not calculated' };
     }
 
-    if (!treasuryAddress) {
-      return { success: false, error: 'Treasury address not loaded. Please try again or pay through the website.' };
+    if (!paymentOrderId) {
+      return { success: false, error: 'Order ID is required for payment' };
     }
 
-    const amountRaw = tokenAmount; // Amount in whole tokens
-
-    // AINTI is on Solana - send SPL Token
+    // Process payment through the AINTI Payment Program
+    // This creates an on-chain PaymentRecord for order verification
     const result = await sendToBackground<SendTransactionResult>({
-      type: 'WALLET_SEND_SPL_TOKEN',
+      type: 'WALLET_PROCESS_STORE_PAYMENT',
       payload: {
-        recipient: treasuryAddress,
-        amount: amountRaw,
-        mint: AINTI_CONFIG.mint,
-        decimals: AINTI_CONFIG.decimals,
+        orderId: paymentOrderId,
+        amount: tokenAmount,
       },
     });
 
     if (result.success && result.data) {
       return { success: true, signature: result.data.signature };
     } else {
-      return { success: false, error: result.error || 'Failed to send AINTI token' };
+      return { success: false, error: result.error || 'Failed to process AINTI payment' };
     }
   };
 
@@ -299,10 +297,8 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
       return;
     }
     
-    if (paymentMethod === 'wallet' && !treasuryAddress) {
-      setPaymentError('Treasury address not loaded. Please wait or try again.');
-      return;
-    }
+    // Note: For wallet payments, we no longer need to check treasury address
+    // as the payment program reads it from the on-chain vault
 
     setIsPlacingOrder(true);
     setPaymentError(null);
@@ -319,15 +315,27 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
       const finalOrderId = orderResult.orderId || orderId;
       setCreatedOrderId(finalOrderId);
 
-      // Step 2: If wallet payment selected, send payment
+      // Step 2: If wallet payment selected, send payment through the payment program
       if (paymentMethod === 'wallet') {
         setStep('confirming');
         setIsProcessingPayment(true);
 
-        const paymentResult = await sendPayment();
+        const paymentResult = await sendPayment(finalOrderId);
         
         if (!paymentResult.success) {
-          setPaymentError(paymentResult.error || 'Payment failed');
+          // Make error messages more user-friendly
+          let errorMsg = paymentResult.error || 'Payment failed';
+          setIsWalletLockedError(false); // Reset locked state
+          
+          if (errorMsg.toLowerCase().includes('locked') || errorMsg.toLowerCase().includes('unlock')) {
+            errorMsg = 'Wallet is locked. Please unlock your wallet to complete the payment.';
+            setIsWalletLockedError(true);
+          } else if (errorMsg.includes('Insufficient token balance') || errorMsg.includes('Custom":1')) {
+            errorMsg = `Insufficient AINTI balance. You need at least ${tokenAmount?.toFixed(2)} AINTI to complete this purchase.`;
+          } else if (errorMsg.includes('Insufficient funds for fee') || errorMsg.includes('Insufficient SOL')) {
+            errorMsg = 'Insufficient SOL for transaction fees. Please add SOL to your wallet.';
+          }
+          setPaymentError(errorMsg);
           setStep('error');
           return;
         }
@@ -416,13 +424,15 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
           {errors.email && <span className="store-form-error">{errors.email}</span>}
         </div>
         <div className="store-form-field">
-          <label>Phone</label>
+          <label>Phone *</label>
           <input
             type="tel"
             name="phone"
             value={formData.phone}
             onChange={handleInputChange}
+            className={errors.phone ? 'error' : ''}
           />
+          {errors.phone && <span className="store-form-error">{errors.phone}</span>}
         </div>
       </div>
 
@@ -665,17 +675,41 @@ const StoreCheckout: React.FC<StoreCheckoutProps> = ({
     </div>
   );
 
+  // Handle unlock wallet from error screen
+  const handleUnlockFromError = () => {
+    if (onUnlockWallet) {
+      onUnlockWallet();
+      // Return to payment step so user can retry after unlocking
+      setStep('payment');
+      setPaymentError(null);
+      setIsWalletLockedError(false);
+    }
+  };
+
   const renderErrorStep = () => (
     <div className="store-checkout-error">
       <div className="store-error-icon">
-        <AlertIcon size={32} />
+        {isWalletLockedError ? (
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        ) : (
+          <AlertIcon size={32} />
+        )}
       </div>
-      <h3>Payment Failed</h3>
+      <h3>{isWalletLockedError ? 'Wallet Locked' : 'Payment Failed'}</h3>
       <p>{paymentError || 'An error occurred during payment'}</p>
       <div className="store-error-actions">
-        <button className="store-retry-btn" onClick={() => setStep('payment')}>
-          Try Again
-        </button>
+        {isWalletLockedError && onUnlockWallet ? (
+          <button className="store-retry-btn" onClick={handleUnlockFromError}>
+            Unlock Wallet
+          </button>
+        ) : (
+          <button className="store-retry-btn" onClick={() => setStep('payment')}>
+            Try Again
+          </button>
+        )}
         <button className="store-cancel-btn" onClick={onBack}>
           Cancel
         </button>

@@ -368,9 +368,7 @@ export function getSolanaPrivateKeyBase58(keypair: Keypair): string {
 
 export function getEVMPrivateKeyHex(keypair: EVMKeypair): string {
   return keypair.privateKey;
-}
-
-export function validatePrivateKey(privateKey: string): {
+}export function validatePrivateKey(privateKey: string): {
   valid: boolean;
   chainType: 'solana' | 'evm' | 'unknown';
   error?: string;

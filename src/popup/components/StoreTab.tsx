@@ -6,7 +6,6 @@ import StoreProductCard from './StoreProductCard';
 import StoreCart from './StoreCart';
 import StoreCheckout from './StoreCheckout';
 import StoreSubTabs, { type StoreSubTab } from './StoreSubTabs';
-import StoreMixer from './StoreMixer';
 import StoreGiftCards from './StoreGiftCards';
 import StoreESim from './StoreESim';
 
@@ -41,11 +40,12 @@ export interface CartItem {
 interface StoreTabProps {
   walletState: WalletState | null;
   onWalletStateChange?: () => void;
+  onBuyAinti?: () => void; // Navigate to swap to buy AINTI
 }
 
 type MerchView = 'products' | 'cart' | 'checkout';
 
-const StoreTab: React.FC<StoreTabProps> = ({ walletState, onWalletStateChange }) => {
+const StoreTab: React.FC<StoreTabProps> = ({ walletState, onWalletStateChange, onBuyAinti }) => {
   // Sub-tab state
   const [activeSubTab, setActiveSubTab] = useState<StoreSubTab>('merch');
   
@@ -356,19 +356,12 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onWalletStateChange })
           </>
         );
 
-      case 'mixer':
-        return (
-          <StoreMixer 
-            walletState={walletState} 
-            onUnlockWallet={handleShowUnlockModal}
-          />
-        );
-
       case 'giftcards':
         return (
           <StoreGiftCards 
             walletState={walletState} 
             onUnlockWallet={handleShowUnlockModal}
+            onBuyAinti={onBuyAinti}
           />
         );
 
@@ -377,6 +370,7 @@ const StoreTab: React.FC<StoreTabProps> = ({ walletState, onWalletStateChange })
           <StoreESim 
             walletState={walletState} 
             onUnlockWallet={handleShowUnlockModal}
+            onBuyAinti={onBuyAinti}
           />
         );
 

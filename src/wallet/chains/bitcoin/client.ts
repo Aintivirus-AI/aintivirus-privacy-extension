@@ -1577,7 +1577,6 @@ async function getTransactionsBlockchair(
           const keys = Object.keys(data.data || {});
           if (keys.length > 0) {
             addressData = data.data[keys[0]];
-            console.log(`[BCH Transactions] Found address data under key: ${keys[0]} (queried: ${address})`);
           }
         }
         

@@ -30,7 +30,7 @@ const CHAIN_COINGECKO_IDS: Record<string, string> = {
   // EVM chains
   ethereum: 'ethereum',
   bnb: 'binancecoin',
-  polygon: 'matic-network',
+  polygon: 'polygon-ecosystem-token',
   arbitrum: 'ethereum', // Arbitrum uses ETH
   optimism: 'ethereum', // Optimism uses ETH
   base: 'ethereum', // Base uses ETH
@@ -152,7 +152,7 @@ async function fetchBatchedNativePrices(): Promise<void> {
       SOL_COINGECKO_ID,      // solana
       ETH_COINGECKO_ID,      // ethereum
       BNB_COINGECKO_ID,      // binancecoin
-      'matic-network',       // polygon
+      'polygon-ecosystem-token', // polygon (POL - formerly MATIC)
       'avalanche-2',         // avalanche
       'bitcoin',             // bitcoin
       'bitcoin-cash',        // bitcoin cash
@@ -178,7 +178,7 @@ async function fetchBatchedNativePrices(): Promise<void> {
     // Store all chain prices using the mapping
     storePriceInCache(data, 'ethereum', ETH_CACHE_KEY, now);
     storePriceInCache(data, 'binancecoin', BNB_CACHE_KEY, now);
-    storePriceInCache(data, 'matic-network', 'polygon-native', now);
+    storePriceInCache(data, 'polygon-ecosystem-token', 'polygon-native', now);
     storePriceInCache(data, 'avalanche-2', 'avalanche-native', now);
     storePriceInCache(data, 'bitcoin', 'bitcoin-native', now);
     storePriceInCache(data, 'bitcoin-cash', 'bitcoincash-native', now);

@@ -206,17 +206,14 @@ async function handleDAppRequest(
   sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
   const { chainType, method, params, origin, tabId, favicon, title } = payload;
-  console.log('[DApp Handler] handleDAppRequest:', { chainType, method, origin, tabId });
 
   if (tabId) {
     await addConnectedTab(tabId, origin, chainType);
   }
 
   if (!requiresApproval(method, chainType)) {
-    console.log('[DApp Handler] Handling as read-only method');
     return await handleReadOnlyMethod(chainType, method, params, origin);
   }
-  console.log('[DApp Handler] Method requires approval');
 
   const hasExistingPermission = await hasPermission(origin, chainType);
   const autoApprove = await shouldAutoApprove(origin, chainType);
@@ -229,7 +226,6 @@ async function handleDAppRequest(
       // Record in security module for auto-approved connections too
       if (permission?.accounts[0]) {
         try {
-          console.log('[DApp Handler] Recording auto-approved connection:', origin, permission.accounts[0]);
           await approveConnection(origin, origin, permission.accounts[0], 'low', [], tabId);
         } catch (err) {
           console.error('[DApp Handler] Failed to record auto-approved connection:', err);
@@ -446,7 +442,6 @@ async function processConnectApproval(
 
   // Also record in security module so connections show in the Security tab
   try {
-    console.log('[DApp Handler] Recording new connection approval:', origin, selectedAccounts[0]);
     await approveConnection(
       origin,
       origin, // Use origin as URL since we may not have full URL
@@ -507,7 +502,6 @@ async function processSignApproval(request: QueuedRequest): Promise<unknown> {
 
 async function processTransactionApproval(request: QueuedRequest): Promise<unknown> {
   const { chainType, params } = request;
-  console.log('[DApp Handler] processTransactionApproval:', { chainType, params });
 
   if (chainType === 'evm') {
     const txParams = (params as unknown[])[0] as {
@@ -520,10 +514,8 @@ async function processTransactionApproval(request: QueuedRequest): Promise<unkno
       maxFeePerGas?: string;
       maxPriorityFeePerGas?: string;
     };
-    console.log('[DApp Handler] Sending EVM transaction:', txParams);
 
     const result = await sendEVMTransaction(txParams);
-    console.log('[DApp Handler] EVM transaction result:', result);
     return result;
   } else {
     const { transaction, options } = params as {

@@ -303,6 +303,10 @@ export type WalletSendSPLTokenMessage = BaseMessage<
   'WALLET_SEND_SPL_TOKEN',
   WalletMessagePayloads['WALLET_SEND_SPL_TOKEN']
 >;
+export type WalletProcessStorePaymentMessage = BaseMessage<
+  'WALLET_PROCESS_STORE_PAYMENT',
+  WalletMessagePayloads['WALLET_PROCESS_STORE_PAYMENT']
+>;
 export type WalletEstimateFeeMessage = BaseMessage<
   'WALLET_ESTIMATE_FEE',
   WalletMessagePayloads['WALLET_ESTIMATE_FEE']
@@ -405,6 +409,15 @@ export type WalletSendBTCMessage = BaseMessage<
 export type WalletEstimateBTCFeeMessage = BaseMessage<
   'WALLET_ESTIMATE_BTC_FEE',
   WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE']
+>;
+// TRON chain messages
+export type WalletSendTRXMessage = BaseMessage<
+  'WALLET_SEND_TRX',
+  WalletMessagePayloads['WALLET_SEND_TRX']
+>;
+export type WalletEstimateTRXFeeMessage = BaseMessage<
+  'WALLET_ESTIMATE_TRX_FEE',
+  WalletMessagePayloads['WALLET_ESTIMATE_TRX_FEE']
 >;
 export type WalletGetEVMTokensMessage = BaseMessage<
   'WALLET_GET_EVM_TOKENS',
@@ -704,6 +717,7 @@ export type ExtensionMessage =
   | WalletSetSettingsMessage
   | WalletSendSolMessage
   | WalletSendSPLTokenMessage
+  | WalletProcessStorePaymentMessage
   | WalletEstimateFeeMessage
   | WalletGetHistoryMessage
   | WalletGetTokensMessage
@@ -733,6 +747,9 @@ export type ExtensionMessage =
   // Bitcoin-family chains
   | WalletSendBTCMessage
   | WalletEstimateBTCFeeMessage
+  // TRON
+  | WalletSendTRXMessage
+  | WalletEstimateTRXFeeMessage
   | WalletGetEVMTokensMessage
   | WalletGetEVMHistoryMessage
   | WalletEstimateEVMFeeMessage
@@ -764,6 +781,7 @@ export type ExtensionMessage =
   | EVMSwapAvailableMessage
 
   | EVMRpcRequestMessage
+
   | SecurityConnectionRequestMessage
   | SecurityConnectionApproveMessage
   | SecurityConnectionDenyMessage
@@ -832,7 +850,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
 export const DEFAULT_STORAGE: StorageSchema = {
   featureFlags: DEFAULT_FEATURE_FLAGS,
   initialized: false,
-  version: '0.2.0',
+  version: '2.0.0',
 
   privacySettings: DEFAULT_PRIVACY_SETTINGS,
   privacySiteSettings: {},

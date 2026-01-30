@@ -22,6 +22,7 @@ import {
   EVMTokenBalance,
   EVMFeeEstimate,
   EVMTransactionResult,
+  EVMHistoryItemResponse,
   EVMSendParams,
   EVMTokenSendParams,
   EVMPendingTxInfo,
@@ -29,6 +30,8 @@ import {
   EVMReplacementFeeEstimate,
   BTCTransactionResult,
   BTCFeeEstimate,
+  TRXTransactionResult,
+  TRXFeeEstimate,
 } from './types';
 import {
   walletExists,
@@ -110,7 +113,7 @@ import { generateAddressQR } from './qr';
 import { validateMnemonic } from './keychain';
 import bs58 from 'bs58';
 
-import { sendSol, sendSPLToken, estimateTransactionFee } from './transactions';
+import { sendSol, sendSPLToken, processStorePayment, estimateTransactionFee } from './transactions';
 import { getTransactionHistory, clearHistoryCache } from './history';
 import {
   getTokenBalances,
@@ -267,6 +270,9 @@ export async function handleWalletMessage(
     case 'WALLET_SEND_SPL_TOKEN':
       return handleSendSPLToken(payload as WalletMessagePayloads['WALLET_SEND_SPL_TOKEN']);
 
+    case 'WALLET_PROCESS_STORE_PAYMENT':
+      return handleProcessStorePayment(payload as WalletMessagePayloads['WALLET_PROCESS_STORE_PAYMENT']);
+
     case 'WALLET_ESTIMATE_FEE':
       return handleEstimateFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_FEE']);
 
@@ -321,6 +327,13 @@ export async function handleWalletMessage(
 
     case 'WALLET_ESTIMATE_BTC_FEE':
       return handleEstimateBTCFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE']);
+
+    // TRON
+    case 'WALLET_SEND_TRX':
+      return handleSendTRX(payload as WalletMessagePayloads['WALLET_SEND_TRX']);
+
+    case 'WALLET_ESTIMATE_TRX_FEE':
+      return handleEstimateTRXFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_TRX_FEE']);
 
     case 'WALLET_GET_EVM_TOKENS':
       return handleGetEVMTokens(payload as WalletMessagePayloads['WALLET_GET_EVM_TOKENS']);
@@ -776,6 +789,33 @@ async function handleSendSPLToken(
   clearHistoryCache();
   clearTokenCache();
 
+  balanceDedup.invalidate(/^balance:solana:/);
+
+  return result;
+}
+
+/**
+ * Handle store payment through the AINTI Payment Program
+ * This creates an on-chain PaymentRecord for order verification
+ */
+async function handleProcessStorePayment(
+  payload: WalletMessagePayloads['WALLET_PROCESS_STORE_PAYMENT'],
+): Promise<SendTransactionResult> {
+  const { orderId, amount } = payload;
+
+  if (!orderId) {
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Order ID is required');
+  }
+
+  if (!amount || amount <= 0) {
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Amount must be greater than 0');
+  }
+
+  const result = await processStorePayment({ orderId, amount });
+
+  // Clear caches since balance changed
+  clearHistoryCache();
+  clearTokenCache();
   balanceDedup.invalidate(/^balance:solana:/);
 
   return result;
@@ -1346,7 +1386,8 @@ async function handleGetEVMTokens(
     await saveWalletSettings({ hiddenTokens: newHiddenTokens });
   }
 
-  return tokens
+  // Map tokens (no spam filtering)
+  const mappedTokens: EVMTokenBalance[] = tokens
     .filter(
       (t) =>
         !hiddenTokens.has(t.address.toLowerCase()) || customTokenMints.has(t.address.toLowerCase()),
@@ -1355,6 +1396,7 @@ async function handleGetEVMTokens(
       const normalizedAddress = t.address.toLowerCase();
       const customMeta = customTokenMap.get(normalizedAddress);
       const isCustom = customTokenMints.has(normalizedAddress);
+
       return {
         address: t.address,
         symbol: customMeta?.symbol || t.symbol,
@@ -1366,11 +1408,20 @@ async function handleGetEVMTokens(
         isCustom,
       };
     });
+
+  // Sort by balance (highest first)
+  mappedTokens.sort((a, b) => {
+    if (a.uiBalance > 0 && b.uiBalance === 0) return -1;
+    if (a.uiBalance === 0 && b.uiBalance > 0) return 1;
+    return b.uiBalance - a.uiBalance;
+  });
+
+  return mappedTokens;
 }
 
 async function handleGetEVMHistory(
   payload: WalletMessagePayloads['WALLET_GET_EVM_HISTORY'],
-): Promise<{ transactions: any[]; hasMore: boolean }> {
+): Promise<{ transactions: EVMHistoryItemResponse[]; hasMore: boolean }> {
   const settings = await getWalletSettings();
   const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
   const testnet = settings.networkEnvironment === 'testnet';
@@ -1548,7 +1599,19 @@ async function handleGetChainAddress(
     };
   }
   
-  // For other chains (Bitcoin, TRON, Monero), derive the address from mnemonic
+  // For Monero, return the stored watch-only address (not derived from mnemonic)
+  if (chainConfig.family === 'monero') {
+    const settings = await getWalletSettings();
+    const moneroAddress = settings.moneroWatchOnly?.address || '';
+    return {
+      address: moneroAddress,
+      chainId,
+      chainFamily: chainConfig.family,
+      symbol: chainConfig.symbol,
+    };
+  }
+  
+  // For other chains (Bitcoin, TRON), derive the address from mnemonic
   const mnemonic = getUnlockedMnemonic();
   if (!mnemonic) {
     return {
@@ -1951,6 +2014,215 @@ async function handleEstimateBTCFee(
     totalFeeSatoshis: feeEstimate.totalFee,
     totalFeeBTC: feeEstimate.totalFee / 100000000, // Convert satoshis to BTC
     estimatedBlocks: feeEstimate.estimatedBlocks,
+  };
+}
+
+// ============================================================================
+// TRON Handlers
+// ============================================================================
+
+/**
+ * Send TRX on TRON network
+ */
+async function handleSendTRX(
+  payload: WalletMessagePayloads['WALLET_SEND_TRX'],
+): Promise<TRXTransactionResult> {
+  const { recipient, amountSun } = payload;
+
+  // Get mnemonic to derive TRON keypair
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock to send transactions.',
+    );
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  // Import TRON functions dynamically
+  const { deriveTronKeypair, isValidTronAddress } = await import('./chains/tron/addresses');
+  const { createTransferTransaction, broadcastTransaction } = await import('./chains/tron/client');
+  const { getTronTxExplorerUrl } = await import('./chains/tron/config');
+
+  // Derive keypair
+  const keypair = deriveTronKeypair(mnemonic, 0);
+
+  // Validate recipient address
+  if (!isValidTronAddress(recipient)) {
+    throw new WalletError(
+      WalletErrorCode.INVALID_RECIPIENT,
+      `Invalid TRON address: ${recipient}`,
+    );
+  }
+
+  // Helper to decode hex error messages from TRON API
+  const decodeHexError = (hex: string): string => {
+    try {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+      return new TextDecoder().decode(bytes);
+    } catch {
+      return hex;
+    }
+  };
+
+  try {
+    // Create unsigned transaction
+    const unsignedTx = await createTransferTransaction(
+      keypair.address,
+      recipient,
+      amountSun,
+      testnet,
+    );
+
+    // Sign transaction
+    const { signTransaction } = await import('./chains/tron/addresses');
+    const signature = signTransaction(unsignedTx.raw_data_hex, keypair.privateKey);
+
+    // Create signed transaction object
+    // IMPORTANT: Must include visible field to match the format used during creation
+    const signedTx = {
+      txID: unsignedTx.txID,
+      raw_data: unsignedTx.raw_data,
+      raw_data_hex: unsignedTx.raw_data_hex,
+      signature: [signature],
+      visible: unsignedTx.visible ?? true, // Must match the format used when creating transaction
+    };
+
+    // Broadcast transaction
+    const txid = await broadcastTransaction(signedTx, testnet);
+
+    // Get explorer URL
+    const explorerUrl = getTronTxExplorerUrl(txid, testnet);
+
+    return {
+      txid,
+      explorerUrl,
+      confirmed: true, // TRON confirms quickly
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Log for debugging
+    console.error('[TRON] Send error:', errorMessage);
+    
+    // Check if it's a hex-encoded error message
+    let decodedMessage = errorMessage;
+    if (/^[0-9a-fA-F]+$/.test(errorMessage)) {
+      decodedMessage = decodeHexError(errorMessage);
+    }
+    
+    // Check for our custom receiver not activated error
+    if (decodedMessage.includes('RECEIVER_NOT_ACTIVATED')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'This receiving address has not been activated on TRON. To activate a new address, you need to send at least 1 TRX.',
+      );
+    }
+    
+    // Check for sender not found error
+    if (decodedMessage.includes('SENDER_NOT_FOUND')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'Your TRON account was not found on the network. Please ensure you have received TRX before.',
+      );
+    }
+    
+    // Check for our custom insufficient balance error
+    if (decodedMessage.includes('INSUFFICIENT_BALANCE')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        decodedMessage.replace('INSUFFICIENT_BALANCE: ', ''),
+      );
+    }
+    
+    // Check for insufficient balance error from network
+    if (decodedMessage.includes('balance is not sufficient') || decodedMessage.includes('not sufficient')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        'Insufficient balance. TRON requires keeping a reserve in your account. Try sending a smaller amount.',
+      );
+    }
+    
+    // Check for bandwidth/resource errors
+    if (decodedMessage.includes('bandwidth') || decodedMessage.includes('AccountResourceInsufficient')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'Insufficient bandwidth or energy. You may need to wait for bandwidth to regenerate or have more TRX for fees.',
+      );
+    }
+    
+    // "No contract" or "Account not exist" for the RECEIVER usually means new address
+    // But this should still work for transfers >= 1 TRX
+    // Only show this error if the amount was too small
+    if ((decodedMessage.includes('No contract') || decodedMessage.includes('Account not exist')) 
+        && amountSun < 1000000) { // Less than 1 TRX
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'This receiving address has not been activated on TRON. To activate a new address, you need to send at least 1 TRX.',
+      );
+    }
+    
+    // For other "No contract" errors, provide more context
+    if (decodedMessage.includes('No contract')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        `Transaction failed: ${decodedMessage}. This may be a network issue - please try again.`,
+      );
+    }
+    
+    throw new WalletError(
+      WalletErrorCode.TRANSACTION_FAILED,
+      decodedMessage,
+    );
+  }
+}
+
+/**
+ * Estimate fee for a TRON transaction
+ */
+async function handleEstimateTRXFee(
+  payload: WalletMessagePayloads['WALLET_ESTIMATE_TRX_FEE'],
+): Promise<TRXFeeEstimate> {
+  const { recipient, amountSun } = payload;
+
+  // Get mnemonic to derive TRON address
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    // Return a default estimate if wallet is locked
+    return {
+      bandwidth: 270,
+      energy: 0,
+      feeSun: 0, // Most TRX transfers are free with bandwidth
+      feeTRX: 0,
+    };
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  // Import TRON functions dynamically
+  const { deriveTronKeypair } = await import('./chains/tron/addresses');
+  const { estimateFee } = await import('./chains/tron/client');
+
+  const keypair = deriveTronKeypair(mnemonic, 0);
+
+  const feeEstimate = await estimateFee(
+    keypair.address,
+    recipient,
+    amountSun,
+    testnet,
+  );
+
+  return {
+    bandwidth: feeEstimate.bandwidth,
+    energy: feeEstimate.energy,
+    feeSun: feeEstimate.trxFee,
+    feeTRX: feeEstimate.trxFeeFormatted,
   };
 }
 
@@ -2555,3 +2827,20 @@ export {
   STUCK_THRESHOLD_MS,
   SOLANA_COMMITMENT_ORDER,
 } from './txStatus';
+
+// Spam Detection exports
+export {
+  detectSpamToken,
+  detectSpamEVMToken,
+  detectSpamTokensBatch,
+  detectSpamEVMTokensBatch,
+  filterSpamTokens,
+  getSpamReasonSummary,
+  shouldFlagToken,
+  getSpamWarningLevel,
+  DEFAULT_SPAM_CONFIG,
+  type SpamDetectionConfig,
+  type SpamDetectionResult,
+  type SpamSignal,
+  type SpamSignalType,
+} from './spamDetection';

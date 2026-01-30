@@ -102,6 +102,24 @@ export interface RecentRecipient {
 
 export type RecentRecipientsMap = Record<RecentRecipientChainId, RecentRecipient[]>;
 
+export interface SpamFilterSettings {
+  /** Enable spam token detection (default: true) */
+  enabled: boolean;
+  /** Auto-hide tokens detected as spam (default: false - show with warning instead) */
+  autoHide: boolean;
+  /** Minimum confidence threshold 0-100 to flag as spam (default: 70) */
+  confidenceThreshold: number;
+  /** User-whitelisted token addresses (never flag as spam) */
+  whitelistedTokens: string[];
+}
+
+export const DEFAULT_SPAM_FILTER_SETTINGS: SpamFilterSettings = {
+  enabled: true,
+  autoHide: false,
+  confidenceThreshold: 70,
+  whitelistedTokens: [],
+};
+
 export interface WalletSettings {
   network: SolanaNetwork;
 
@@ -125,6 +143,17 @@ export interface WalletSettings {
   customEVMTokens?: Partial<Record<EVMChainId, string[]>>;
 
   recentRecipients?: RecentRecipientsMap;
+
+  /** Monero watch-only configuration (address and view key) */
+  moneroWatchOnly?: {
+    address: string;
+    viewKey: string;
+    /** Optional restore height for faster sync */
+    restoreHeight?: number;
+  };
+
+  /** Spam token filter settings */
+  spamFilter?: SpamFilterSettings;
 }
 
 export const DEFAULT_WALLET_SETTINGS: WalletSettings = {
@@ -399,6 +428,7 @@ export type WalletMessageType =
   | 'WALLET_SET_SETTINGS'
   | 'WALLET_SEND_SOL'
   | 'WALLET_SEND_SPL_TOKEN'
+  | 'WALLET_PROCESS_STORE_PAYMENT'
   | 'WALLET_ESTIMATE_FEE'
   | 'WALLET_GET_HISTORY'
   | 'WALLET_GET_TOKENS'
@@ -417,6 +447,9 @@ export type WalletMessageType =
   | 'WALLET_SEND_ERC20'
   | 'WALLET_SEND_BTC'
   | 'WALLET_ESTIMATE_BTC_FEE'
+  // TRON
+  | 'WALLET_SEND_TRX'
+  | 'WALLET_ESTIMATE_TRX_FEE'
   | 'WALLET_GET_EVM_TOKENS'
   | 'WALLET_GET_EVM_HISTORY'
   | 'WALLET_ESTIMATE_EVM_FEE'
@@ -485,6 +518,13 @@ export interface WalletMessagePayloads {
     decimals: number;
     tokenAccount?: string;
   };
+  /** Process payment through the AINTI payment program (creates on-chain PaymentRecord) */
+  WALLET_PROCESS_STORE_PAYMENT: {
+    /** The order ID from the backend (will be hashed to bytes32) */
+    orderId: string;
+    /** Amount in AINTI tokens (human-readable, e.g., 100.5) */
+    amount: number;
+  };
   WALLET_ESTIMATE_FEE: { recipient: string; amountSol: number };
 
   WALLET_GET_HISTORY: { limit?: number; before?: string; forceRefresh?: boolean };
@@ -524,6 +564,22 @@ export interface WalletMessagePayloads {
     recipient: string;
     /** Amount in satoshis */
     amountSatoshis: number;
+  };
+  
+  /** Send native TRX on TRON */
+  WALLET_SEND_TRX: {
+    /** Recipient TRON address (starts with T) */
+    recipient: string;
+    /** Amount in SUN (1 TRX = 1,000,000 SUN) */
+    amountSun: number;
+  };
+  
+  /** Estimate fee for a TRON transaction */
+  WALLET_ESTIMATE_TRX_FEE: {
+    /** Recipient TRON address */
+    recipient: string;
+    /** Amount in SUN */
+    amountSun: number;
   };
   WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | string | null; forceRefresh?: boolean };
   WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | string | null; limit?: number };
@@ -647,6 +703,7 @@ export interface WalletMessageResponses {
 
   WALLET_SEND_SOL: SendTransactionResult;
   WALLET_SEND_SPL_TOKEN: SendTransactionResult;
+  WALLET_PROCESS_STORE_PAYMENT: SendTransactionResult;
   WALLET_ESTIMATE_FEE: FeeEstimate;
   WALLET_GET_HISTORY: TransactionHistoryResult;
   WALLET_GET_TOKENS: SPLTokenBalance[];
@@ -665,8 +722,10 @@ export interface WalletMessageResponses {
   WALLET_SEND_ERC20: EVMTransactionResult;
   WALLET_SEND_BTC: BTCTransactionResult;
   WALLET_ESTIMATE_BTC_FEE: BTCFeeEstimate;
+  WALLET_SEND_TRX: TRXTransactionResult;
+  WALLET_ESTIMATE_TRX_FEE: TRXFeeEstimate;
   WALLET_GET_EVM_TOKENS: EVMTokenBalance[];
-  WALLET_GET_EVM_HISTORY: { transactions: any[]; hasMore: boolean };
+  WALLET_GET_EVM_HISTORY: { transactions: EVMHistoryItemResponse[]; hasMore: boolean };
   WALLET_ESTIMATE_EVM_FEE: EVMFeeEstimate;
   WALLET_GET_EVM_ADDRESS: string;
   WALLET_GET_CHAIN_ADDRESS: { address: string; chainId: string; chainFamily: string; symbol: string };
@@ -918,6 +977,19 @@ export interface TransactionHistoryResult {
   cursor: string | null;
 }
 
+export type SpamWarningLevel = 'none' | 'low' | 'medium' | 'high';
+
+export interface SpamInfo {
+  /** Whether this token is flagged as spam */
+  isSpam: boolean;
+  /** Confidence score 0-100 */
+  confidence: number;
+  /** Warning level for UI display */
+  warningLevel: SpamWarningLevel;
+  /** Human-readable reasons */
+  reasons: string[];
+}
+
 export interface SPLTokenBalance {
   mint: string;
 
@@ -934,6 +1006,9 @@ export interface SPLTokenBalance {
   tokenAccount: string;
 
   logoUri?: string;
+
+  /** Spam detection info (populated by spam filter) */
+  spamInfo?: SpamInfo;
 }
 
 export interface CustomToken {
@@ -1068,6 +1143,9 @@ export interface EVMTokenBalance {
 
   /** True if this token was explicitly added by the user */
   isCustom?: boolean;
+
+  /** Spam detection info (populated by spam filter) */
+  spamInfo?: SpamInfo;
 }
 
 export interface EVMFeeEstimate {
@@ -1092,6 +1170,38 @@ export interface EVMTransactionResult {
   confirmed: boolean;
 
   error?: string;
+}
+
+/**
+ * EVM history item returned from API
+ */
+export interface EVMHistoryItemResponse {
+  hash: string;
+  timestamp: number | null;
+  direction: 'sent' | 'received' | 'self' | 'unknown';
+  type: string;
+  amount: number;
+  symbol: string;
+  counterparty: string | null;
+  fee: number;
+  status: 'confirmed' | 'pending' | 'failed';
+  explorerUrl: string;
+  logoUri?: string;
+  tokenAddress?: string;
+  swapInfo?: {
+    fromToken: {
+      symbol: string;
+      amount: number;
+      address?: string;
+      logoUri?: string;
+    };
+    toToken: {
+      symbol: string;
+      amount: number;
+      address?: string;
+      logoUri?: string;
+    };
+  };
 }
 
 /** Bitcoin transaction result */
@@ -1122,6 +1232,36 @@ export interface BTCFeeEstimate {
 
   /** Estimated confirmation time in blocks */
   estimatedBlocks: number;
+}
+
+/** TRON transaction result */
+export interface TRXTransactionResult {
+  /** Transaction ID (hash) */
+  txid: string;
+
+  /** Block explorer URL */
+  explorerUrl: string;
+
+  /** Whether transaction is confirmed */
+  confirmed: boolean;
+
+  /** Error message if transaction failed */
+  error?: string;
+}
+
+/** TRON fee estimate */
+export interface TRXFeeEstimate {
+  /** Estimated bandwidth cost */
+  bandwidth: number;
+
+  /** Estimated energy cost (for smart contracts) */
+  energy: number;
+
+  /** Total fee in SUN */
+  feeSun: number;
+
+  /** Total fee in TRX (formatted) */
+  feeTRX: number;
 }
 
 export type ChainFamily = 'solana' | 'evm' | 'bitcoin' | 'tron' | 'monero';
@@ -1166,11 +1306,30 @@ function buildSupportedChains(): ChainDisplayInfo[] {
     monero: 4,
   };
 
-  // Sort chains by family then alphabetically
+  // Define display order within EVM family (lower = first)
+  // Ethereum should be first, then popular L2s
+  const evmDisplayOrder: Record<string, number> = {
+    ethereum: 0,
+    base: 1,
+    arbitrum: 2,
+    optimism: 3,
+    polygon: 4,
+    bnb: 5,
+  };
+
+  // Sort chains by family, then by custom order (for EVM), then alphabetically
   const sortedChains = Object.values(CHAIN_REGISTRY).sort((a, b) => {
     const orderA = familyOrder[a.family] ?? 99;
     const orderB = familyOrder[b.family] ?? 99;
     if (orderA !== orderB) return orderA - orderB;
+    
+    // Within EVM family, use custom display order
+    if (a.family === 'evm' && b.family === 'evm') {
+      const evmOrderA = evmDisplayOrder[a.id] ?? 99;
+      const evmOrderB = evmDisplayOrder[b.id] ?? 99;
+      if (evmOrderA !== evmOrderB) return evmOrderA - evmOrderB;
+    }
+    
     return a.name.localeCompare(b.name);
   });
 

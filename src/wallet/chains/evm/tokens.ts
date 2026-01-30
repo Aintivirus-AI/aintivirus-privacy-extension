@@ -77,20 +77,21 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
-      logoUri:
-        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/assets/0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359/logo.png',
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
       name: 'Tether USD',
       symbol: 'USDT',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
     },
     {
       address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
   ],
   arbitrum: [
@@ -99,24 +100,29 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
       name: 'Tether USD',
       symbol: 'USDT',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
     },
     {
       address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
     {
       address: '0x912CE59144191C1204E64559FE8253a0e49E6548',
       name: 'Arbitrum',
       symbol: 'ARB',
       decimals: 18,
+      logoUri:
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png',
     },
   ],
   optimism: [
@@ -125,24 +131,29 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
       name: 'Tether USD',
       symbol: 'USDT',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
     },
     {
       address: '0x4200000000000000000000000000000000000006',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
     {
       address: '0x4200000000000000000000000000000000000042',
       name: 'Optimism',
       symbol: 'OP',
       decimals: 18,
+      logoUri:
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/assets/0x4200000000000000000000000000000000000042/logo.png',
     },
   ],
   base: [
@@ -151,12 +162,14 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0x4200000000000000000000000000000000000006',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
   ],
 

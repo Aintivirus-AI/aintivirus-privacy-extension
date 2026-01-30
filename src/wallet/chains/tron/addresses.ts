@@ -181,6 +181,44 @@ export function hexToAddress(hex: string): string {
 }
 
 /**
+ * Normalize an address to base58 format for comparison
+ * Handles both hex (41...) and base58 (T...) formats
+ */
+export function normalizeAddress(address: string): string {
+  if (!address) return '';
+  
+  // If it starts with 'T', it's already base58
+  if (address.startsWith('T')) {
+    return address;
+  }
+  
+  // If it looks like hex (starts with 41 and is 42 chars), convert to base58
+  if (/^41[0-9a-fA-F]{40}$/.test(address)) {
+    try {
+      return hexToAddress(address);
+    } catch {
+      return address;
+    }
+  }
+  
+  return address;
+}
+
+/**
+ * Compare two TRON addresses for equality
+ * Handles mixed formats (hex vs base58)
+ */
+export function addressesEqual(addr1: string, addr2: string): boolean {
+  if (!addr1 || !addr2) return false;
+  
+  // Normalize both addresses to base58 for comparison
+  const normalized1 = normalizeAddress(addr1);
+  const normalized2 = normalizeAddress(addr2);
+  
+  return normalized1 === normalized2;
+}
+
+/**
  * Derive a TRON keypair from mnemonic
  */
 export function deriveTronKeypair(
@@ -264,13 +302,23 @@ export function isValidTronAddress(address: string): boolean {
 }
 
 /**
- * Sign a message with TRON private key
+ * Convert hex string to Uint8Array
  */
-export function signMessage(message: Uint8Array, privateKey: Uint8Array): string {
-  const hash = sha256(message);
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Sign data and return signature in TRON format (r + s + v)
+ */
+function signData(data: Uint8Array, privateKey: Uint8Array): string {
+  const hash = sha256(data);
   const signature = secp256k1.sign(hash, privateKey);
   
-  // Convert to hex
   const r = signature.r.toString(16).padStart(64, '0');
   const s = signature.s.toString(16).padStart(64, '0');
   const v = (signature.recovery + 27).toString(16).padStart(2, '0');
@@ -279,28 +327,15 @@ export function signMessage(message: Uint8Array, privateKey: Uint8Array): string
 }
 
 /**
- * Sign a transaction
+ * Sign a message with TRON private key
  */
-export function signTransaction(
-  txRawDataHex: string,
-  privateKey: Uint8Array
-): string {
-  // Convert hex to bytes
-  const rawData = new Uint8Array(txRawDataHex.length / 2);
-  for (let i = 0; i < rawData.length; i++) {
-    rawData[i] = parseInt(txRawDataHex.substr(i * 2, 2), 16);
-  }
-  
-  // Hash the raw data
-  const hash = sha256(rawData);
-  
-  // Sign
-  const signature = secp256k1.sign(hash, privateKey);
-  
-  // Convert to hex format expected by TRON
-  const r = signature.r.toString(16).padStart(64, '0');
-  const s = signature.s.toString(16).padStart(64, '0');
-  const v = (signature.recovery + 27).toString(16).padStart(2, '0');
-  
-  return r + s + v;
+export function signMessage(message: Uint8Array, privateKey: Uint8Array): string {
+  return signData(message, privateKey);
+}
+
+/**
+ * Sign a transaction (hex-encoded raw data)
+ */
+export function signTransaction(txRawDataHex: string, privateKey: Uint8Array): string {
+  return signData(hexToBytes(txRawDataHex), privateKey);
 }

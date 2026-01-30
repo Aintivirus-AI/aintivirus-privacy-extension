@@ -192,6 +192,13 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         isNative: true,
       },
       {
+        address: 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW',
+        symbol: 'AINTI',
+        name: 'Aintivirus',
+        decimals: 6,
+        logoUri: 'https://tokens.jup.ag/token/BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW/logo',
+      },
+      {
         address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
         symbol: 'USDC',
         name: 'USD Coin',
@@ -323,7 +330,7 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     id: 'polygon',
     family: 'evm',
     name: 'Polygon',
-    symbol: 'MATIC',
+    symbol: 'POL',
     decimals: 18,
     chainId: 137,
     rpcUrls: [
@@ -356,7 +363,7 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     popularTokens: [
       {
         address: EVM_NATIVE_TOKEN_ADDRESS,
-        symbol: 'MATIC',
+        symbol: 'POL',
         name: 'Polygon',
         decimals: 18,
         logoUri: 'https://assets.coingecko.com/coins/images/4713/small/polygon.png',

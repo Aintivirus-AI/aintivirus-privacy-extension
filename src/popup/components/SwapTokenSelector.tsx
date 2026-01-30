@@ -53,6 +53,19 @@ interface TokenListItemProps {
 }
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Truncate an address for display (e.g., "So111...1112" or "0xA0b8...EB48")
+ */
+function truncateAddress(address: string, startChars = 4, endChars = 4): string {
+  if (!address) return '';
+  if (address.length <= startChars + endChars + 3) return address;
+  return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
+}
+
+// ============================================================================
 // Token List Item Component
 // ============================================================================
 
@@ -65,6 +78,11 @@ const TokenListItem: React.FC<TokenListItemProps> = ({
   const fallbackLogo = token.chainId === 'solana'
     ? 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'
     : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
+
+  // Check if this is a native token (shouldn't show address)
+  const isNativeToken = token.symbol === 'SOL' || 
+    token.address.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ||
+    token.address === 'So11111111111111111111111111111111111111112';
 
   return (
     <button
@@ -93,6 +111,12 @@ const TokenListItem: React.FC<TokenListItemProps> = ({
           )}
         </div>
         <div className="swap-token-list-item-name">{token.name}</div>
+        {/* Show contract address for non-native tokens */}
+        {!isNativeToken && (
+          <div className="swap-token-list-item-address" title={token.address}>
+            {truncateAddress(token.address, 6, 4)}
+          </div>
+        )}
       </div>
       {showBalance && token.balance && (
         <div className="swap-token-list-item-balance">

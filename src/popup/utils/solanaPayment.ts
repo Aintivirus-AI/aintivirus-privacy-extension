@@ -5,20 +5,94 @@
  * This mirrors the website's implementation in lib/contracts/aintivirus-payment-solana.ts
  */
 
-// Configuration
-const API_URL = 'https://api.v2.aintivirus.ai';
-const SOLANA_RPC_ENDPOINT = 'https://api.mainnet-beta.solana.com';
+// Environment configuration (shared with storeApi.ts)
+// Set STORE_ENVIRONMENT=staging in .env to use staging/devnet for testing
+type StoreEnvironment = 'production' | 'staging';
+
+const STORE_ENVIRONMENT: StoreEnvironment = 
+  (process.env.STORE_ENVIRONMENT as StoreEnvironment) || 'production';
+
+// Alchemy API key for better RPC reliability
+const ALCHEMY_API_KEY = process.env.AINTIVIRUS_ALCHEMY_API_KEY;
+
+// API URLs per environment
+const API_URLS: Record<StoreEnvironment, string> = {
+  production: 'https://api.v2.aintivirus.ai',
+  staging: 'https://stage.api.aintivirus.ai',
+};
+
+// Get the best available Solana RPC endpoint
+// Prioritizes Alchemy (with API key) over public endpoints which are rate-limited
+function getAlchemySolanaRpcUrl(): string | null {
+  if (!ALCHEMY_API_KEY) return null;
+  return `https://solana-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
+}
+
+// Solana RPC endpoints per environment
+// Uses Alchemy as primary if API key is available (much better rate limits)
+// Falls back to Ankr and other public endpoints
+const SOLANA_RPC_URLS: Record<StoreEnvironment, string> = {
+  production: getAlchemySolanaRpcUrl() || 'https://rpc.ankr.com/solana',
+  staging: getAlchemySolanaRpcUrl() || 'https://rpc.ankr.com/solana',
+};
+
+// Fallback RPC endpoints in case primary fails
+// Only use public endpoints as fallbacks (they're rate-limited)
+const SOLANA_RPC_FALLBACKS: string[] = [
+  ...(getAlchemySolanaRpcUrl() ? ['https://rpc.ankr.com/solana'] : []),
+  'https://solana-mainnet.rpc.extrnode.com',
+  'https://api.mainnet-beta.solana.com',
+];
+
+const API_URL = API_URLS[STORE_ENVIRONMENT];
+let SOLANA_RPC_ENDPOINT = SOLANA_RPC_URLS[STORE_ENVIRONMENT];
+
+// Log environment in development for debugging
+if (process.env.NODE_ENV !== 'production') {
+  console.log(`[Solana Payment] Environment: ${STORE_ENVIRONMENT}, API: ${API_URL}`);
+  console.log(`[Solana Payment] RPC: ${SOLANA_RPC_ENDPOINT.includes('alchemy') ? 'Alchemy' : 'Public'}`);
+}
+
+/**
+ * Make an RPC call with automatic fallback to backup endpoints
+ */
+async function solanaRpcCall(body: object): Promise<Response> {
+  const endpoints = [SOLANA_RPC_ENDPOINT, ...SOLANA_RPC_FALLBACKS];
+  
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      
+      if (response.ok) {
+        // Cache working endpoint for future calls
+        SOLANA_RPC_ENDPOINT = endpoint;
+        return response;
+      }
+    } catch (err) {
+      console.warn(`RPC endpoint ${endpoint} failed, trying next...`);
+    }
+  }
+  
+  throw new Error('All Solana RPC endpoints failed');
+}
 const AINTI_TOKEN_MINT = 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW';
 const AINTI_TOKEN_DECIMALS = 6;
 
-// Payment Program ID - this should match the website's NEXT_PUBLIC_SOLANA_PAYMENT_PROGRAM_ID
-// This is the deployed Anchor program that handles payments
-const SOLANA_PAYMENT_PROGRAM_ID = process.env.SOLANA_PAYMENT_PROGRAM_ID || '';
+// Payment Program ID - matches the website's NEXT_PUBLIC_SOLANA_PAYMENT_PROGRAM_ID
+// This is the deployed Anchor program that handles payments on mainnet
+// IMPORTANT: This must match the website's program ID for payment verification
+const SOLANA_PAYMENT_PROGRAM_ID = 
+  process.env.SOLANA_PAYMENT_PROGRAM_ID || 'tAGZHAnxidA1o7KrZtCHpiCZ69mfSSKju3cLPaXQWQH';
 
-// Fallback merchant address from environment (matches website's NEXT_PUBLIC_MERCHANT_SOL_ADDRESS)
-// TODO: Replace with actual treasury address from website deployment
-const MERCHANT_SOL_ADDRESS = process.env.MERCHANT_SOL_ADDRESS || 
-  ''; // <-- Add your NEXT_PUBLIC_MERCHANT_SOL_ADDRESS here
+// Merchant/Treasury address (matches website's NEXT_PUBLIC_MERCHANT_SOL_ADDRESS)
+// This is the treasury wallet that receives payments
+// Used as fallback if treasury cannot be read from the on-chain vault
+const MERCHANT_SOL_ADDRESS = 
+  process.env.MERCHANT_SOL_ADDRESS || 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW';
 
 // Cache for treasury address to avoid repeated RPC/API calls
 let cachedTreasuryAddress: string | null = null;
@@ -127,29 +201,25 @@ async function findPaymentVaultAccount(programId: string): Promise<{
   data: Uint8Array;
 } | null> {
   try {
-    const response = await fetch(SOLANA_RPC_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getProgramAccounts',
-        params: [
-          programId,
-          {
-            encoding: 'base64',
-            filters: [
-              {
-                // PaymentVault account size (approximate)
-                // authority(32) + treasury_wallet(32) + ainti_token_mint(32) + 
-                // total_volume(8) + payment_count(8) + is_paused(1) + bump(1) = 114 bytes
-                // Plus 8 bytes for discriminator = 122 bytes
-                dataSize: 122,
-              },
-            ],
-          },
-        ],
-      }),
+    const response = await solanaRpcCall({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getProgramAccounts',
+      params: [
+        programId,
+        {
+          encoding: 'base64',
+          filters: [
+            {
+              // PaymentVault account size (approximate)
+              // authority(32) + treasury_wallet(32) + ainti_token_mint(32) + 
+              // total_volume(8) + payment_count(8) + is_paused(1) + bump(1) = 114 bytes
+              // Plus 8 bytes for discriminator = 122 bytes
+              dataSize: 122,
+            },
+          ],
+        },
+      ],
     });
 
     const result = await response.json();
@@ -225,13 +295,11 @@ async function fetchTreasuryFromApi(): Promise<string | null> {
                       data.solana?.treasuryAddress ||
                       data.solana?.merchantAddress;
       if (address) {
-        console.log('Treasury address loaded from API:', address);
         return address;
       }
     }
   } catch (err) {
-    // API endpoint might not exist, that's okay
-    console.log('Payment config API not available, trying other methods');
+    // API endpoint might not exist, that's okay - try other methods
   }
   return null;
 }
@@ -252,7 +320,6 @@ export async function getTreasuryAddress(): Promise<string | null> {
   
   // Method 1: Check environment variable
   if (MERCHANT_SOL_ADDRESS) {
-    console.log('Using treasury address from environment:', MERCHANT_SOL_ADDRESS);
     cachedTreasuryAddress = MERCHANT_SOL_ADDRESS;
     cacheTimestamp = Date.now();
     return MERCHANT_SOL_ADDRESS;
@@ -277,7 +344,6 @@ export async function getTreasuryAddress(): Promise<string | null> {
         if (treasury) {
           cachedTreasuryAddress = treasury;
           cacheTimestamp = Date.now();
-          console.log('Treasury address loaded from chain:', treasury);
           return treasury;
         }
       }
@@ -301,19 +367,15 @@ export async function getTreasuryTokenAccount(treasuryAddress: string): Promise<
     // ATA = PDA([wallet, TOKEN_PROGRAM_ID, mint], ATA_PROGRAM_ID)
     // For simplicity, we'll fetch it from the chain
     
-    const response = await fetch(SOLANA_RPC_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getTokenAccountsByOwner',
-        params: [
-          treasuryAddress,
-          { mint: AINTI_TOKEN_MINT },
-          { encoding: 'jsonParsed' },
-        ],
-      }),
+    const response = await solanaRpcCall({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getTokenAccountsByOwner',
+      params: [
+        treasuryAddress,
+        { mint: AINTI_TOKEN_MINT },
+        { encoding: 'jsonParsed' },
+      ],
     });
 
     const result = await response.json();
