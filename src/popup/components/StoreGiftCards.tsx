@@ -13,6 +13,7 @@ import {
   POPULAR_COUNTRIES as POPULAR_COUNTRY_DATA,
   REGIONS,
   normalizeCountryName,
+  countries as ALL_COUNTRIES_DATA,
 } from '../data/countries';
 
 interface StoreGiftCardsProps {
@@ -287,34 +288,45 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
     }
   };
 
-  // Get all unique countries from gift cards, normalized to our standard names
-  const allCountries = useMemo(() => {
-    const countriesMap = new Map<string, string>(); // normalized -> original display name
-    giftCardTypes.forEach(card => {
-      card.supportedCountries?.forEach(country => {
-        if (country) {
-          // Try to match to our country list
-          const countryData = getCountryByValue(country);
-          if (countryData) {
-            // Use our standardized name
-            countriesMap.set(countryData.value, countryData.label);
-          } else {
-            // Keep original name if no match
-            countriesMap.set(country, country);
-          }
-        }
-      });
+  // Global country names that should apply to ALL countries
+  const GLOBAL_COUNTRY_NAMES = ['global', 'worldwide', 'international', 'world'];
+  
+  // Check if a country string is a "global" type
+  const isGlobalCountry = useCallback((country: string): boolean => {
+    const lower = country.toLowerCase().trim();
+    return GLOBAL_COUNTRY_NAMES.includes(lower);
+  }, []);
+
+  // Get count of "Global" gift cards (cards that work everywhere)
+  const globalGiftCardCount = useMemo(() => {
+    const uniqueNames = getUniqueGiftCardNames(giftCardTypes);
+    let count = 0;
+    
+    uniqueNames.forEach(name => {
+      const cardData = getMergedGiftCardData(giftCardTypes, name);
+      if (cardData) {
+        const hasGlobal = cardData.supportedCountries.some(c => isGlobalCountry(c));
+        if (hasGlobal) count++;
+      }
     });
     
-    return Array.from(countriesMap.entries())
-      .map(([value, label]) => ({ value, label }))
+    return count;
+  }, [giftCardTypes, isGlobalCountry]);
+
+  // Use ALL countries from our database (excluding special entries like Global, Worldwide, Europe)
+  const allCountries = useMemo(() => {
+    const excludedValues = ['Global', 'Worldwide', 'Europe', 'European Union'];
+    
+    return ALL_COUNTRIES_DATA
+      .filter(c => !excludedValues.includes(c.value))
+      .map(c => ({ value: c.value, label: c.label }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [giftCardTypes]);
+  }, []);
 
   // Get just the country values for filtering
   const allCountryValues = useMemo(() => allCountries.map(c => c.value), [allCountries]);
 
-  // Get gift card count per country
+  // Get gift card count per country (includes Global cards in every country)
   const giftCardCountByCountry = useMemo(() => {
     const countMap = new Map<string, number>();
     const uniqueNames = getUniqueGiftCardNames(giftCardTypes);
@@ -326,9 +338,12 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
       uniqueNames.forEach(name => {
         const cardData = getMergedGiftCardData(giftCardTypes, name);
         if (cardData) {
+          // Check if this card is for this specific country OR is a Global card
           const hasCountry = cardData.supportedCountries.some(c => {
             const normalized = normalizeCountryName(c).toLowerCase();
-            return normalized === normalizedCountry || c.toLowerCase() === country.value.toLowerCase();
+            const isMatch = normalized === normalizedCountry || c.toLowerCase() === country.value.toLowerCase();
+            const isGlobal = isGlobalCountry(c);
+            return isMatch || isGlobal;
           });
           if (hasCountry) count++;
         }
@@ -338,7 +353,7 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
     });
     
     return countMap;
-  }, [giftCardTypes, allCountries]);
+  }, [giftCardTypes, allCountries, isGlobalCountry]);
 
   // Helper to get count for a country
   const getCountryGiftCardCount = useCallback((countryValue: string): number => {
@@ -405,7 +420,7 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
     );
   }, [allCountries, searchQuery]);
 
-  // Get gift cards available for the selected country
+  // Get gift cards available for the selected country (includes Global cards)
   const giftCardsForCountry = useMemo(() => {
     if (!selectedCountry) return [];
     
@@ -416,12 +431,15 @@ const StoreGiftCards: React.FC<StoreGiftCardsProps> = ({ walletState, onUnlockWa
       .map(name => getMergedGiftCardData(giftCardTypes, name))
       .filter((card): card is NonNullable<typeof card> => {
         if (!card || !card.id) return false;
+        // Include cards that are for this specific country OR are Global cards
         return card.supportedCountries.some(c => {
           const normalized = normalizeCountryName(c).toLowerCase();
-          return normalized === selectedNormalized || c.toLowerCase() === selectedCountry.toLowerCase();
+          const isMatch = normalized === selectedNormalized || c.toLowerCase() === selectedCountry.toLowerCase();
+          const isGlobal = isGlobalCountry(c);
+          return isMatch || isGlobal;
         });
       });
-  }, [giftCardTypes, selectedCountry]);
+  }, [giftCardTypes, selectedCountry, isGlobalCountry]);
 
   // Separate featured and regular cards for the selected country
   const { featuredCards, regularCards } = useMemo(() => {

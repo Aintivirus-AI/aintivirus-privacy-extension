@@ -242,6 +242,8 @@ const StorePayment: React.FC<StorePaymentProps> = ({
         setIsWalletLockedError(true);
       } else if (errorMessage.includes('Insufficient token balance') || errorMessage.includes('Custom":1')) {
         setError(`Insufficient AINTI balance. You need at least ${tokenAmount?.toFixed(6)} AINTI to complete this purchase.`);
+      } else if (errorMessage.includes('InsufficientFundsForRent') || errorMessage.includes('account rent')) {
+        setError('Insufficient SOL for account rent. You need approximately 0.002 SOL to create the payment record. Please add SOL to your wallet.');
       } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
         setError('Insufficient AINTI balance. Please ensure you have enough tokens.');
       } else if (errorMessage.includes('Insufficient funds for fee') || errorMessage.includes('Insufficient SOL')) {

@@ -27,6 +27,21 @@ import { getTokenMetadata } from './tokens';
 
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
+/**
+ * Get a display-friendly token name with fallback.
+ * If symbol is available, use it. Otherwise, use truncated mint address.
+ */
+function getTokenDisplayName(symbol: string | undefined | null, mint: string | undefined | null): string {
+  if (symbol && symbol.trim()) {
+    return symbol;
+  }
+  if (mint && mint.length > 8) {
+    // Show first 4 and last 4 characters of mint: "EPjF...1v"
+    return `${mint.slice(0, 4)}...${mint.slice(-2)}`;
+  }
+  return 'Token';
+}
+
 const DEFAULT_LIMIT = 15;
 
 const MAX_LIMIT = 50;
@@ -499,7 +514,7 @@ function parseTransferInfo(
               amount: solAmount > 0 ? solAmount : 0,
             },
             toToken: {
-              symbol: tokenTransferInfo.tokenInfo.symbol || 'Token',
+              symbol: getTokenDisplayName(tokenTransferInfo.tokenInfo.symbol, tokenTransferInfo.tokenInfo.mint),
               amount: tokenTransferInfo.tokenInfo.amount,
               mint: tokenTransferInfo.tokenInfo.mint,
               logoUri: tokenTransferInfo.tokenInfo.logoUri,
@@ -519,7 +534,7 @@ function parseTransferInfo(
           tokenInfo: tokenTransferInfo.tokenInfo,
           swapInfo: {
             fromToken: {
-              symbol: tokenTransferInfo.tokenInfo.symbol || 'Token',
+              symbol: getTokenDisplayName(tokenTransferInfo.tokenInfo.symbol, tokenTransferInfo.tokenInfo.mint),
               amount: tokenTransferInfo.tokenInfo.amount,
               mint: tokenTransferInfo.tokenInfo.mint,
               logoUri: tokenTransferInfo.tokenInfo.logoUri,
@@ -642,13 +657,13 @@ function parseTokenTransfer(
         },
         swapInfo: {
           fromToken: {
-            symbol: sentChange.symbol || 'Token',
+            symbol: getTokenDisplayName(sentChange.symbol, sentChange.mint),
             amount: Math.abs(sentChange.uiAmount),
             mint: sentChange.mint,
             logoUri: sentChange.logoUri,
           },
           toToken: {
-            symbol: receivedChange.symbol || 'Token',
+            symbol: getTokenDisplayName(receivedChange.symbol, receivedChange.mint),
             amount: Math.abs(receivedChange.uiAmount),
             mint: receivedChange.mint,
             logoUri: receivedChange.logoUri,

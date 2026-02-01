@@ -157,6 +157,10 @@ export const countries: Country[] = [
   { value: 'Poland', label: 'Poland', code: 'PL' },
   { value: 'Portugal', label: 'Portugal', code: 'PT' },
   { value: 'Puerto Rico', label: 'Puerto Rico', code: 'PR' },
+  { value: 'Guam', label: 'Guam', code: 'GU' },
+  { value: 'Virgin Islands', label: 'US Virgin Islands', code: 'VI' },
+  { value: 'American Samoa', label: 'American Samoa', code: 'AS' },
+  { value: 'Northern Mariana Islands', label: 'Northern Mariana Islands', code: 'MP' },
   { value: 'Qatar', label: 'Qatar', code: 'QA' },
   { value: 'Romania', label: 'Romania', code: 'RO' },
   { value: 'Russia', label: 'Russia', code: 'RU' },
@@ -282,6 +286,14 @@ const COUNTRY_ALIASES: Record<string, string> = {
   'international': 'Global',
   'world': 'Global',
   'worldwide': 'Worldwide',
+  
+  // US Territories
+  'us virgin islands': 'Virgin Islands',
+  'u.s. virgin islands': 'Virgin Islands',
+  'usvi': 'Virgin Islands',
+  'american samoa': 'American Samoa',
+  'northern mariana islands': 'Northern Mariana Islands',
+  'cnmi': 'Northern Mariana Islands',
 };
 
 /**
@@ -355,6 +367,7 @@ export function getFlagUrl(countryOrCode: string, size: 'w20' | 'w40' | 'w80' | 
 
 /**
  * Popular countries for quick access (ordered by usage)
+ * Note: Global/Worldwide cards are included in every country's count automatically
  */
 export const POPULAR_COUNTRIES: Country[] = [
   countries.find(c => c.value === 'United States')!,
@@ -364,46 +377,85 @@ export const POPULAR_COUNTRIES: Country[] = [
   countries.find(c => c.value === 'Germany')!,
   countries.find(c => c.value === 'France')!,
   countries.find(c => c.value === 'Japan')!,
-  countries.find(c => c.value === 'Global')!,
+  countries.find(c => c.value === 'Singapore')!,
 ].filter(Boolean);
 
 /**
  * Region groupings for country organization
+ * Comprehensive list covering all countries commonly supported by gift card providers
  */
 export const REGIONS: Record<string, string[]> = {
   'Americas': [
-    'United States', 'Canada', 'Mexico', 'Brazil', 'Argentina', 'Colombia',
-    'Chile', 'Peru', 'Ecuador', 'Venezuela', 'Uruguay', 'Paraguay', 'Bolivia',
-    'Costa Rica', 'Panama', 'Guatemala', 'Honduras', 'El Salvador', 'Nicaragua',
+    // North America
+    'United States', 'Canada', 'Mexico',
+    // Central America
+    'Guatemala', 'Honduras', 'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Belize',
+    // Caribbean
     'Cuba', 'Dominican Republic', 'Puerto Rico', 'Jamaica', 'Trinidad and Tobago',
-    'Bahamas', 'Barbados', 'Haiti', 'Guyana', 'Suriname', 'Belize',
+    'Bahamas', 'Barbados', 'Haiti', 'Antigua and Barbuda', 'Saint Lucia',
+    'Saint Kitts and Nevis', 'Grenada', 'Dominica', 'Saint Vincent and the Grenadines',
+    // South America
+    'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Ecuador', 'Venezuela',
+    'Uruguay', 'Paraguay', 'Bolivia', 'Guyana', 'Suriname',
+    // US Territories (grouped with Americas)
+    'Guam', 'Virgin Islands',
   ],
   'Europe': [
+    // Western Europe
     'United Kingdom', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands',
-    'Switzerland', 'Poland', 'Sweden', 'Belgium', 'Austria', 'Ireland',
-    'Portugal', 'Denmark', 'Norway', 'Finland', 'Czech Republic', 'Romania',
-    'Hungary', 'Greece', 'Ukraine', 'Croatia', 'Slovakia', 'Slovenia',
-    'Bulgaria', 'Serbia', 'Lithuania', 'Latvia', 'Estonia', 'Luxembourg',
-    'Malta', 'Cyprus', 'Iceland', 'Montenegro', 'North Macedonia', 'Albania',
-    'Bosnia and Herzegovina', 'Moldova', 'Belarus',
+    'Switzerland', 'Belgium', 'Austria', 'Ireland', 'Portugal', 'Luxembourg',
+    'Monaco', 'Liechtenstein', 'Andorra', 'San Marino', 'Vatican City',
+    // Northern Europe
+    'Sweden', 'Denmark', 'Norway', 'Finland', 'Iceland',
+    // Central Europe
+    'Poland', 'Czech Republic', 'Hungary', 'Slovakia', 'Slovenia',
+    // Eastern Europe
+    'Romania', 'Ukraine', 'Bulgaria', 'Serbia', 'Croatia', 'Moldova', 'Belarus',
+    'Bosnia and Herzegovina', 'Montenegro', 'North Macedonia', 'Albania', 'Kosovo',
+    // Baltic States
+    'Lithuania', 'Latvia', 'Estonia',
+    // Mediterranean
+    'Greece', 'Malta', 'Cyprus',
+    // Russia & Caucasus
+    'Russia', 'Georgia', 'Armenia', 'Azerbaijan',
   ],
   'Asia Pacific': [
-    'Japan', 'Korea, South', 'China', 'Australia', 'Singapore', 'Hong Kong',
-    'Thailand', 'Indonesia', 'Malaysia', 'Philippines', 'Vietnam', 'India',
-    'New Zealand', 'Taiwan', 'Bangladesh', 'Pakistan', 'Sri Lanka', 'Nepal',
-    'Cambodia', 'Myanmar', 'Laos', 'Mongolia', 'Fiji', 'Maldives', 'Brunei',
-    'Macau',
+    // East Asia
+    'Japan', 'Korea, South', 'China', 'Taiwan', 'Hong Kong', 'Macau', 'Mongolia',
+    // Southeast Asia
+    'Singapore', 'Thailand', 'Indonesia', 'Malaysia', 'Philippines', 'Vietnam',
+    'Cambodia', 'Myanmar', 'Laos', 'Brunei', 'East Timor',
+    // South Asia
+    'India', 'Bangladesh', 'Pakistan', 'Sri Lanka', 'Nepal', 'Bhutan', 'Maldives',
+    // Oceania
+    'Australia', 'New Zealand', 'Fiji', 'Papua New Guinea', 'Samoa', 'Tonga',
+    'Vanuatu', 'Solomon Islands', 'Kiribati', 'Marshall Islands', 'Micronesia',
+    'Palau', 'Nauru', 'Tuvalu',
+    // Central Asia
+    'Kazakhstan', 'Uzbekistan', 'Turkmenistan', 'Kyrgyzstan', 'Tajikistan',
   ],
   'Middle East': [
     'United Arab Emirates', 'Saudi Arabia', 'Turkey', 'Israel', 'Qatar',
     'Kuwait', 'Bahrain', 'Oman', 'Jordan', 'Lebanon', 'Iraq', 'Iran',
-    'Palestine', 'Syria', 'Yemen',
+    'Palestine', 'Syria', 'Yemen', 'Afghanistan',
   ],
   'Africa': [
-    'South Africa', 'Egypt', 'Morocco', 'Kenya', 'Nigeria', 'Ghana',
-    'Tanzania', 'Ethiopia', 'Uganda', 'Rwanda', 'Senegal', "Côte d'Ivoire",
-    'Cameroon', 'Algeria', 'Tunisia', 'Libya', 'Sudan', 'Angola', 'Mozambique',
-    'Zimbabwe', 'Zambia', 'Botswana', 'Namibia', 'Mauritius', 'Madagascar',
+    // North Africa
+    'Egypt', 'Morocco', 'Algeria', 'Tunisia', 'Libya', 'Sudan', 'South Sudan',
+    // West Africa
+    'Nigeria', 'Ghana', 'Senegal', "Côte d'Ivoire", 'Cameroon', 'Mali', 'Burkina Faso',
+    'Niger', 'Guinea', 'Benin', 'Togo', 'Sierra Leone', 'Liberia', 'Mauritania',
+    'Gambia', 'Guinea-Bissau', 'Cabo Verde',
+    // East Africa
+    'Kenya', 'Ethiopia', 'Tanzania', 'Uganda', 'Rwanda', 'Burundi', 'Somalia',
+    'Eritrea', 'Djibouti', 'Seychelles', 'Comoros', 'Mauritius', 'Madagascar',
+    // Central Africa
+    'Congo, Democratic Republic of the', 'Congo, Republic of the',
+    'Central African Republic', 'Chad', 'Gabon', 'Equatorial Guinea',
+    'Sao Tome and Principe',
+    // Southern Africa
+    'South Africa', 'Angola', 'Mozambique', 'Zimbabwe', 'Zambia', 'Botswana',
+    'Namibia', 'Malawi', 'Lesotho', 'Eswatini',
   ],
 };
 

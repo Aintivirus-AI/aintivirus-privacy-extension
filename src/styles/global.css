@@ -5617,6 +5617,54 @@ img.tx-token-logo {
   transition: all 0.15s ease;
 }
 
+/* Mode indicator button - always visible for USD/Token toggle */
+.swap-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  min-width: 52px;
+  justify-content: center;
+}
+
+.swap-mode-indicator.clickable:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.swap-mode-indicator.clickable:hover .swap-mode-arrows {
+  opacity: 1;
+}
+
+.swap-mode-indicator.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.swap-mode-arrows {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+/* Equivalent value display (non-clickable) */
+.swap-equivalent-value {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: var(--space-xs);
+  opacity: 0.9;
+}
+
 /* USD prefix in input */
 .swap-input-prefix {
   position: absolute;

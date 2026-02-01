@@ -7,6 +7,7 @@
  */
 
 import type { EVMChainId } from './chains/types';
+import { getTokenMetadata } from './chains/evm/tokens';
 
 // ============================================================================
 // Types
@@ -573,19 +574,51 @@ export async function searchEVMTokens(
     return allTokens.slice(0, 50); // Return top 50 by default
   }
 
-  // Check if it's an address search
-  if (normalizedQuery.startsWith('0x') && normalizedQuery.length === 42) {
-    // Search for exact address match
+  // Check if it's an address search (0x + 40 hex chars)
+  const isAddressSearch = normalizedQuery.startsWith('0x') && normalizedQuery.length === 42;
+  
+  if (isAddressSearch) {
+    // Search for exact address match in cached tokens
     const exactMatch = allTokens.find(
       (t) => t.address.toLowerCase() === normalizedQuery
     );
     if (exactMatch) return [exactMatch];
     
-    // For unknown addresses, return empty (could add on-chain lookup later)
+    // Not in cache - try to fetch token info from blockchain
+    try {
+      const metadata = await getTokenMetadata(chainId, false, normalizedQuery);
+      
+      // Check if we got valid metadata (not just defaults)
+      if (metadata && metadata.symbol !== '???' && metadata.name !== 'Unknown Token') {
+        return [{
+          address: metadata.address,
+          symbol: metadata.symbol,
+          name: metadata.name,
+          decimals: metadata.decimals,
+          logoUri: metadata.logoUri || '',
+          verified: false, // Mark as unverified since it's not in the official list
+        }];
+      }
+      
+      // Even if we only got partial info, return it so user can try
+      if (metadata && metadata.symbol !== '???') {
+        return [{
+          address: metadata.address,
+          symbol: metadata.symbol,
+          name: metadata.name || metadata.symbol,
+          decimals: metadata.decimals,
+          logoUri: metadata.logoUri || '',
+          verified: false,
+        }];
+      }
+    } catch (error) {
+      console.warn('[swapTokens] Failed to fetch on-chain token metadata:', error);
+    }
+    
     return [];
   }
 
-  // Search by symbol
+  // Search by symbol or name
   const results = allTokens.filter((token) => {
     const symbolMatch = token.symbol.toLowerCase().includes(normalizedQuery);
     const nameMatch = token.name.toLowerCase().includes(normalizedQuery);

@@ -1029,6 +1029,13 @@ export async function processStorePayment(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Provide user-friendly error messages
+    if (errorMessage.includes('InsufficientFundsForRent')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        'Insufficient SOL for account rent. You need approximately 0.002 SOL to create the payment record. Please add SOL to your wallet.',
+      );
+    }
+    
     if (errorMessage.includes('insufficient funds') || errorMessage.includes('Insufficient')) {
       throw new WalletError(
         WalletErrorCode.INSUFFICIENT_FUNDS,

@@ -826,8 +826,26 @@ const WalletTab: React.FC<WalletTabProps> = ({
             evmTokens={swapEvmTokens}
             balance={swapBalance}
             evmBalance={swapEvmBalance}
-            onClose={() => setView('dashboard')}
-            onSwapComplete={onStateChange}
+            onClose={() => {
+              setView('dashboard');
+              // Force dashboard refresh after closing swap to pick up new balances
+              setDashboardKey((k) => k + 1);
+            }}
+            onSwapComplete={() => {
+              onStateChange();
+              // Force dashboard refresh after swap completes (similar to send)
+              // Multiple refreshes to catch blockchain confirmation
+              setDashboardKey((k) => k + 1);
+              setTimeout(() => {
+                setDashboardKey((k) => k + 1);
+              }, 3000);
+              setTimeout(() => {
+                setDashboardKey((k) => k + 1);
+              }, 8000);
+              setTimeout(() => {
+                setDashboardKey((k) => k + 1);
+              }, 15000);
+            }}
           />
         )}
         {view === 'manage' && (
@@ -1479,15 +1497,20 @@ const ChainSelector: React.FC<{
           </div>
           <div className="chain-selector-list">
             {SUPPORTED_CHAINS.map((chain) => {
-              // Check active state using chainId for all chains
+              // Check active state - IMPORTANT: Only one chain should be active at a time
               let isActive = false;
-              if (chain.type === 'solana' && activeChain === 'solana') {
-                isActive = true;
-              } else if (chain.family === 'evm' && chain.evmChainId === activeEVMChain) {
-                isActive = true;
-              } else if (chain.chainId === activeChainId) {
-                // For non-EVM chains (Bitcoin, TRON, Monero), match by chainId
-                isActive = true;
+              if (activeChain === 'solana') {
+                // When on Solana, only Solana should be active
+                isActive = chain.type === 'solana';
+              } else if (activeChain === 'evm') {
+                // When on EVM-type chains (includes Bitcoin/TRON/Monero for legacy reasons)
+                // First check by chainId (works for all chains including non-EVM)
+                if (activeChainId && chain.chainId === activeChainId) {
+                  isActive = true;
+                } else if (!activeChainId && chain.family === 'evm' && chain.evmChainId === activeEVMChain) {
+                  // Fallback to evmChainId for actual EVM chains when no chainId is set
+                  isActive = true;
+                }
               }
 
               return (
@@ -1879,13 +1902,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     async (forceRefresh: boolean = false) => {
       setLoadingBalance(true);
 
-      // OPTIMIZATION: Only fetch data for the ACTIVE chain to avoid rate limiting
-      // Fetch balance and tokens in parallel for the active chain
-
       // Store fetched tokens locally to use for price fetching
       // (avoids dependency on `tokens` state which causes infinite loops)
       let fetchedTokens: SPLTokenBalance[] = [];
       let fetchedEvmTokens: EVMTokenBalance[] = [];
+
+      try {
+      // OPTIMIZATION: Only fetch data for the ACTIVE chain to avoid rate limiting
+      // Fetch balance and tokens in parallel for the active chain
 
       if (activeChain === 'solana') {
         // Solana: fetch balance, tokens, and history in parallel
@@ -2109,10 +2133,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         }
       }
       // Note: Bitcoin, Tron, and Monero prices are already fetched in their respective branches above
-
-      // Only stop loading after all critical data (balance + tokens) are fetched
-      // Prices are fetched in background/deferred
-      setLoadingBalance(false);
+      } catch (error) {
+        // Log error for debugging but don't crash the UI
+        console.error('[WalletDashboard] Error fetching data:', error);
+      } finally {
+        // CRITICAL: Always stop loading to prevent infinite loading state
+        // This ensures the UI remains responsive even if network requests fail
+        setLoadingBalance(false);
+      }
     },
     [activeChain, activeEVMChain, activeChainId, chainFamily, evmAddress],
   );
@@ -2246,6 +2274,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
       // Skip if already refreshing manually
       if (refreshing) return;
 
+      try {
       // Silently fetch fresh balance data with forceRefresh to bypass all caches
       if (activeChain === 'solana') {
         // First check for new transactions (quick check)
@@ -2332,6 +2361,10 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         }
       }
       // Note: Monero is watch-only and doesn't auto-refresh
+      } catch (error) {
+        // Silently ignore errors during auto-refresh to prevent UI disruption
+        console.warn('[WalletDashboard] Auto-refresh error:', error);
+      }
     };
 
     // Auto-refresh every 15 seconds for faster incoming tx detection

@@ -707,14 +707,23 @@ export const SwapView: React.FC<SwapViewProps> = ({
               <div className="swap-input-group">
                 <label className="swap-label">You Pay</label>
                 <div className="swap-input-row">
-                  {/* USD prefix when in USD mode */}
-                  {inputMode === 'usd' && (
-                    <span className="swap-input-prefix">$</span>
-                  )}
+                  {/* USD/Token mode toggle - always visible */}
+                  <button
+                    type="button"
+                    className={`swap-mode-indicator ${inputTokenPrice ? 'clickable' : 'disabled'}`}
+                    onClick={inputTokenPrice ? toggleInputMode : undefined}
+                    title={inputTokenPrice ? `Switch to ${inputMode === 'token' ? 'USD' : 'token'} input` : 'Price not available'}
+                    disabled={!inputTokenPrice}
+                  >
+                    {inputMode === 'usd' ? '$' : inputToken?.symbol?.slice(0, 3) || 'TOK'}
+                    <svg className="swap-mode-arrows" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4"/>
+                    </svg>
+                  </button>
                   <input
                     type="number"
                     className="swap-amount-input"
-                    placeholder={inputMode === 'usd' ? '0.00' : '0.00'}
+                    placeholder="0.00"
                     value={inputAmount}
                     onChange={(e) => setInputAmount(e.target.value)}
                     disabled={executing || tokensLoading}
@@ -737,23 +746,15 @@ export const SwapView: React.FC<SwapViewProps> = ({
                     Contract: {truncateAddress(inputToken.address)}
                   </div>
                 )}
-                {/* Equivalent value display - clickable to toggle mode */}
+                {/* Equivalent value display - shows converted amount */}
                 {inputAmount && parseFloat(inputAmount) > 0 && inputTokenPrice !== null && inputToken && (
-                  <button
-                    type="button"
-                    className="swap-usd-value swap-mode-toggle"
-                    onClick={toggleInputMode}
-                    title={`Click to enter in ${inputMode === 'token' ? 'USD' : inputToken.symbol}`}
-                  >
+                  <div className="swap-equivalent-value">
                     {inputMode === 'token' ? (
                       <>≈ ${usdEquivalent?.toFixed(2)}</>
                     ) : (
                       <>≈ {tokenEquivalent?.toFixed(6)} {inputToken.symbol}</>
                     )}
-                    <svg className="swap-toggle-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4"/>
-                    </svg>
-                  </button>
+                  </div>
                 )}
                 {inputBalance !== null && inputToken && (
                   <div className="swap-balance">
@@ -880,11 +881,23 @@ export const SwapView: React.FC<SwapViewProps> = ({
                   <div className="swap-quote-row">
                     <span>Rate</span>
                     <span>
-                      1 {inputToken.symbol} ≈{' '}
-                      {outputAmountFormatted && inputAmount
-                        ? (parseFloat(outputAmountFormatted) / parseFloat(inputAmount)).toFixed(6)
-                        : '0'}{' '}
-                      {outputToken.symbol}
+                      {inputMode === 'usd' ? (
+                        <>
+                          1 USD ≈{' '}
+                          {outputAmountFormatted && inputAmount
+                            ? (parseFloat(outputAmountFormatted) / parseFloat(inputAmount)).toFixed(6)
+                            : '0'}{' '}
+                          {outputToken.symbol}
+                        </>
+                      ) : (
+                        <>
+                          1 {inputToken.symbol} ≈{' '}
+                          {outputAmountFormatted && actualTokenAmount
+                            ? (parseFloat(outputAmountFormatted) / parseFloat(actualTokenAmount)).toFixed(6)
+                            : '0'}{' '}
+                          {outputToken.symbol}
+                        </>
+                      )}
                     </span>
                   </div>
                   <div className="swap-quote-row">

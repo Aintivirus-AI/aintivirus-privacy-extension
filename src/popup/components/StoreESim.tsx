@@ -29,13 +29,87 @@ const POPULAR_REGIONS = [
   'Global',
 ];
 
-// Region categories
+// Region categories - comprehensive list to properly categorize all countries
 const REGION_CATEGORIES: Record<string, string[]> = {
-  'Americas': ['United States', 'Canada', 'Mexico', 'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru'],
-  'Europe': ['United Kingdom', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Switzerland', 'Europe'],
-  'Asia Pacific': ['Japan', 'South Korea', 'China', 'Thailand', 'Singapore', 'Australia', 'Indonesia', 'Malaysia', 'Vietnam', 'Philippines', 'India'],
-  'Middle East': ['UAE', 'Saudi Arabia', 'Turkey', 'Israel', 'Qatar'],
-  'Africa': ['South Africa', 'Egypt', 'Morocco', 'Kenya', 'Nigeria'],
+  'Americas': [
+    // North America
+    'United States', 'USA', 'US', 'America', 'Canada', 'Mexico',
+    // Central America
+    'Guatemala', 'Belize', 'Honduras', 'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama',
+    // Caribbean
+    'Cuba', 'Dominican Republic', 'Haiti', 'Puerto Rico', 'Jamaica', 'Trinidad', 'Trinidad and Tobago',
+    'Bahamas', 'Barbados', 'Guam', 'US Virgin Islands', 'Antigua', 'Antigua and Barbuda',
+    'Anguilla', 'Aruba', 'Bermuda', 'British Virgin Islands', 'Cayman Islands', 'Curacao', 'Curaçao',
+    'Dominica', 'Grenada', 'Guadeloupe', 'Martinique', 'Montserrat', 'Saint Kitts', 'St Kitts',
+    'Saint Lucia', 'St Lucia', 'Saint Vincent', 'St Vincent', 'Sint Maarten', 'Turks and Caicos',
+    // South America
+    'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Ecuador', 'Venezuela',
+    'Uruguay', 'Paraguay', 'Bolivia', 'Guyana', 'Suriname', 'French Guiana',
+    // Regional
+    'Latin America', 'South America', 'North America', 'Caribbean',
+  ],
+  'Europe': [
+    // Western Europe
+    'United Kingdom', 'UK', 'Great Britain', 'England', 'Germany', 'France', 'Italy', 'Spain',
+    'Netherlands', 'Holland', 'Belgium', 'Austria', 'Switzerland', 'Ireland', 'Portugal',
+    'Luxembourg', 'Monaco', 'Andorra', 'Liechtenstein', 'San Marino', 'Vatican',
+    'Gibraltar',
+    // Northern Europe
+    'Sweden', 'Norway', 'Denmark', 'Finland', 'Iceland', 'Faroe Islands', 'Greenland',
+    // Eastern Europe
+    'Poland', 'Czech Republic', 'Czechia', 'Romania', 'Hungary', 'Ukraine', 'Russia',
+    'Slovakia', 'Slovenia', 'Croatia', 'Bulgaria', 'Serbia', 'Lithuania', 'Latvia', 'Estonia',
+    'Belarus', 'Moldova', 'Bosnia', 'North Macedonia', 'Macedonia', 'Albania', 'Montenegro', 'Kosovo',
+    // Southern Europe
+    'Greece', 'Malta', 'Cyprus',
+    // Caucasus
+    'Georgia', 'Armenia', 'Azerbaijan',
+    // Regional
+    'Europe', 'European', 'EU', 'Scandinavia', 'Baltic', 'Balkans',
+  ],
+  'Asia Pacific': [
+    // East Asia
+    'Japan', 'South Korea', 'Korea', 'China', 'Taiwan', 'Hong Kong', 'Macau', 'Macao', 'Mongolia',
+    // Southeast Asia
+    'Singapore', 'Thailand', 'Indonesia', 'Malaysia', 'Vietnam', 'Philippines',
+    'Cambodia', 'Myanmar', 'Burma', 'Laos', 'Brunei', 'Timor-Leste', 'East Timor',
+    // South Asia
+    'India', 'Pakistan', 'Bangladesh', 'Sri Lanka', 'Nepal', 'Maldives', 'Bhutan',
+    // Central Asia
+    'Kazakhstan', 'Uzbekistan', 'Turkmenistan', 'Kyrgyzstan', 'Tajikistan',
+    // Oceania
+    'Australia', 'New Zealand', 'Fiji', 'Papua New Guinea', 'New Caledonia', 'French Polynesia',
+    'Samoa', 'Tonga', 'Vanuatu', 'Solomon Islands', 'Micronesia', 'Palau', 'Marshall Islands',
+    'Kiribati', 'Nauru', 'Tuvalu', 'Cook Islands', 'Niue', 'American Samoa', 'Northern Mariana',
+    // Regional
+    'Asia', 'Asia Pacific', 'APAC', 'Oceania', 'Pacific',
+  ],
+  'Middle East': [
+    'UAE', 'United Arab Emirates', 'Emirates', 'Saudi Arabia', 'Turkey', 'Türkiye',
+    'Israel', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Jordan', 'Lebanon',
+    'Iraq', 'Iran', 'Syria', 'Yemen', 'Palestine', 'Afghanistan',
+    // Regional
+    'Middle East', 'Gulf', 'GCC',
+  ],
+  'Africa': [
+    // North Africa
+    'Egypt', 'Morocco', 'Algeria', 'Tunisia', 'Libya', 'Sudan', 'South Sudan',
+    // West Africa
+    'Nigeria', 'Ghana', 'Senegal', 'Ivory Coast', "Cote d'Ivoire", 'Côte d\'Ivoire',
+    'Cameroon', 'Mali', 'Burkina Faso', 'Niger', 'Guinea', 'Benin', 'Togo',
+    'Sierra Leone', 'Liberia', 'Mauritania', 'Gambia', 'Guinea-Bissau', 'Cape Verde', 'Cabo Verde',
+    // East Africa
+    'Kenya', 'Ethiopia', 'Tanzania', 'Uganda', 'Rwanda', 'Burundi', 'Somalia',
+    'Eritrea', 'Djibouti', 'Mauritius', 'Seychelles', 'Comoros', 'Madagascar', 'Reunion', 'Mayotte',
+    // Central Africa
+    'Democratic Republic of the Congo', 'DRC', 'DR Congo', 'Republic of the Congo', 'Congo',
+    'Central African Republic', 'Chad', 'Gabon', 'Equatorial Guinea', 'Sao Tome',
+    // Southern Africa
+    'South Africa', 'Namibia', 'Botswana', 'Zimbabwe', 'Zambia', 'Malawi',
+    'Mozambique', 'Angola', 'Lesotho', 'Eswatini', 'Swaziland',
+    // Regional
+    'Africa', 'Sub-Saharan', 'North Africa', 'West Africa', 'East Africa', 'Southern Africa',
+  ],
 };
 
 // ISO code to flag image URL (using flagcdn.com for reliable flag images)
