@@ -45,7 +45,7 @@ export const ManageWalletsView: React.FC<ManageWalletsViewProps> = ({
   const [exportingWalletId, setExportingWalletId] = useState<string | null>(null);
   const [exportType, setExportType] = useState<'mnemonic' | 'privateKey' | null>(null);
   const [exportedData, setExportedData] = useState<string | null>(null);
-  const [exportChain, setExportChain] = useState<'solana' | 'evm'>('solana');
+  const [exportChain, setExportChain] = useState<'solana' | 'evm' | 'bitcoin'>('solana');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -386,20 +386,27 @@ export const ManageWalletsView: React.FC<ManageWalletsViewProps> = ({
                           >
                             Select chain:
                           </label>
-                          <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+                          <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>
                             <button
                               className={`btn btn-sm ${exportChain === 'solana' ? 'btn-primary' : 'btn-secondary'}`}
                               onClick={() => setExportChain('solana')}
-                              style={{ flex: 1 }}
+                              style={{ flex: 1, minWidth: '60px' }}
                             >
                               Solana
                             </button>
                             <button
                               className={`btn btn-sm ${exportChain === 'evm' ? 'btn-primary' : 'btn-secondary'}`}
                               onClick={() => setExportChain('evm')}
-                              style={{ flex: 1 }}
+                              style={{ flex: 1, minWidth: '60px' }}
                             >
                               EVM
+                            </button>
+                            <button
+                              className={`btn btn-sm ${exportChain === 'bitcoin' ? 'btn-primary' : 'btn-secondary'}`}
+                              onClick={() => setExportChain('bitcoin')}
+                              style={{ flex: 1, minWidth: '60px' }}
+                            >
+                              Bitcoin
                             </button>
                           </div>
                         </div>

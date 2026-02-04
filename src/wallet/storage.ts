@@ -99,6 +99,13 @@ interface InMemoryWalletState {
   sessionPassword: string | null;
 
   cachedMnemonic: string | null;
+
+  /**
+   * Cached Bitcoin WIF private key for Bitcoin-family private key imports.
+   * Used to derive addresses for BTC, BCH, LTC, ZEC without re-decrypting.
+   * @security This is cleared when the wallet is locked (lockWallet).
+   */
+  cachedBitcoinWIF: string | null;
 }
 
 // Keeps the runtime wallet state/memo separate from persisted vault data.
@@ -106,6 +113,7 @@ const memoryState: InMemoryWalletState = {
   activeWalletId: null,
   activeAccountId: null,
   keypair: null,
+  cachedBitcoinWIF: null,
   evmKeypair: null,
   publicAddress: null,
   evmAddress: null,
@@ -323,11 +331,14 @@ export async function getWalletState(): Promise<WalletState> {
   let evmAddress: string | null = null;
   let isWatchOnly = false;
 
+  // Helper to check if wallet is unlocked - works for Solana, EVM, and Bitcoin wallets
+  const isUnlocked = memoryState.sessionPassword !== null;
+
   if (versionInfo.version === 0) {
     lockState = 'uninitialized';
   } else if (versionInfo.version === 1) {
     const legacyVault = versionInfo.legacyVault!;
-    if (memoryState.keypair) {
+    if (isUnlocked && memoryState.keypair) {
       lockState = 'unlocked';
       // Derive address from keypair if not cached (ensures address is always available when unlocked)
       publicAddress = memoryState.publicAddress || getPublicKeyBase58(memoryState.keypair);
@@ -350,10 +361,13 @@ export async function getWalletState(): Promise<WalletState> {
 
     if (walletCount === 0) {
       lockState = 'uninitialized';
-    } else if (memoryState.keypair) {
+    } else if (isUnlocked) {
       lockState = 'unlocked';
-      // Derive address from keypair if not cached (ensures address is always available when unlocked)
-      publicAddress = memoryState.publicAddress || getPublicKeyBase58(memoryState.keypair);
+      // Derive address from keypair if available (Solana wallets), otherwise use cached address
+      if (memoryState.keypair && !memoryState.publicAddress) {
+        memoryState.publicAddress = getPublicKeyBase58(memoryState.keypair);
+      }
+      publicAddress = memoryState.publicAddress;
       activeWalletId = memoryState.activeWalletId;
       activeWalletLabel = memoryState.walletLabel;
       activeAccountId = memoryState.activeAccountId;
@@ -361,12 +375,7 @@ export async function getWalletState(): Promise<WalletState> {
       evmAddress = memoryState.evmAddress;
       isWatchOnly = memoryState.isWatchOnly;
       
-      // Update cache if address was missing
-      if (!memoryState.publicAddress) {
-        memoryState.publicAddress = publicAddress;
-      }
-      
-      // If activeWalletId is missing but we have a keypair, try to find matching wallet from vault
+      // If activeWalletId is missing but we have an address, try to find matching wallet from vault
       if (!activeWalletId && publicAddress) {
         const matchingWallet = vault.wallets.find((w) => w.publicKey === publicAddress);
         if (matchingWallet) {
@@ -410,9 +419,9 @@ export async function getWalletState(): Promise<WalletState> {
 
     if (walletCount === 0 && vault.watchOnlyAccounts.length === 0) {
       lockState = 'uninitialized';
-    } else if (memoryState.keypair || memoryState.isWatchOnly) {
+    } else if (isUnlocked || memoryState.isWatchOnly) {
       lockState = 'unlocked';
-      // Derive address from keypair if not cached (ensures address is always available when unlocked)
+      // Derive address from keypair if available (Solana wallets), otherwise use cached address
       if (memoryState.keypair && !memoryState.publicAddress) {
         memoryState.publicAddress = getPublicKeyBase58(memoryState.keypair);
       }
@@ -510,6 +519,35 @@ export async function getWalletState(): Promise<WalletState> {
     }
   }
 
+  // Determine supported chain families for the current wallet
+  // Mnemonic wallets support all chains, private key imports only support their chain
+  let supportedChainFamilies: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null = null;
+  
+  if (lockState === 'unlocked' && !isWatchOnly) {
+    if (memoryState.cachedMnemonic) {
+      // Mnemonic wallet - supports all chains
+      supportedChainFamilies = null;
+    } else {
+      // Private key import - determine chain from address prefix
+      if (publicAddress) {
+        if (publicAddress.startsWith('btc:')) {
+          supportedChainFamilies = ['bitcoin'];
+        } else if (publicAddress.startsWith('evm:')) {
+          supportedChainFamilies = ['evm'];
+        } else if (publicAddress.startsWith('tron:')) {
+          supportedChainFamilies = ['tron'];
+        } else if (memoryState.keypair && !memoryState.evmKeypair) {
+          // Has Solana keypair but no EVM keypair - Solana-only private key import
+          supportedChainFamilies = ['solana'];
+        } else if (!memoryState.keypair && memoryState.evmKeypair) {
+          // Has EVM keypair but no Solana keypair - EVM-only private key import
+          supportedChainFamilies = ['evm'];
+        }
+        // If both keypairs exist or neither has a prefix, assume mnemonic wallet (all chains)
+      }
+    }
+  }
+
   return {
     lockState,
     publicAddress,
@@ -526,6 +564,7 @@ export async function getWalletState(): Promise<WalletState> {
     evmAddress,
     networkEnvironment: settings.networkEnvironment || 'mainnet',
     isWatchOnly,
+    supportedChainFamilies,
   };
 }
 
@@ -815,9 +854,10 @@ export async function unlockWallet(password: string): Promise<{ publicAddress: s
     );
   }
 
-  if (memoryState.keypair) {
+  // Check if already unlocked (works for all wallet types: Solana, EVM, Bitcoin)
+  if (memoryState.sessionPassword !== null && memoryState.publicAddress) {
     await resetRateLimit();
-    return { publicAddress: memoryState.publicAddress! };
+    return { publicAddress: memoryState.publicAddress };
   }
 
   if (versionInfo.version === 1) {
@@ -833,12 +873,44 @@ export async function unlockWallet(password: string): Promise<{ publicAddress: s
     }
   }
 
-  return await unlockWalletV2(password, versionInfo.multiWalletVault!);
+  // V2 and V3 vaults - get the appropriate vault
+  const vault = versionInfo.multiWalletVault || versionInfo.multiWalletVaultV3;
+  if (!vault) {
+    throw new WalletError(WalletErrorCode.WALLET_NOT_FOUND, 'Wallet vault not found');
+  }
+  return await unlockWalletV2(password, vault);
+}
+
+// Helper to get public address from wallet entry (works for both V2 and V3)
+function getWalletEntryAddress(
+  walletEntry: WalletEntry | WalletEntryV3,
+  activeAccountId?: string | null
+): { solanaAddress: string | null; evmAddress: string | null } {
+  // V2 wallet entry has publicKey directly
+  if ('publicKey' in walletEntry) {
+    return {
+      solanaAddress: walletEntry.publicKey,
+      evmAddress: walletEntry.evmAddress || null,
+    };
+  }
+  
+  // V3 wallet entry has accounts array
+  if ('accounts' in walletEntry && walletEntry.accounts.length > 0) {
+    const account = activeAccountId
+      ? walletEntry.accounts.find((a) => a.id === activeAccountId) || walletEntry.accounts[0]
+      : walletEntry.accounts[0];
+    return {
+      solanaAddress: account.solanaAddress,
+      evmAddress: account.evmAddress || null,
+    };
+  }
+  
+  return { solanaAddress: null, evmAddress: null };
 }
 
 async function unlockWalletV2(
   password: string,
-  vault: MultiWalletVault,
+  vault: MultiWalletVault | MultiWalletVaultV3,
 ): Promise<{ publicAddress: string }> {
   const isValid = await validateMasterPassword(password, vault.masterSalt, vault.masterVerifier);
   if (!isValid) {
@@ -852,7 +924,10 @@ async function unlockWalletV2(
     );
   }
 
+  const isV3 = vault.version === 3;
   let activeWalletId = vault.activeWalletId;
+  const activeAccountId = isV3 ? (vault as MultiWalletVaultV3).activeAccountId : null;
+  
   if (!activeWalletId && vault.wallets.length > 0) {
     activeWalletId = vault.wallets[0].id;
   }
@@ -865,6 +940,9 @@ async function unlockWalletV2(
   if (!walletEntry) {
     throw new WalletError(WalletErrorCode.WALLET_NOT_FOUND, 'Active wallet not found');
   }
+
+  // Get stored addresses from wallet entry (handles both V2 and V3)
+  const storedAddresses = getWalletEntryAddress(walletEntry, activeAccountId);
 
   const encryptedData = await getEncryptedWalletData();
   const walletData = encryptedData[activeWalletId];
@@ -880,8 +958,11 @@ async function unlockWalletV2(
     let evmKeypair: EVMKeypair | null = null;
     let publicAddress: string;
     let evmAddress: string = '';
+    let activeAccountIdToSet: string | null = null;
+    let accountName: string | null = null;
 
     let mnemonicToCache: string | null = null;
+    let bitcoinWIFToCache: string | null = null;
 
     if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
       const parts = decryptedData.split(':');
@@ -900,7 +981,22 @@ async function unlockWalletV2(
         evmAddress = evmKeypair.address;
 
         keypair = null;
-        publicAddress = walletEntry.publicKey;
+        // Use stored address from wallet entry
+        publicAddress = storedAddresses.solanaAddress || `evm:${evmAddress}`;
+      } else if (storedChainType === 'bitcoin') {
+        // Bitcoin-only wallet imported from WIF
+        keypair = null;
+        evmKeypair = null;
+        evmAddress = '';
+        // Use stored address from wallet entry (btc:address format)
+        publicAddress = storedAddresses.solanaAddress || '';
+        bitcoinWIFToCache = storedPrivateKey; // Cache WIF for address derivation on other Bitcoin-family chains
+        
+        // Set the active chain to Bitcoin for this wallet
+        await saveWalletSettings({
+          activeChain: 'evm', // Legacy compatibility
+          activeChainId: 'bitcoin',
+        });
       } else {
         throw new WalletError(WalletErrorCode.DECRYPTION_FAILED, 'Unknown private key type');
       }
@@ -913,7 +1009,8 @@ async function unlockWalletV2(
       keypair = deriveKeypair(mnemonic);
       publicAddress = getPublicKeyBase58(keypair);
 
-      if (publicAddress !== walletEntry.publicKey) {
+      // For V3, we don't do the corruption check since addresses are stored differently
+      if (!isV3 && storedAddresses.solanaAddress && publicAddress !== storedAddresses.solanaAddress) {
         await recordFailedAttempt();
         throw new WalletError(
           WalletErrorCode.DECRYPTION_FAILED,
@@ -927,12 +1024,23 @@ async function unlockWalletV2(
       mnemonicToCache = mnemonic;
     }
 
-    if (!walletEntry.evmAddress && evmAddress) {
-      walletEntry.evmAddress = evmAddress;
+    // For V3, set account info
+    if (isV3 && 'accounts' in walletEntry && walletEntry.accounts.length > 0) {
+      const account = activeAccountId
+        ? walletEntry.accounts.find((a) => a.id === activeAccountId) || walletEntry.accounts[0]
+        : walletEntry.accounts[0];
+      activeAccountIdToSet = account.id;
+      accountName = account.name;
+      evmAddress = evmAddress || account.evmAddress || '';
+    }
+
+    // Update EVM address if missing (V2 only)
+    if (!isV3 && 'evmAddress' in walletEntry && !walletEntry.evmAddress && evmAddress) {
+      (walletEntry as WalletEntry).evmAddress = evmAddress;
       const walletIndex = vault.wallets.findIndex((w) => w.id === activeWalletId);
       if (walletIndex >= 0) {
         vault.wallets[walletIndex] = walletEntry;
-        await saveMultiWalletVault(vault);
+        await saveMultiWalletVault(vault as MultiWalletVault);
       }
     }
 
@@ -946,6 +1054,9 @@ async function unlockWalletV2(
     memoryState.walletLabel = walletEntry.label;
     memoryState.sessionPassword = password;
     memoryState.cachedMnemonic = mnemonicToCache;
+    memoryState.cachedBitcoinWIF = bitcoinWIFToCache;
+    memoryState.activeAccountId = activeAccountIdToSet;
+    memoryState.accountName = accountName;
 
     await startAutoLockTimer();
 
@@ -969,6 +1080,7 @@ export function lockWallet(): void {
   memoryState.evmKeypair = null;
   memoryState.sessionPassword = null;
   memoryState.cachedMnemonic = null;
+  memoryState.cachedBitcoinWIF = null;
   memoryState.isWatchOnly = false;
 }
 
@@ -1208,6 +1320,7 @@ export async function switchWallet(
   let publicAddress: string;
   let evmAddress: string = '';
   let mnemonicToCache: string | null = null;
+  let bitcoinWIFToCache: string | null = null;
 
   if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
     const parts = decryptedData.split(':');
@@ -1227,6 +1340,19 @@ export async function switchWallet(
 
       keypair = null;
       publicAddress = walletEntry.publicKey;
+    } else if (storedChainType === 'bitcoin') {
+      // Bitcoin-only wallet imported from WIF
+      keypair = null;
+      evmKeypair = null;
+      evmAddress = '';
+      publicAddress = walletEntry.publicKey; // btc:address format
+      bitcoinWIFToCache = storedPrivateKey; // Cache WIF for address derivation on other Bitcoin-family chains
+      
+      // Set the active chain to Bitcoin for this wallet
+      await saveWalletSettings({
+        activeChain: 'evm', // Legacy compatibility
+        activeChainId: 'bitcoin',
+      });
     } else {
       throw new WalletError(WalletErrorCode.DECRYPTION_FAILED, 'Unknown private key type');
     }
@@ -1268,6 +1394,7 @@ export async function switchWallet(
   memoryState.walletLabel = walletEntry.label;
   memoryState.sessionPassword = effectivePassword;
   memoryState.cachedMnemonic = mnemonicToCache;
+  memoryState.cachedBitcoinWIF = bitcoinWIFToCache;
 
   await startAutoLockTimer();
 
@@ -1635,49 +1762,101 @@ export async function switchAccount(
     }
 
     const key = await deriveKeyFromPassword(memoryState.sessionPassword, walletData.salt);
-    const mnemonic = await decrypt(walletData.ciphertext, key, walletData.iv);
+    const decryptedData = await decrypt(walletData.ciphertext, key, walletData.iv);
 
-    const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
-      mnemonic,
-      account.index,
-      wallet.evmPathType,
-      wallet.solanaPathType,
-    );
+    // Check if this is a private key import or a mnemonic
+    if (decryptedData.startsWith('PRIVATE_KEY_IMPORT:')) {
+      // Handle private key imports
+      const parts = decryptedData.split(':');
+      const storedChainType = parts[1];
+      const storedPrivateKey = parts.slice(2).join(':');
 
-    memoryState.activeWalletId = walletId;
-    memoryState.activeAccountId = accountId;
-    memoryState.keypair = solanaKeypair;
-    memoryState.evmKeypair = evmKeypair;
-    memoryState.publicAddress = account.solanaAddress;
-    memoryState.evmAddress = account.evmAddress;
-    memoryState.walletLabel = wallet.label;
-    memoryState.accountName = account.name;
-    memoryState.accountIndex = account.index;
-    memoryState.cachedMnemonic = mnemonic;
-    memoryState.isWatchOnly = false;
-  } else {
-    if (!memoryState.cachedMnemonic) {
-      throw new WalletError(
-        WalletErrorCode.WALLET_LOCKED,
-        'Session expired. Please unlock wallet again.',
+
+      let keypair: Keypair | null = null;
+      let evmKeypair: EVMKeypair | null = null;
+      let evmAddress = '';
+      let bitcoinWIFToCache: string | null = null;
+
+      if (storedChainType === 'solana') {
+        keypair = keypairFromPrivateKey(storedPrivateKey);
+      } else if (storedChainType === 'evm') {
+        evmKeypair = evmKeypairFromPrivateKey(storedPrivateKey);
+        evmAddress = evmKeypair.address;
+      } else if (storedChainType === 'bitcoin') {
+        bitcoinWIFToCache = storedPrivateKey; // Cache WIF for address derivation on other Bitcoin-family chains
+        // Bitcoin-only wallet - set chain settings
+        await saveWalletSettings({
+          activeChain: 'evm',
+          activeChainId: 'bitcoin',
+        });
+      }
+
+      memoryState.activeWalletId = walletId;
+      memoryState.activeAccountId = accountId;
+      memoryState.keypair = keypair;
+      memoryState.evmKeypair = evmKeypair;
+      memoryState.publicAddress = account.solanaAddress;
+      memoryState.evmAddress = evmAddress || account.evmAddress;
+      memoryState.walletLabel = wallet.label;
+      memoryState.accountName = account.name;
+      memoryState.accountIndex = account.index;
+      memoryState.cachedMnemonic = null; // Private key imports don't have mnemonic
+      memoryState.cachedBitcoinWIF = bitcoinWIFToCache;
+      memoryState.isWatchOnly = false;
+    } else {
+      // Standard mnemonic wallet
+      const mnemonic = decryptedData;
+
+      const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
+        mnemonic,
+        account.index,
+        wallet.evmPathType,
+        wallet.solanaPathType,
       );
+
+      memoryState.activeWalletId = walletId;
+      memoryState.activeAccountId = accountId;
+      memoryState.keypair = solanaKeypair;
+      memoryState.evmKeypair = evmKeypair;
+      memoryState.publicAddress = account.solanaAddress;
+      memoryState.evmAddress = account.evmAddress;
+      memoryState.walletLabel = wallet.label;
+      memoryState.accountName = account.name;
+      memoryState.accountIndex = account.index;
+      memoryState.cachedMnemonic = mnemonic;
+      memoryState.isWatchOnly = false;
     }
+  } else {
+    // Switching accounts within the same wallet
+    // For private key imports (cachedMnemonic is null), the account is already loaded
+    // since private key wallets only have one account
+    if (memoryState.cachedMnemonic) {
+      // Standard mnemonic wallet - derive new keypairs for the account
+      const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
+        memoryState.cachedMnemonic,
+        account.index,
+        wallet.evmPathType,
+        wallet.solanaPathType,
+      );
 
-    const { solanaKeypair, evmKeypair } = deriveKeypairsForIndex(
-      memoryState.cachedMnemonic,
-      account.index,
-      wallet.evmPathType,
-      wallet.solanaPathType,
-    );
-
-    memoryState.activeAccountId = accountId;
-    memoryState.keypair = solanaKeypair;
-    memoryState.evmKeypair = evmKeypair;
-    memoryState.publicAddress = account.solanaAddress;
-    memoryState.evmAddress = account.evmAddress;
-    memoryState.accountName = account.name;
-    memoryState.accountIndex = account.index;
-    memoryState.isWatchOnly = false;
+      memoryState.activeAccountId = accountId;
+      memoryState.keypair = solanaKeypair;
+      memoryState.evmKeypair = evmKeypair;
+      memoryState.publicAddress = account.solanaAddress;
+      memoryState.evmAddress = account.evmAddress;
+      memoryState.accountName = account.name;
+      memoryState.accountIndex = account.index;
+      memoryState.isWatchOnly = false;
+    } else {
+      // Private key import - just update the account info (only one account exists)
+      // The keypairs are already loaded, just update the account metadata
+      memoryState.activeAccountId = accountId;
+      memoryState.publicAddress = account.solanaAddress;
+      memoryState.evmAddress = account.evmAddress;
+      memoryState.accountName = account.name;
+      memoryState.accountIndex = account.index;
+      memoryState.isWatchOnly = false;
+    }
   }
 
   vault.activeWalletId = walletId;
@@ -2187,8 +2366,19 @@ export function getUnlockedMnemonic(): string | null {
   return memoryState.cachedMnemonic;
 }
 
+/**
+ * Get the cached Bitcoin WIF private key from the unlocked wallet.
+ * This is only available when the wallet is a Bitcoin private key import.
+ * @returns The WIF string or null if not a Bitcoin private key wallet
+ */
+export function getUnlockedBitcoinWIF(): string | null {
+  return memoryState.cachedBitcoinWIF;
+}
+
 export function isWalletUnlocked(): boolean {
-  return memoryState.keypair !== null;
+  // A wallet is unlocked if we have a session password set
+  // This works for all wallet types: Solana, EVM, and Bitcoin
+  return memoryState.sessionPassword !== null;
 }
 
 export async function getPublicAddress(): Promise<string | null> {
@@ -2262,7 +2452,7 @@ export async function importWalletFromPrivateKey(
   privateKey: string,
   password?: string,
   label?: string,
-): Promise<{ publicAddress: string; evmAddress: string; walletId: string }> {
+): Promise<{ publicAddress: string; evmAddress: string; bitcoinAddress: string; walletId: string }> {
   const versionInfo = await detectVaultVersion();
 
   const effectivePassword = password || memoryState.sessionPassword;
@@ -2306,8 +2496,9 @@ export async function importWalletFromPrivateKey(
 
   let solanaKeypair: Keypair | null = null;
   let evmKeypair: EVMKeypair | null = null;
-  let publicAddress: string;
+  let publicAddress: string = '';
   let evmAddress: string = '';
+  let bitcoinAddress: string = '';
 
   if (validation.chainType === 'solana') {
     solanaKeypair = keypairFromPrivateKey(privateKey);
@@ -2315,8 +2506,11 @@ export async function importWalletFromPrivateKey(
   } else if (validation.chainType === 'evm') {
     evmKeypair = evmKeypairFromPrivateKey(privateKey);
     evmAddress = evmKeypair.address;
-
-    publicAddress = '';
+  } else if (validation.chainType === 'bitcoin') {
+    // Import Bitcoin WIF key
+    const { getBitcoinAddressFromWIF } = await import('./chains/bitcoin/addresses');
+    const btcResult = getBitcoinAddressFromWIF(privateKey, 'native-segwit');
+    bitcoinAddress = btcResult.address;
   } else {
     throw new WalletError(WalletErrorCode.INVALID_MNEMONIC, 'Could not determine private key type');
   }
@@ -2328,6 +2522,62 @@ export async function importWalletFromPrivateKey(
     const initialized = await initializeMultiWalletVault(effectivePassword!);
     vault = initialized.vault;
     encryptedData = initialized.encryptedData;
+  } else if (versionInfo.version === 3) {
+    // Handle V3 vaults - need to add wallet to V3 structure
+    // For now, we convert to V2-style entry for compatibility
+    if (!effectivePassword) {
+      throw new WalletError(
+        WalletErrorCode.WALLET_LOCKED,
+        'Wallet is locked. Please unlock first.',
+      );
+    }
+
+    const v3Vault = versionInfo.multiWalletVaultV3!;
+    encryptedData = await getEncryptedWalletData();
+
+    if (password && password !== memoryState.sessionPassword) {
+      const isValid = await validateMasterPassword(
+        password,
+        v3Vault.masterSalt,
+        v3Vault.masterVerifier,
+      );
+      if (!isValid) {
+        throw new WalletError(WalletErrorCode.INVALID_PASSWORD, 'Incorrect password');
+      }
+    }
+
+    if (v3Vault.wallets.length >= MAX_WALLETS) {
+      throw new WalletError(
+        WalletErrorCode.MAX_WALLETS_REACHED,
+        `Maximum of ${MAX_WALLETS} wallets reached`,
+      );
+    }
+
+    // Convert V3 vault to V2 format for this function (we store as V2 entry for private key imports)
+    // This is a workaround - ideally we'd have proper V3 support for private key imports
+    vault = {
+      version: 2,
+      activeWalletId: v3Vault.activeWalletId,
+      wallets: [], // Will be populated from V3 structure
+      masterSalt: v3Vault.masterSalt,
+      masterVerifier: v3Vault.masterVerifier,
+      createdAt: v3Vault.createdAt,
+    };
+    
+    // Convert V3 wallet entries to V2 format for compatibility checking
+    for (const v3Wallet of v3Vault.wallets) {
+      if (v3Wallet.accounts.length > 0) {
+        const firstAccount = v3Wallet.accounts[0];
+        vault.wallets.push({
+          id: v3Wallet.id,
+          label: v3Wallet.label,
+          publicKey: firstAccount.solanaAddress,
+          evmAddress: firstAccount.evmAddress,
+          createdAt: v3Wallet.createdAt,
+          derivationIndex: firstAccount.index,
+        });
+      }
+    }
   } else {
     if (!effectivePassword) {
       throw new WalletError(
@@ -2358,9 +2608,12 @@ export async function importWalletFromPrivateKey(
     }
   }
 
-  const searchAddress = publicAddress || evmAddress;
+  // Determine the primary address for this wallet based on chain type
+  const searchAddress = publicAddress || evmAddress || bitcoinAddress;
   const existingWallet = vault.wallets.find(
-    (w) => w.publicKey === searchAddress || w.evmAddress === evmAddress,
+    (w) => w.publicKey === searchAddress || 
+           w.evmAddress === evmAddress || 
+           w.publicKey === `btc:${bitcoinAddress}`,
   );
   if (existingWallet) {
     throw new WalletError(
@@ -2382,43 +2635,106 @@ export async function importWalletFromPrivateKey(
   const key = await deriveKeyFromPassword(effectivePassword!, salt);
   const ciphertext = await encrypt(storageData, key, iv);
 
+  // Determine publicKey field based on chain type
+  let publicKeyField: string;
+  if (publicAddress) {
+    publicKeyField = publicAddress;
+  } else if (evmAddress) {
+    publicKeyField = `evm:${evmAddress}`;
+  } else {
+    publicKeyField = `btc:${bitcoinAddress}`;
+  }
+
   const walletEntry: WalletEntry = {
     id: walletId,
     label: walletLabel,
-    publicKey: publicAddress || `evm:${evmAddress}`,
+    publicKey: publicKeyField,
     createdAt: Date.now(),
     derivationIndex: 0,
     evmAddress: evmAddress || undefined,
   };
 
-  vault.wallets.push(walletEntry);
-  vault.activeWalletId = walletId;
-  if (vault.createdAt === 0) {
-    vault.createdAt = Date.now();
-  }
-
   encryptedData[walletId] = { salt, iv, ciphertext };
 
-  await saveMultiWalletVault(vault);
-  await saveEncryptedWalletData(encryptedData);
+  // Save to the appropriate vault version
+  if (versionInfo.version === 3) {
+    // For V3 vaults, we need to add the wallet in V3 format
+    const v3Vault = versionInfo.multiWalletVaultV3!;
+    
+    // Create a V3 wallet entry with the private key import
+    // Since this is a private key import (not mnemonic), we only have one account
+    const v3WalletEntry: WalletEntryV3 = {
+      id: walletId,
+      label: walletLabel,
+      accounts: [{
+        id: generateWalletId(),
+        name: 'Account 1',
+        index: 0,
+        solanaAddress: publicAddress || publicKeyField, // Use the btc: or evm: prefixed address for non-Solana
+        evmAddress: evmAddress || '',
+        createdAt: Date.now(),
+      }],
+      evmPathType: 'standard',
+      solanaPathType: 'standard',
+      nextAccountIndex: 1,
+      createdAt: Date.now(),
+    };
+    
+    v3Vault.wallets.push(v3WalletEntry);
+    v3Vault.activeWalletId = walletId;
+    v3Vault.activeAccountId = v3WalletEntry.accounts[0].id;
+    
+    await saveMultiWalletVaultV3(v3Vault);
+    await saveEncryptedWalletData(encryptedData);
+  } else {
+    // For V2 vaults (or new vaults created as V2)
+    vault.wallets.push(walletEntry);
+    vault.activeWalletId = walletId;
+    if (vault.createdAt === 0) {
+      vault.createdAt = Date.now();
+    }
 
+    await saveMultiWalletVault(vault);
+    await saveEncryptedWalletData(encryptedData);
+  }
+
+  // For Bitcoin-only wallets, publicAddress is empty but we need to use the btc: prefixed address
+  // This ensures the wallet state correctly shows as unlocked with a valid address
+  const effectivePublicAddress = publicAddress || (bitcoinAddress ? `btc:${bitcoinAddress}` : '');
+  
   memoryState.activeWalletId = walletId;
   memoryState.keypair = solanaKeypair;
   memoryState.evmKeypair = evmKeypair;
-  memoryState.publicAddress = publicAddress;
+  memoryState.publicAddress = effectivePublicAddress;
   memoryState.evmAddress = evmAddress;
   memoryState.walletLabel = walletLabel;
   memoryState.sessionPassword = effectivePassword!;
+  memoryState.cachedMnemonic = null; // Private key imports don't have a mnemonic
+  memoryState.cachedBitcoinWIF = validation.chainType === 'bitcoin' ? privateKey : null;
+
+  // For non-Solana private key imports, update the active chain settings
+  // This ensures the UI knows which chain type this wallet belongs to
+  if (validation.chainType === 'bitcoin') {
+    await saveWalletSettings({
+      activeChain: 'evm', // Legacy compatibility - non-solana chains use 'evm' as legacy type
+      activeChainId: 'bitcoin',
+    });
+  } else if (validation.chainType === 'evm') {
+    await saveWalletSettings({
+      activeChain: 'evm',
+      activeEVMChain: 'ethereum', // Default to Ethereum for EVM private key imports
+    });
+  }
 
   await startAutoLockTimer();
 
-  return { publicAddress, evmAddress, walletId };
+  return { publicAddress: memoryState.publicAddress, evmAddress, bitcoinAddress, walletId };
 }
 
 export async function exportPrivateKey(
   walletId: string,
   password: string,
-  chain: 'solana' | 'evm',
+  chain: 'solana' | 'evm' | 'bitcoin',
 ): Promise<{ privateKey: string }> {
   const versionInfo = await detectVaultVersion();
 
@@ -2472,7 +2788,7 @@ export async function exportPrivateKey(
         );
       }
       return { privateKey: storedPrivateKey };
-    } else {
+    } else if (chain === 'evm') {
       if (storedChainType !== 'evm') {
         throw new WalletError(
           WalletErrorCode.WALLET_NOT_FOUND,
@@ -2480,6 +2796,20 @@ export async function exportPrivateKey(
         );
       }
       return { privateKey: storedPrivateKey };
+    } else if (chain === 'bitcoin') {
+      if (storedChainType !== 'bitcoin') {
+        throw new WalletError(
+          WalletErrorCode.WALLET_NOT_FOUND,
+          'This wallet does not have a Bitcoin private key',
+        );
+      }
+      // Return the WIF key that was imported
+      return { privateKey: storedPrivateKey };
+    } else {
+      throw new WalletError(
+        WalletErrorCode.WALLET_NOT_FOUND,
+        'Unknown chain type requested',
+      );
     }
   } else {
     const mnemonic = decryptedData;
@@ -2488,10 +2818,16 @@ export async function exportPrivateKey(
       const keypair = deriveKeypair(mnemonic);
       const privateKey = getSolanaPrivateKeyBase58(keypair);
       return { privateKey };
-    } else {
+    } else if (chain === 'evm') {
       const evmKeypair = deriveEVMKeypair(mnemonic);
       const privateKey = getEVMPrivateKeyHex(evmKeypair);
       return { privateKey };
+    } else {
+      // Bitcoin - derive keypair and return WIF format
+      const { deriveBitcoinKeypair } = await import('./chains/bitcoin/addresses');
+      const bitcoinKeypair = deriveBitcoinKeypair(mnemonic, 'bitcoin', 0);
+      // WIF (Wallet Import Format) is the standard format for Bitcoin private keys
+      return { privateKey: bitcoinKeypair.wif };
     }
   }
 }

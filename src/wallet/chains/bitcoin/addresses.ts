@@ -576,3 +576,239 @@ export function cashAddrToLegacy(cashAddr: string): string {
   // Encode to legacy Base58Check
   return toBase58Check(hash, version);
 }
+
+// ============================================================================
+// WIF (Wallet Import Format) Support
+// ============================================================================
+
+/**
+ * WIF version bytes for different networks
+ * - 0x80: Bitcoin mainnet
+ * - 0xef: Bitcoin testnet
+ * - 0xb0: Litecoin mainnet
+ */
+const WIF_VERSION_BYTES: Record<number, { network: string; testnet: boolean }> = {
+  0x80: { network: 'bitcoin', testnet: false },
+  0xef: { network: 'bitcoin', testnet: true },
+  0xb0: { network: 'litecoin', testnet: false },
+};
+
+export interface DecodedWIF {
+  privateKey: Uint8Array;
+  compressed: boolean;
+  network: string;
+  testnet: boolean;
+}
+
+/**
+ * Validate if a string is a valid WIF private key
+ */
+export function isValidWIF(wif: string): boolean {
+  try {
+    decodeWIF(wif);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Decode a WIF (Wallet Import Format) private key
+ * @param wif - The WIF encoded private key
+ * @returns Decoded private key info including the raw key bytes
+ * @throws Error if WIF is invalid
+ */
+export function decodeWIF(wif: string): DecodedWIF {
+  // WIF should be 51-52 characters
+  if (wif.length < 51 || wif.length > 52) {
+    throw new Error('Invalid WIF length');
+  }
+  
+  // Decode from Base58
+  const decoded = fromBase58(wif);
+  
+  // Minimum: 1 version byte + 32 private key bytes + 4 checksum bytes = 37
+  // With compression flag: 1 + 32 + 1 + 4 = 38
+  if (decoded.length < 37 || decoded.length > 38) {
+    throw new Error('Invalid WIF decoded length');
+  }
+  
+  // Verify checksum
+  const payload = decoded.slice(0, -4);
+  const checksum = decoded.slice(-4);
+  const expectedChecksum = doubleSha256(payload).slice(0, 4);
+  
+  for (let i = 0; i < 4; i++) {
+    if (checksum[i] !== expectedChecksum[i]) {
+      throw new Error('Invalid WIF checksum');
+    }
+  }
+  
+  // Extract version byte
+  const version = payload[0];
+  const networkInfo = WIF_VERSION_BYTES[version];
+  
+  if (!networkInfo) {
+    throw new Error(`Unknown WIF version byte: 0x${version.toString(16)}`);
+  }
+  
+  // Check for compression flag
+  let privateKey: Uint8Array;
+  let compressed: boolean;
+  
+  if (payload.length === 34) {
+    // Compressed: version (1) + key (32) + compression flag (1) = 34
+    if (payload[33] !== 0x01) {
+      throw new Error('Invalid compression flag');
+    }
+    privateKey = payload.slice(1, 33);
+    compressed = true;
+  } else if (payload.length === 33) {
+    // Uncompressed: version (1) + key (32) = 33
+    privateKey = payload.slice(1, 33);
+    compressed = false;
+  } else {
+    throw new Error('Invalid WIF payload length');
+  }
+  
+  // Validate private key is within valid range for secp256k1
+  // Must be > 0 and < curve order (n)
+  const keyBigInt = BigInt('0x' + Buffer.from(privateKey).toString('hex'));
+  const curveOrder = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141');
+  
+  if (keyBigInt === BigInt(0) || keyBigInt >= curveOrder) {
+    throw new Error('Private key out of valid range');
+  }
+  
+  return {
+    privateKey,
+    compressed,
+    network: networkInfo.network,
+    testnet: networkInfo.testnet,
+  };
+}
+
+/**
+ * Derive Bitcoin address from WIF private key
+ * @param wif - WIF encoded private key
+ * @param addressType - Type of address to generate (defaults to native-segwit)
+ * @returns Bitcoin address and keypair info
+ */
+export function getBitcoinAddressFromWIF(
+  wif: string,
+  addressType: BitcoinAddressType = 'native-segwit'
+): { address: string; publicKey: string; wif: string } {
+  const decoded = decodeWIF(wif);
+  
+  // Derive public key from private key
+  const publicKey = secp256k1.getPublicKey(decoded.privateKey, decoded.compressed);
+  
+  // Get network config
+  const chainId: BitcoinChainId = decoded.network === 'litecoin' ? 'litecoin' : 'bitcoin';
+  const config = getBitcoinChainConfig(chainId);
+  const network = decoded.testnet && config.testnet ? config.testnet : config.network;
+  
+  // Generate address based on type
+  let address: string;
+  switch (addressType) {
+    case 'legacy':
+      address = createP2PKHAddress(publicKey, network.pubKeyHash);
+      break;
+    case 'segwit':
+      address = createP2SHP2WPKHAddress(publicKey, network.scriptHash);
+      break;
+    case 'native-segwit':
+      if (!network.bech32) {
+        address = createP2PKHAddress(publicKey, network.pubKeyHash);
+      } else {
+        address = createP2WPKHAddress(publicKey, network.bech32);
+      }
+      break;
+    case 'taproot':
+      if (!network.bech32) {
+        throw new Error('Taproot not supported for this chain');
+      }
+      address = createP2TRAddress(publicKey, network.bech32);
+      break;
+    default:
+      address = createP2PKHAddress(publicKey, network.pubKeyHash);
+  }
+  
+  return {
+    address,
+    publicKey: Buffer.from(publicKey).toString('hex'),
+    wif,
+  };
+}
+
+/**
+ * Derive address for any Bitcoin-family chain from a WIF private key
+ * This allows using a BTC WIF key to derive addresses for BCH, LTC, ZEC, etc.
+ * @param wif - WIF encoded private key (from any Bitcoin-family chain)
+ * @param targetChainId - The chain to derive address for (bitcoin, bitcoincash, litecoin, zcash)
+ * @param addressType - Type of address to generate (defaults to native-segwit)
+ * @param testnet - Whether to use testnet parameters
+ * @returns Address string for the target chain
+ */
+export function getBitcoinFamilyAddressFromWIF(
+  wif: string,
+  targetChainId: BitcoinChainId,
+  addressType: BitcoinAddressType = 'native-segwit',
+  testnet: boolean = false
+): string {
+  // Decode WIF to get raw private key
+  const decoded = decodeWIF(wif);
+  
+  // Derive public key from private key (same for all Bitcoin-family chains)
+  const publicKey = secp256k1.getPublicKey(decoded.privateKey, decoded.compressed);
+  
+  // Get target chain's network config
+  const config = getBitcoinChainConfig(targetChainId);
+  const network = testnet && config.testnet ? config.testnet : config.network;
+  
+  // Generate address based on type and target chain
+  let address: string;
+  
+  // BCH uses CashAddr format for native-segwit equivalent
+  if (targetChainId === 'bitcoincash' && (addressType === 'native-segwit' || addressType === 'segwit')) {
+    // BCH doesn't have SegWit, use legacy P2PKH with CashAddr encoding
+    const legacyAddress = createP2PKHAddress(publicKey, network.pubKeyHash);
+    // Convert to CashAddr format
+    address = legacyToCashAddr(legacyAddress, testnet ? 'bchtest' : 'bitcoincash');
+    return address;
+  }
+  
+  switch (addressType) {
+    case 'legacy':
+      address = createP2PKHAddress(publicKey, network.pubKeyHash);
+      break;
+    case 'segwit':
+      if (targetChainId === 'zcash') {
+        // ZEC doesn't support SegWit, use legacy
+        address = createP2PKHAddress(publicKey, network.pubKeyHash);
+      } else {
+        address = createP2SHP2WPKHAddress(publicKey, network.scriptHash);
+      }
+      break;
+    case 'native-segwit':
+      if (!network.bech32 || targetChainId === 'zcash') {
+        // Fall back to legacy for chains without bech32 support
+        address = createP2PKHAddress(publicKey, network.pubKeyHash);
+      } else {
+        address = createP2WPKHAddress(publicKey, network.bech32);
+      }
+      break;
+    case 'taproot':
+      if (!network.bech32 || targetChainId !== 'bitcoin') {
+        // Only BTC supports Taproot currently
+        address = createP2PKHAddress(publicKey, network.pubKeyHash);
+      } else {
+        address = createP2TRAddress(publicKey, network.bech32);
+      }
+      break;
+    default:
+      address = createP2PKHAddress(publicKey, network.pubKeyHash);
+  }
+  
+  return address;
+}

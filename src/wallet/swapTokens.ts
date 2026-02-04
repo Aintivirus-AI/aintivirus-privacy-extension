@@ -38,8 +38,19 @@ interface ParaSwapToken {
 // Configuration
 // ============================================================================
 
-// ParaSwap Token API - for EVM tokens
+// ParaSwap Token API - for EVM tokens (may be geo-blocked in some countries)
 const PARASWAP_TOKEN_API = 'https://api.paraswap.io/tokens';
+
+// Fallback: TrustWallet token lists on jsDelivr CDN (works globally, no geo-blocking)
+// These are static JSON files served via CDN, so they work even in OFAC-sanctioned countries
+const TRUSTWALLET_TOKEN_LISTS: Record<EVMChainId, string> = {
+  ethereum: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/tokenlist.json',
+  polygon: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/tokenlist.json',
+  arbitrum: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/tokenlist.json',
+  optimism: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/tokenlist.json',
+  base: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/base/tokenlist.json',
+  bnb: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/smartchain/tokenlist.json',
+};
 
 // Chain ID mapping for ParaSwap
 const PARASWAP_CHAIN_IDS: Record<EVMChainId, number> = {
@@ -93,6 +104,82 @@ function getCacheKey(chainType: 'solana' | 'evm', chainId?: EVMChainId): string 
 function isCacheValid(cache: TokenCache | undefined): boolean {
   if (!cache) return false;
   return Date.now() - cache.timestamp < CACHE_DURATION;
+}
+
+// DexScreener chain IDs for logo fetching
+const DEXSCREENER_CHAIN_IDS: Record<EVMChainId, string> = {
+  ethereum: 'ethereum',
+  polygon: 'polygon',
+  arbitrum: 'arbitrum',
+  optimism: 'optimism',
+  base: 'base',
+  bnb: 'bsc',
+};
+
+/**
+ * Try to fetch token logo from multiple sources
+ * This helps for tokens not in standard lists
+ */
+async function fetchTokenLogo(
+  address: string,
+  chainId: EVMChainId
+): Promise<string | undefined> {
+  const dexScreenerChain = DEXSCREENER_CHAIN_IDS[chainId];
+  
+  // Try DexScreener first - has logos for many DEX-listed tokens
+  if (dexScreenerChain) {
+    try {
+      const response = await fetchWithTimeout(
+        `https://api.dexscreener.com/latest/dex/tokens/${address}`,
+        5000
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // DexScreener returns pairs array with token info
+        if (data.pairs && data.pairs.length > 0) {
+          const pair = data.pairs[0];
+          // Check baseToken and quoteToken for the logo
+          if (pair.baseToken?.address?.toLowerCase() === address.toLowerCase() && pair.info?.imageUrl) {
+            return pair.info.imageUrl;
+          }
+          if (pair.quoteToken?.address?.toLowerCase() === address.toLowerCase() && pair.info?.imageUrl) {
+            return pair.info.imageUrl;
+          }
+        }
+      }
+    } catch {
+      // DexScreener failed, continue to next source
+    }
+  }
+  
+  // Try CoinGecko by contract address
+  try {
+    const cgPlatforms: Record<EVMChainId, string> = {
+      ethereum: 'ethereum',
+      polygon: 'polygon-pos',
+      arbitrum: 'arbitrum-one',
+      optimism: 'optimistic-ethereum',
+      base: 'base',
+      bnb: 'binance-smart-chain',
+    };
+    const platform = cgPlatforms[chainId];
+    if (platform) {
+      const response = await fetchWithTimeout(
+        `https://api.coingecko.com/api/v3/coins/${platform}/contract/${address.toLowerCase()}`,
+        5000
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.image?.small || data.image?.thumb) {
+          return data.image.small || data.image.thumb;
+        }
+      }
+    }
+  } catch {
+    // CoinGecko failed, continue
+  }
+  
+  return undefined;
 }
 
 // ============================================================================
@@ -506,7 +593,41 @@ function getDefaultSolanaTokens(): SwapToken[] {
 // ============================================================================
 
 /**
- * Fetch all tokens for an EVM chain from ParaSwap
+ * Fetch tokens from TrustWallet CDN (fallback for geo-blocked users)
+ * TrustWallet token lists are static JSON on jsDelivr CDN, which works globally
+ */
+async function fetchTrustWalletTokens(chainId: EVMChainId): Promise<SwapToken[]> {
+  const listUrl = TRUSTWALLET_TOKEN_LISTS[chainId];
+  if (!listUrl) return [];
+  
+  try {
+    const response = await fetchWithTimeout(listUrl, 10000);
+    if (!response.ok) return [];
+    
+    const data = await response.json();
+    // TrustWallet format: { tokens: [{ address, symbol, name, decimals, logoURI }] }
+    const tokenList = data.tokens || [];
+    
+    return tokenList
+      .filter((t: { address?: string; symbol?: string }) => t.address && t.symbol)
+      .map((token: { address: string; symbol: string; name?: string; decimals?: number; logoURI?: string }) => ({
+        address: token.address,
+        symbol: token.symbol,
+        name: token.name || token.symbol,
+        decimals: token.decimals || 18,
+        logoUri: token.logoURI || getDefaultEVMLogo(chainId),
+        verified: true,
+        chainId,
+      }))
+      .slice(0, 200); // Limit to 200 tokens for performance
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all tokens for an EVM chain
+ * Tries ParaSwap first, falls back to TrustWallet CDN for geo-blocked regions
  */
 export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<SwapToken[]> {
   const cacheKey = getCacheKey('evm', chainId);
@@ -516,20 +637,18 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
     return cached!.tokens;
   }
 
+  let tokens: SwapToken[] = [];
+
+  // Try ParaSwap first (may be geo-blocked in some countries like Venezuela)
   try {
     const networkId = PARASWAP_CHAIN_IDS[chainId];
     const response = await fetchWithTimeout(`${PARASWAP_TOKEN_API}/${networkId}`);
     
-    if (!response.ok) {
-      throw new Error(`ParaSwap API error: ${response.status}`);
-    }
+    if (response.ok) {
+      const data = await response.json();
+      const tokenList: ParaSwapToken[] = data.tokens || [];
 
-    const data = await response.json();
-    const tokenList: ParaSwapToken[] = data.tokens || [];
-
-    // Map to our token format
-    const tokens: SwapToken[] = tokenList
-      .map((token) => ({
+      tokens = tokenList.map((token) => ({
         address: token.address,
         symbol: token.symbol,
         name: token.symbol, // ParaSwap doesn't always provide name
@@ -537,31 +656,45 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
         logoUri: token.img || getDefaultEVMLogo(chainId),
         verified: true,
         chainId,
-      }))
-      .sort((a, b) => {
-        // Prioritize native token and major stablecoins
-        const nativeSymbols = getNativeSymbol(chainId);
-        const priority = [nativeSymbols, 'WETH', 'USDC', 'USDT', 'DAI', 'WBTC'];
-        const aIdx = priority.indexOf(a.symbol);
-        const bIdx = priority.indexOf(b.symbol);
-        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-        if (aIdx !== -1) return -1;
-        if (bIdx !== -1) return 1;
-        return a.symbol.localeCompare(b.symbol);
-      });
+      }));
+    }
+  } catch (error) {
+    console.warn('[swapTokens] ParaSwap API failed (may be geo-blocked):', error);
+  }
 
-    // Cache the results
-    tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
+  // If ParaSwap failed or returned empty, try TrustWallet CDN fallback
+  // This works in OFAC-sanctioned countries since it's just static JSON on CDN
+  if (tokens.length === 0) {
+    console.log('[swapTokens] Trying TrustWallet CDN fallback for token list');
+    tokens = await fetchTrustWalletTokens(chainId);
+  }
 
-    return tokens;
-  } catch {
-    // Fall back to default tokens on error
+  // If still empty, use hardcoded defaults
+  if (tokens.length === 0) {
     return getDefaultEVMTokens(chainId);
   }
+
+  // Sort tokens: prioritize native token and major stablecoins
+  tokens.sort((a, b) => {
+    const nativeSymbols = getNativeSymbol(chainId);
+    const priority = [nativeSymbols, 'WETH', 'USDC', 'USDT', 'DAI', 'WBTC'];
+    const aIdx = priority.indexOf(a.symbol);
+    const bIdx = priority.indexOf(b.symbol);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return a.symbol.localeCompare(b.symbol);
+  });
+
+  // Cache the results
+  tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
+
+  return tokens;
 }
 
 /**
  * Search EVM tokens by symbol, name, or address
+ * Includes custom tokens from wallet settings and cached metadata
  */
 export async function searchEVMTokens(
   query: string,
@@ -574,15 +707,93 @@ export async function searchEVMTokens(
     return allTokens.slice(0, 50); // Return top 50 by default
   }
 
+  // Get custom tokens from wallet settings (these should always be searchable)
+  let customTokens: SwapToken[] = [];
+  try {
+    const { getWalletSettings, getCachedTokenMetadata } = await import('./storage');
+    const settings = await getWalletSettings();
+    const evmCustomTokens = (settings.customTokens || []).filter(
+      (t) => t.mint.startsWith('0x') && t.mint.length === 42
+    );
+    
+    // Convert custom tokens to SwapToken format
+    for (const ct of evmCustomTokens) {
+      // First check metadata cache for this token
+      const cachedMeta = await getCachedTokenMetadata(ct.mint.toLowerCase());
+      
+      customTokens.push({
+        address: ct.mint,
+        symbol: ct.symbol || cachedMeta?.symbol || ct.mint.slice(0, 6) + '...',
+        name: ct.name || cachedMeta?.name || 'Custom Token',
+        decimals: cachedMeta?.decimals || 18,
+        logoUri: ct.logoUri || cachedMeta?.logoUri || '',
+        verified: false,
+        chainId,
+      });
+    }
+  } catch (error) {
+    // Continue without custom tokens if storage access fails
+    console.warn('[swapTokens] Could not load custom tokens:', error);
+  }
+
   // Check if it's an address search (0x + 40 hex chars)
   const isAddressSearch = normalizedQuery.startsWith('0x') && normalizedQuery.length === 42;
   
   if (isAddressSearch) {
-    // Search for exact address match in cached tokens
+    // Search for exact address match in cached API tokens
     const exactMatch = allTokens.find(
       (t) => t.address.toLowerCase() === normalizedQuery
     );
     if (exactMatch) return [exactMatch];
+    
+    // Check if it's a custom token the user already added
+    const customMatch = customTokens.find(
+      (t) => t.address.toLowerCase() === normalizedQuery
+    );
+    if (customMatch && customMatch.symbol && !customMatch.symbol.includes('...')) {
+      return [customMatch];
+    }
+    
+    // Check metadata cache before hitting RPC
+    try {
+      const { getCachedTokenMetadata, saveTokenMetadataToCache } = await import('./storage');
+      const cachedMeta = await getCachedTokenMetadata(normalizedQuery);
+      
+      if (cachedMeta && cachedMeta.symbol && cachedMeta.symbol !== '???') {
+        let logoUri = cachedMeta.logoUri || '';
+        
+        // If no logo in cache, try to fetch from external sources
+        if (!logoUri) {
+          try {
+            const fetchedLogo = await fetchTokenLogo(normalizedQuery, chainId);
+            if (fetchedLogo) {
+              logoUri = fetchedLogo;
+              // Update cache with logo
+              await saveTokenMetadataToCache(normalizedQuery, {
+                symbol: cachedMeta.symbol,
+                name: cachedMeta.name,
+                decimals: cachedMeta.decimals,
+                logoUri,
+              });
+            }
+          } catch {
+            // Logo fetch failed, continue without
+          }
+        }
+        
+        return [{
+          address: normalizedQuery,
+          symbol: cachedMeta.symbol,
+          name: cachedMeta.name || cachedMeta.symbol,
+          decimals: cachedMeta.decimals || 18,
+          logoUri,
+          verified: false,
+          chainId,
+        }];
+      }
+    } catch {
+      // Continue to RPC fallback
+    }
     
     // Not in cache - try to fetch token info from blockchain
     try {
@@ -590,40 +801,98 @@ export async function searchEVMTokens(
       
       // Check if we got valid metadata (not just defaults)
       if (metadata && metadata.symbol !== '???' && metadata.name !== 'Unknown Token') {
+        // If no logo, try to fetch from external sources (DexScreener, CoinGecko)
+        let logoUri = metadata.logoUri || '';
+        if (!logoUri) {
+          try {
+            const fetchedLogo = await fetchTokenLogo(normalizedQuery, chainId);
+            if (fetchedLogo) {
+              logoUri = fetchedLogo;
+              // Cache the logo for future use
+              try {
+                const { saveTokenMetadataToCache } = await import('./storage');
+                await saveTokenMetadataToCache(normalizedQuery, {
+                  symbol: metadata.symbol,
+                  name: metadata.name,
+                  decimals: metadata.decimals,
+                  logoUri,
+                });
+              } catch {
+                // Caching failed, continue without
+              }
+            }
+          } catch {
+            // Logo fetch failed, continue without
+          }
+        }
+        
         return [{
           address: metadata.address,
           symbol: metadata.symbol,
           name: metadata.name,
           decimals: metadata.decimals,
-          logoUri: metadata.logoUri || '',
+          logoUri,
           verified: false, // Mark as unverified since it's not in the official list
+          chainId,
         }];
       }
       
       // Even if we only got partial info, return it so user can try
       if (metadata && metadata.symbol !== '???') {
+        // Try to fetch logo for partial metadata too
+        let logoUri = metadata.logoUri || '';
+        if (!logoUri) {
+          try {
+            const fetchedLogo = await fetchTokenLogo(normalizedQuery, chainId);
+            if (fetchedLogo) logoUri = fetchedLogo;
+          } catch {
+            // Logo fetch failed, continue without
+          }
+        }
+        
         return [{
           address: metadata.address,
           symbol: metadata.symbol,
           name: metadata.name || metadata.symbol,
           decimals: metadata.decimals,
-          logoUri: metadata.logoUri || '',
+          logoUri,
           verified: false,
+          chainId,
         }];
       }
     } catch (error) {
       console.warn('[swapTokens] Failed to fetch on-chain token metadata:', error);
     }
     
+    // If custom match exists but metadata is incomplete, return it anyway
+    // User added it, so they should be able to select it
+    if (customMatch) {
+      return [customMatch];
+    }
+    
     return [];
   }
 
-  // Search by symbol or name
-  const results = allTokens.filter((token) => {
+  // Search by symbol or name - include both API tokens AND custom tokens
+  const apiResults = allTokens.filter((token) => {
     const symbolMatch = token.symbol.toLowerCase().includes(normalizedQuery);
     const nameMatch = token.name.toLowerCase().includes(normalizedQuery);
     return symbolMatch || nameMatch;
   });
+  
+  // Also search custom tokens by name/symbol
+  const customResults = customTokens.filter((token) => {
+    const symbolMatch = token.symbol.toLowerCase().includes(normalizedQuery);
+    const nameMatch = token.name.toLowerCase().includes(normalizedQuery);
+    return symbolMatch || nameMatch;
+  });
+  
+  // Merge results, custom tokens first (user's tokens), avoiding duplicates
+  const apiAddresses = new Set(apiResults.map((t) => t.address.toLowerCase()));
+  const uniqueCustom = customResults.filter(
+    (t) => !apiAddresses.has(t.address.toLowerCase())
+  );
+  const results = [...uniqueCustom, ...apiResults];
 
   // Sort: exact symbol match first
   return results.sort((a, b) => {

@@ -218,7 +218,7 @@ export const AddWalletView: React.FC<AddWalletViewProps> = ({ onClose, onComplet
             <input
               type={showPrivateKey ? 'text' : 'password'}
               className="form-input"
-              placeholder="Enter private key (Base58 or Hex)"
+              placeholder="Enter private key"
               value={privateKey}
               onChange={(e) => setPrivateKey(e.target.value)}
               style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
@@ -240,7 +240,7 @@ export const AddWalletView: React.FC<AddWalletViewProps> = ({ onClose, onComplet
               marginBottom: 'var(--space-sm)',
             }}
           >
-            Accepts Solana (Base58/Hex) or EVM (0x hex) private keys
+            Accepts Solana (Base58), EVM (0x hex), or Bitcoin (WIF) private keys
           </p>
           {error && <div className="form-error">{error}</div>}
           <button

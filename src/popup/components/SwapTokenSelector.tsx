@@ -362,10 +362,26 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
 
   // Tokens to display based on search state
   const displayTokens = useMemo(() => {
-    const query = searchQuery.trim();
+    const query = searchQuery.trim().toLowerCase();
     
     if (query) {
-      return filterExcluded(searchResults);
+      // When searching, also include matching user tokens (custom/held tokens)
+      // This ensures custom tokens can be found by name/symbol, not just contract address
+      const matchingUserTokens = userTokens.filter((token) => {
+        const symbolMatch = token.symbol.toLowerCase().includes(query);
+        const nameMatch = token.name.toLowerCase().includes(query);
+        const addressMatch = token.address.toLowerCase().includes(query);
+        return symbolMatch || nameMatch || addressMatch;
+      });
+      
+      // Merge user token matches with API search results, avoiding duplicates
+      const apiResultAddresses = new Set(searchResults.map((t) => t.address.toLowerCase()));
+      const uniqueUserMatches = matchingUserTokens.filter(
+        (t) => !apiResultAddresses.has(t.address.toLowerCase())
+      );
+      
+      // User's tokens first (they're verified owned), then API results
+      return filterExcluded([...uniqueUserMatches, ...searchResults]);
     }
     
     // Merge user tokens with popular tokens, removing duplicates

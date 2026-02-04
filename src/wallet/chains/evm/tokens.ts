@@ -468,6 +468,9 @@ export async function isERC20Token(
 }
 
 export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): string | undefined {
+  // Only return logo for known/popular tokens
+  // Don't generate TrustWallet URLs for unknown tokens (causes 403 errors)
+  // External sources (DexScreener, CoinGecko) are used in swapTokens.ts for unknown tokens
   const popularTokens = POPULAR_TOKENS[chainId] || [];
   const known = popularTokens.find((t) => t.address.toLowerCase() === tokenAddress.toLowerCase());
 
@@ -475,28 +478,7 @@ export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): stri
     return known.logoUri;
   }
 
-  const chainNames: Record<EVMChainId, string> = {
-    ethereum: 'ethereum',
-    polygon: 'polygon',
-    arbitrum: 'arbitrum',
-    optimism: 'optimism',
-    base: 'base',
-    bnb: 'smartchain',
-  };
-
-  const chainName = chainNames[chainId];
-  if (chainName) {
-    // TrustWallet requires checksummed addresses
-    let checksumAddress: string;
-    try {
-      checksumAddress = getAddress(tokenAddress);
-    } catch {
-      checksumAddress = tokenAddress;
-    }
-    // Use jsDelivr CDN for better reliability
-    return `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainName}/assets/${checksumAddress}/logo.png`;
-  }
-
+  // No fallback URL - let the caller fetch from DexScreener/CoinGecko instead
   return undefined;
 }
 

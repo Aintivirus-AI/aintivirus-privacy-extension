@@ -44,6 +44,7 @@ import {
   getUnlockedKeypair,
   getUnlockedEVMKeypair,
   getUnlockedMnemonic,
+  getUnlockedBitcoinWIF,
   getEVMAddress,
   isWalletUnlocked,
   getPublicAddress,
@@ -599,8 +600,8 @@ async function handleExportPrivateKey(
     );
   }
 
-  if (!chain || (chain !== 'solana' && chain !== 'evm')) {
-    throw new WalletError(WalletErrorCode.INVALID_MNEMONIC, 'Chain type must be "solana" or "evm"');
+  if (!chain || (chain !== 'solana' && chain !== 'evm' && chain !== 'bitcoin')) {
+    throw new WalletError(WalletErrorCode.INVALID_MNEMONIC, 'Chain type must be "solana", "evm", or "bitcoin"');
   }
 
   const result = await exportPrivateKey(walletId, password, chain);
@@ -617,6 +618,18 @@ async function handleGetBalance(payload?: { forceRefresh?: boolean }): Promise<W
 
   if (!address) {
     throw new WalletError(WalletErrorCode.WALLET_NOT_INITIALIZED, 'No wallet found');
+  }
+
+  // Check if this is a non-Solana wallet (Bitcoin or EVM-only)
+  // These addresses are prefixed with 'btc:' or 'evm:'
+  if (address.startsWith('btc:') || address.startsWith('evm:')) {
+    // Return zero balance for non-Solana wallets
+    // The UI should use WALLET_GET_EVM_BALANCE for these chains
+    return {
+      lamports: 0,
+      sol: 0,
+      lastUpdated: Date.now(),
+    };
   }
 
   const forceRefresh = payload?.forceRefresh ?? false;
@@ -1017,18 +1030,47 @@ async function handleGetEVMBalance(
     try {
       const adapter = getAdapterForChain(chainId, network);
       
-      // Derive address from mnemonic for non-EVM chains
+      // Try to get address from mnemonic first, then fall back to stored address for private key imports
       const mnemonic = getUnlockedMnemonic();
-      if (!mnemonic) {
-        return {
-          wei: '0',
-          formatted: 0,
-          symbol: chainConfig.symbol,
-          lastUpdated: Date.now(),
-        };
+      let address: string;
+      
+      if (mnemonic) {
+        // Mnemonic wallet - derive address
+        address = await adapter.deriveAddress(mnemonic, 0);
+      } else {
+        // Private key import - get address from stored wallet data
+        const publicAddress = await getPublicAddress();
+        if (!publicAddress) {
+          return {
+            wei: '0',
+            formatted: 0,
+            symbol: chainConfig.symbol,
+            lastUpdated: Date.now(),
+          };
+        }
+        
+        // Check if the stored address matches the chain we're querying
+        // Bitcoin addresses are stored as btc:address, check chain family
+        const chainFamily = chainConfig.family;
+        const addressPrefix = publicAddress.split(':')[0];
+        const rawAddress = publicAddress.includes(':') ? publicAddress.split(':')[1] : publicAddress;
+        
+        // For Bitcoin-family chains, verify the prefix matches
+        if (chainFamily === 'bitcoin' && addressPrefix === 'btc') {
+          address = rawAddress;
+        } else if (chainFamily === 'tron' && addressPrefix === 'tron') {
+          address = rawAddress;
+        } else {
+          // Chain doesn't match stored address type
+          return {
+            wei: '0',
+            formatted: 0,
+            symbol: chainConfig.symbol,
+            lastUpdated: Date.now(),
+          };
+        }
       }
       
-      const address = await adapter.deriveAddress(mnemonic, 0);
       const balance = await adapter.getBalance(address);
       
       return {
@@ -1434,13 +1476,36 @@ async function handleGetEVMHistory(
     try {
       const adapter = getAdapterForChain(chainId, network);
       
-      // Get the mnemonic to derive address for this chain
+      // Try to get address from mnemonic first, then fall back to stored address for private key imports
       const mnemonic = getUnlockedMnemonic();
-      if (!mnemonic) {
-        return { transactions: [], hasMore: false };
+      let address: string;
+      
+      if (mnemonic) {
+        // Mnemonic wallet - derive address
+        address = await adapter.deriveAddress(mnemonic, 0);
+      } else {
+        // Private key import - get address from stored wallet data
+        const publicAddress = await getPublicAddress();
+        if (!publicAddress) {
+          return { transactions: [], hasMore: false };
+        }
+        
+        // Check if the stored address matches the chain we're querying
+        const chainFamily = chainConfig.family;
+        const addressPrefix = publicAddress.split(':')[0];
+        const rawAddress = publicAddress.includes(':') ? publicAddress.split(':')[1] : publicAddress;
+        
+        // For Bitcoin-family chains, verify the prefix matches
+        if (chainFamily === 'bitcoin' && addressPrefix === 'btc') {
+          address = rawAddress;
+        } else if (chainFamily === 'tron' && addressPrefix === 'tron') {
+          address = rawAddress;
+        } else {
+          // Chain doesn't match stored address type
+          return { transactions: [], hasMore: false };
+        }
       }
       
-      const address = await adapter.deriveAddress(mnemonic, 0);
       const result = await adapter.getTransactionHistory(address, payload?.limit || 20);
       
       // Map to serializable format for the UI
@@ -1611,42 +1676,72 @@ async function handleGetChainAddress(
     };
   }
   
-  // For other chains (Bitcoin, TRON), derive the address from mnemonic
+  // For other chains (Bitcoin, TRON), derive the address from mnemonic or cached WIF
   const mnemonic = getUnlockedMnemonic();
-  if (!mnemonic) {
-    return {
-      address: '',
-      chainId,
-      chainFamily: chainConfig.family,
-      symbol: chainConfig.symbol,
-    };
-  }
+  const bitcoinWIF = getUnlockedBitcoinWIF();
   
   const settings = await getWalletSettings();
   const testnet = settings.networkEnvironment === 'testnet';
   const network = testnet ? 'testnet' : 'mainnet';
   
-  try {
-    const adapter = getAdapterForChain(chainId, network);
-    const address = await adapter.deriveAddress(mnemonic, 0);
-    
-    return {
-      address,
-      chainId,
-      chainFamily: chainConfig.family,
-      symbol: chainConfig.symbol,
-    };
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error(`Failed to derive address for ${chainId}:`, error);
+  // If we have a mnemonic, derive from that
+  if (mnemonic) {
+    try {
+      const adapter = getAdapterForChain(chainId, network);
+      const address = await adapter.deriveAddress(mnemonic, 0);
+      
+      return {
+        address,
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Failed to derive address for ${chainId}:`, error);
+      }
+      return {
+        address: '',
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
     }
-    return {
-      address: '',
-      chainId,
-      chainFamily: chainConfig.family,
-      symbol: chainConfig.symbol,
-    };
   }
+  
+  // If we have a Bitcoin WIF and this is a Bitcoin-family chain, derive from WIF
+  if (bitcoinWIF && chainConfig.family === 'bitcoin') {
+    try {
+      const { getBitcoinFamilyAddressFromWIF } = await import('./chains/bitcoin/addresses');
+      type BitcoinChainIdType = import('./chains/bitcoin/types').BitcoinChainId;
+      const address = getBitcoinFamilyAddressFromWIF(bitcoinWIF, chainId as BitcoinChainIdType, 'native-segwit', testnet);
+      
+      return {
+        address,
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Failed to derive ${chainId} address from WIF:`, error);
+      }
+      return {
+        address: '',
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    }
+  }
+  
+  // No mnemonic or applicable WIF available
+  return {
+    address: '',
+    chainId,
+    chainFamily: chainConfig.family,
+    symbol: chainConfig.symbol,
+  };
 }
 
 async function handleGetPendingTxs(

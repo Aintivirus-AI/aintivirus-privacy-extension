@@ -14,20 +14,8 @@ interface TokenIconProps {
   className?: string;
 }
 
-function getTrustWalletUrl(chain: string, address: string): string {
-  const chainMap: Record<string, string> = {
-    ethereum: 'ethereum',
-    polygon: 'polygon',
-    arbitrum: 'arbitrum',
-    optimism: 'optimism',
-    base: 'base',
-    bnb: 'smartchain',
-  };
-  const chainName = chainMap[chain];
-  if (!chainName || !address) return '';
-  // Use jsDelivr CDN for better reliability
-  return `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainName}/assets/${address}/logo.png`;
-}
+// TrustWallet fallback removed - causes 403 errors for unknown tokens
+// Logos are now fetched via DexScreener/CoinGecko in swapTokens.ts
 
 function getSolanaTokenListUrl(mint: string): string {
   if (!mint) return '';
@@ -106,24 +94,26 @@ export const TokenIcon: React.FC<TokenIconProps> = ({
   const fallbackUrls = useMemo(() => {
     const urls: string[] = [];
 
+    // Primary: use provided logoUri (from DexScreener/CoinGecko API)
     if (logoUri) {
       urls.push(logoUri);
     }
 
-    if (address) {
-      if (chain === 'solana') {
-        urls.push(getJupiterLogoUrl(address));
-        urls.push(getSolanaTokenListUrl(address));
-      } else {
-        urls.push(getTrustWalletUrl(chain, address));
-      }
+    // Solana-specific fallbacks (these work reliably)
+    if (address && chain === 'solana') {
+      urls.push(getJupiterLogoUrl(address));
+      urls.push(getSolanaTokenListUrl(address));
     }
+    // Note: No TrustWallet fallback for EVM - causes 403 errors for unknown tokens
+    // EVM logos should be provided via logoUri from DexScreener/CoinGecko
 
+    // Known token fallback via CoinGecko static mapping
     const cgUrl = getCoinGeckoUrl(symbol);
     if (cgUrl) {
       urls.push(cgUrl);
     }
 
+    // Final fallback: generated placeholder with initials
     urls.push(getPlaceholderUrl(symbol, chain));
 
     return urls;

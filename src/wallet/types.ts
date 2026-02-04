@@ -84,6 +84,14 @@ export interface WalletState {
   networkEnvironment: NetworkEnvironment;
 
   isWatchOnly: boolean;
+
+  /** 
+   * Chain families supported by the current wallet.
+   * For mnemonic wallets: all chains are supported.
+   * For private key imports: only the imported chain family is supported.
+   * null means all chains are supported (mnemonic wallet).
+   */
+  supportedChainFamilies: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null;
 }
 
 export const MAX_RECENT_RECIPIENTS = 10;
@@ -614,7 +622,7 @@ export interface WalletMessagePayloads {
   WALLET_REVOKE_ALLOWANCE: { evmChainId: EVMChainId; tokenAddress: string; spenderAddress: string };
 
   WALLET_IMPORT_PRIVATE_KEY: { privateKey: string; password?: string; label?: string };
-  WALLET_EXPORT_PRIVATE_KEY: { walletId: string; password: string; chain: 'solana' | 'evm' };
+  WALLET_EXPORT_PRIVATE_KEY: { walletId: string; password: string; chain: 'solana' | 'evm' | 'bitcoin' };
   // Jupiter Swap
   WALLET_SWAP_QUOTE: {
     inputMint: string;
@@ -740,7 +748,7 @@ export interface WalletMessageResponses {
   WALLET_ESTIMATE_REVOKE_FEE: EVMRevokeFeeEstimate;
   WALLET_REVOKE_ALLOWANCE: EVMTransactionResult;
 
-  WALLET_IMPORT_PRIVATE_KEY: { publicAddress: string; evmAddress: string; walletId: string };
+  WALLET_IMPORT_PRIVATE_KEY: { publicAddress: string; evmAddress: string; bitcoinAddress: string; walletId: string };
   WALLET_EXPORT_PRIVATE_KEY: { privateKey: string };
   // Jupiter Swap
   WALLET_SWAP_QUOTE: SwapQuoteResult;

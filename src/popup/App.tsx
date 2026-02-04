@@ -770,6 +770,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
             onToggleHideBalances={onToggleHideBalances}
             privacyEnabled={privacyEnabled}
             onShowMoneroSetup={onShowMoneroSetup}
+            supportedChainFamilies={walletState.supportedChainFamilies}
           />
         )}
         {view === 'send' && (
@@ -1120,13 +1121,13 @@ const WalletSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
           <LockIcon size={32} />
         </div>
         <h3>Import Private Key</h3>
-        <p>Enter your Solana or EVM private key</p>
+        <p>Enter your Solana, EVM, or Bitcoin private key</p>
         <div className="unlock-form">
           <div className="password-input-wrapper">
             <input
               type={showPrivateKey ? 'text' : 'password'}
               className="form-input"
-              placeholder="Enter private key (Base58 or Hex)"
+              placeholder="Enter private key (Base58, Hex, or WIF)"
               value={privateKey}
               onChange={(e) => setPrivateKey(e.target.value)}
               style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
@@ -1148,7 +1149,7 @@ const WalletSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
               marginBottom: 'var(--space-sm)',
             }}
           >
-            Accepts Solana (Base58/Hex) or EVM (0x hex) private keys
+            Accepts Solana (Base58), EVM (0x hex), or Bitcoin (WIF) private keys
           </p>
           <div className="password-input-wrapper">
             <input
@@ -1327,6 +1328,7 @@ interface WalletDashboardProps {
   privacyEnabled: boolean;
   onPriceUpdate?: (solPrice: number | null, ethPrice: number | null) => void;
   onShowMoneroSetup?: () => void;
+  supportedChainFamilies?: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null;
 }
 
 // Chain icons with actual logos
@@ -1450,7 +1452,8 @@ const ChainSelector: React.FC<{
   onChainChange: (chain: ChainType, evmChainId?: EVMChainId, chainId?: string) => void;
   onOpen?: () => void;
   forceClose?: boolean;
-}> = ({ activeChain, activeEVMChain, activeChainId, onChainChange, onOpen, forceClose }) => {
+  supportedChainFamilies?: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null;
+}> = ({ activeChain, activeEVMChain, activeChainId, onChainChange, onOpen, forceClose, supportedChainFamilies }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   // Close dropdown when forceClose changes to true
@@ -1471,6 +1474,28 @@ const ChainSelector: React.FC<{
     const chain = SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
     return chain?.name || 'Ethereum';
   };
+
+  // Filter chains based on supported families for private key imports
+  const availableChains = useMemo(() => {
+    if (!supportedChainFamilies) {
+      // null means all chains are supported (mnemonic wallet)
+      return SUPPORTED_CHAINS;
+    }
+    // Filter to only show chains that match supported families
+    return SUPPORTED_CHAINS.filter((chain) => supportedChainFamilies.includes(chain.family));
+  }, [supportedChainFamilies]);
+
+  // If only one chain is supported, don't show the selector
+  if (availableChains.length <= 1) {
+    return (
+      <div className="chain-selector-container">
+        <div className="chain-selector-btn chain-selector-single" title={`${getCurrentChainName()} only`}>
+          <ChainIcon chain={activeChain} evmChainId={activeChainId || activeEVMChain || undefined} size={20} />
+          <span className="chain-selector-label">{getCurrentChainName()}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="chain-selector-container">
@@ -1496,7 +1521,7 @@ const ChainSelector: React.FC<{
             <span>Select Network</span>
           </div>
           <div className="chain-selector-list">
-            {SUPPORTED_CHAINS.map((chain) => {
+            {availableChains.map((chain) => {
               // Check active state - IMPORTANT: Only one chain should be active at a time
               let isActive = false;
               if (activeChain === 'solana') {
@@ -1573,6 +1598,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   privacyEnabled,
   onPriceUpdate,
   onShowMoneroSetup,
+  supportedChainFamilies,
 }) => {
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
@@ -2701,6 +2727,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           activeEVMChain={activeEVMChain}
           activeChainId={activeChainId}
           onChainChange={onChainChange}
+          supportedChainFamilies={supportedChainFamilies}
         />
       </div>
 
@@ -3430,22 +3457,23 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               )}
                             </div>
                             <div className="token-name">
-                              {solTokenMatch.searchMatch?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text="Solana"
-                                  segments={highlightMatch(
-                                    'Solana',
-                                    solTokenMatch.searchMatch.matchStart,
-                                    solTokenMatch.searchMatch.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                'Solana'
-                              )}
+                              <span className="token-name-text" title="Solana">
+                                {solTokenMatch.searchMatch?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text="Solana"
+                                    segments={highlightMatch(
+                                      'Solana',
+                                      solTokenMatch.searchMatch.matchStart,
+                                      solTokenMatch.searchMatch.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  'Solana'
+                                )}
+                              </span>
                               {solPrice !== null && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatTokenPrice(solPrice)}
+                                  {formatTokenPrice(solPrice)}
                                 </span>
                               )}
                             </div>
@@ -3522,22 +3550,23 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               )}
                             </div>
                             <div className="token-name">
-                              {evmNativeTokenMatch.searchMatch?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text={nativeName}
-                                  segments={highlightMatch(
-                                    nativeName,
-                                    evmNativeTokenMatch.searchMatch.matchStart,
-                                    evmNativeTokenMatch.searchMatch.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                nativeName
-                              )}
+                              <span className="token-name-text" title={nativeName}>
+                                {evmNativeTokenMatch.searchMatch?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text={nativeName}
+                                    segments={highlightMatch(
+                                      nativeName,
+                                      evmNativeTokenMatch.searchMatch.matchStart,
+                                      evmNativeTokenMatch.searchMatch.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  nativeName
+                                )}
+                              </span>
                               {ethPrice !== null && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatTokenPrice(ethPrice)}
+                                  {formatTokenPrice(ethPrice)}
                                 </span>
                               )}
                             </div>
@@ -3640,22 +3669,23 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               )}
                             </div>
                             <div className="token-name">
-                              {match?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text={token.name}
-                                  segments={highlightMatch(
-                                    token.name,
-                                    match.matchStart,
-                                    match.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                token.name
-                              )}
+                              <span className="token-name-text" title={token.name}>
+                                {match?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text={token.name}
+                                    segments={highlightMatch(
+                                      token.name,
+                                      match.matchStart,
+                                      match.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  token.name
+                                )}
+                              </span>
                               {tokenPrice && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatTokenPrice(tokenPrice)}
+                                  {formatTokenPrice(tokenPrice)}
                                 </span>
                               )}
                             </div>
@@ -3786,22 +3816,23 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               )}
                             </div>
                             <div className="token-name">
-                              {match?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text={token.name}
-                                  segments={highlightMatch(
-                                    token.name,
-                                    match.matchStart,
-                                    match.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                token.name
-                              )}
+                              <span className="token-name-text" title={token.name}>
+                                {match?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text={token.name}
+                                    segments={highlightMatch(
+                                      token.name,
+                                      match.matchStart,
+                                      match.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  token.name
+                                )}
+                              </span>
                               {tokenPrice && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatTokenPrice(tokenPrice)}
+                                  {formatTokenPrice(tokenPrice)}
                                 </span>
                               )}
                             </div>
