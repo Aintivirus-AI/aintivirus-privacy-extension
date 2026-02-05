@@ -16,6 +16,9 @@ import {
   fromHexChainId,
 } from '../types';
 import { approveConnection } from '../../security/connectionMonitor';
+import { getWalletState as getWalletStateFromStorage } from '../../wallet/storage';
+import { handleWalletMessage } from '../../wallet';
+import type { WalletMessageType } from '../../wallet/types';
 import {
   getPermission,
   setPermission,
@@ -241,8 +244,8 @@ async function handleDAppRequest(
   }
 
   if (hasExistingPermission) {
-    const walletState = await getWalletState();
-    if (!walletState.isUnlocked) {
+    const walletLockState = await getWalletLockState();
+    if (!walletLockState.isUnlocked) {
       return {
         success: false,
         error: 'Wallet is locked. Please unlock to continue.',
@@ -297,31 +300,24 @@ async function handleEVMReadOnlyMethod(
       return await handleGetProviderState({ chainType: 'evm', origin });
     }
 
-    // Get current chain configuration from wallet
-    const walletResponse = await chrome.runtime.sendMessage({
-      type: 'WALLET_GET_STATE',
-      payload: undefined,
-    });
-
-    if (!walletResponse.success) {
+    // Get current chain configuration from wallet directly
+    const walletState = await getWalletStateFromStorage();
+    if (!walletState) {
       return { success: false, error: 'Failed to get wallet state' };
     }
 
-    const walletState = walletResponse.data;
     const chainId = walletState.activeEVMChain || 'ethereum';
     const testnet = walletState.networkEnvironment === 'testnet';
 
-    // Forward RPC request to background for processing
-    const rpcResponse = await chrome.runtime.sendMessage({
-      type: 'EVM_RPC_REQUEST',
-      payload: { method, params, chainId, testnet },
+    // Forward RPC request directly to wallet handler
+    const rpcResult = await handleWalletMessage('EVM_RPC_REQUEST' as WalletMessageType, {
+      method,
+      params,
+      chainId,
+      testnet,
     });
 
-    if (!rpcResponse.success) {
-      return { success: false, error: rpcResponse.error || 'RPC request failed' };
-    }
-
-    return { success: true, data: rpcResponse.data };
+    return { success: true, data: rpcResult };
   } catch (error) {
     return {
       success: false,
@@ -549,47 +545,34 @@ async function processAddChainApproval(request: QueuedRequest): Promise<null> {
 }
 
 async function signEVMMessage(message: string, address: string): Promise<string> {
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SIGN_MESSAGE',
-    payload: { message, address, chainType: 'evm' },
-  });
+  const result = (await handleWalletMessage('WALLET_SIGN_MESSAGE' as WalletMessageType, {
+    message,
+    address,
+    chainType: 'evm',
+  })) as { signature: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to sign message');
-  }
-
-  return response.data.signature;
+  return result.signature;
 }
 
 async function signSolanaMessage(messageBase64: string): Promise<{ signature: string }> {
   const message = atob(messageBase64);
 
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SIGN_MESSAGE',
-    payload: { message },
-  });
+  const result = (await handleWalletMessage('WALLET_SIGN_MESSAGE' as WalletMessageType, {
+    message,
+  })) as { signature: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to sign message');
-  }
-
-  return { signature: response.data.signature };
+  return { signature: result.signature };
 }
 
 async function signSolanaTransaction(transaction: {
   data: string;
   isVersioned: boolean;
 }): Promise<string> {
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SIGN_TRANSACTION',
-    payload: { serializedTransaction: transaction.data },
-  });
+  const result = (await handleWalletMessage('WALLET_SIGN_TRANSACTION' as WalletMessageType, {
+    serializedTransaction: transaction.data,
+  })) as { signedTransaction: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to sign transaction');
-  }
-
-  return response.data.signedTransaction;
+  return result.signedTransaction;
 }
 
 async function signSolanaTransactions(
@@ -619,26 +602,19 @@ async function sendEVMTransaction(txParams: {
   // For simple transfers, convert to decimal string
   const hasData = txParams.data && txParams.data !== '0x';
   
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SEND_ETH',
-    payload: {
-      recipient: txParams.to || '',
-      amount: txParams.value ? (parseInt(txParams.value, 16) / 1e18).toString() : '0',
-      // Pass raw hex value for contract calls to avoid precision loss
-      valueHex: hasData ? txParams.value : undefined,
-      data: txParams.data,
-      gas: txParams.gas,
-      gasPrice: txParams.gasPrice,
-      maxFeePerGas: txParams.maxFeePerGas,
-      maxPriorityFeePerGas: txParams.maxPriorityFeePerGas,
-    },
-  });
+  const result = (await handleWalletMessage('WALLET_SEND_ETH' as WalletMessageType, {
+    recipient: txParams.to || '',
+    amount: txParams.value ? (parseInt(txParams.value, 16) / 1e18).toString() : '0',
+    // Pass raw hex value for contract calls to avoid precision loss
+    valueHex: hasData ? txParams.value : undefined,
+    data: txParams.data,
+    gas: txParams.gas,
+    gasPrice: txParams.gasPrice,
+    maxFeePerGas: txParams.maxFeePerGas,
+    maxPriorityFeePerGas: txParams.maxPriorityFeePerGas,
+  })) as { hash: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to send transaction');
-  }
-
-  return response.data.hash;
+  return result.hash;
 }
 
 async function signAndSendSolanaTransaction(
@@ -684,16 +660,11 @@ async function handleGetProviderState(
 ): Promise<MessageResponse> {
   const { chainType, origin } = payload;
 
-  const walletResponse = await chrome.runtime.sendMessage({
-    type: 'WALLET_GET_STATE',
-    payload: undefined,
-  });
-
-  if (!walletResponse.success) {
+  // Get wallet state directly instead of self-messaging
+  const walletState = await getWalletStateFromStorage();
+  if (!walletState) {
     return { success: false, error: 'Failed to get wallet state' };
   }
-
-  const walletState = walletResponse.data;
 
   const permission = origin ? await getPermission(origin, chainType) : null;
 
@@ -844,21 +815,17 @@ export async function broadcastDisconnect(): Promise<void> {
   await clearConnectedTabs();
 }
 
-async function getWalletState(): Promise<{ isUnlocked: boolean }> {
+async function getWalletLockState(): Promise<{ isUnlocked: boolean }> {
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: 'WALLET_GET_STATE',
-      payload: undefined,
-    });
-
-    if (response.success && response.data) {
-      return {
-        isUnlocked: response.data.lockState === 'unlocked',
-      };
-    }
-  } catch {}
-
-  return { isUnlocked: false };
+    // Call the wallet storage function directly instead of using messaging
+    // This is more reliable since we're already in the background script
+    const walletState = await getWalletStateFromStorage();
+    return {
+      isUnlocked: walletState.lockState === 'unlocked',
+    };
+  } catch {
+    return { isUnlocked: false };
+  }
 }
 
 export {

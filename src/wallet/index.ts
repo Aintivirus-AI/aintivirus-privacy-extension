@@ -744,13 +744,22 @@ async function handleSignMessage(
   }
 
   try {
-    const messageBytes = new TextEncoder().encode(payload.message);
+    // The message comes as a binary string (each character's code point is a byte value)
+    // from the dApp handler which decodes base64 with atob().
+    // We need to convert this back to raw bytes, NOT UTF-8 encode it.
+    const messageBytes = new Uint8Array(payload.message.length);
+    for (let i = 0; i < payload.message.length; i++) {
+      messageBytes[i] = payload.message.charCodeAt(i);
+    }
 
     const nacl = await import('tweetnacl');
     const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
 
+    // Return base64 encoded signature (inpage script expects base64, not base58)
+    // Convert Uint8Array to binary string, then base64 encode
+    const signatureBase64 = btoa(String.fromCharCode(...signature));
     return {
-      signature: bs58.encode(signature),
+      signature: signatureBase64,
     };
   } catch (error) {
     throw new WalletError(WalletErrorCode.SIGNING_FAILED, 'Failed to sign message');

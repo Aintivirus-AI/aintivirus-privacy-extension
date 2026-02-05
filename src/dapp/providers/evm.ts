@@ -93,7 +93,7 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
     super();
     this._setupMessageListener();
 
-    this._initializeState().catch(() => {
+    this._initializeStateWithRetry().catch(() => {
       // Best-effort initialization: if background messaging isn’t ready yet, the provider
       // will still function once events arrive.
     });
@@ -240,7 +240,27 @@ class AintivirusEVMProvider extends SimpleEventEmitter {
           this.emit('connect', { chainId: this._chainId });
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      // Initialization failed - will retry
+      throw error;
+    }
+  }
+
+  private async _initializeStateWithRetry(attempt = 0): Promise<void> {
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 300;
+
+    try {
+      await this._initializeState();
+    } catch {
+      // If initialization fails and we have retries left, wait and try again
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)));
+        await this._initializeStateWithRetry(attempt + 1);
+      }
+      // Best-effort initialization: if it still fails, the provider
+      // will function once events arrive from the background.
+    }
   }
 
   private _setupMessageListener(): void {

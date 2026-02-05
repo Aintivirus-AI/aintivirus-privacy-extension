@@ -113,19 +113,21 @@ export function App() {
 
         const accountList: AccountInfo[] = [];
 
-        if (targetRequest.chainType === 'solana' && walletState.address) {
+        // For Solana, use publicAddress (the actual field name in WalletState)
+        if (targetRequest.chainType === 'solana' && walletState.publicAddress) {
           accountList.push({
-            address: walletState.address,
-            label: walletState.activeWalletName || 'Main Wallet',
+            address: walletState.publicAddress,
+            label: walletState.activeWalletLabel || walletState.activeAccountName || 'Main Wallet',
             balance: walletState.balance ? `${walletState.balance} SOL` : undefined,
             isActive: true,
           });
         }
 
+        // For EVM, use evmAddress
         if (targetRequest.chainType === 'evm' && walletState.evmAddress) {
           accountList.push({
             address: walletState.evmAddress,
-            label: walletState.activeWalletName || 'Main Wallet',
+            label: walletState.activeWalletLabel || walletState.activeAccountName || 'Main Wallet',
             isActive: true,
           });
         }

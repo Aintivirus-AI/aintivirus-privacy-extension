@@ -30,10 +30,51 @@ const extWindow = window as unknown as ExtendedWindow;
 
 let isAdBlockerEnabled = true;
 
+// CRITICAL: Inject dApp script IMMEDIATELY and SYNCHRONOUSLY before any other initialization.
+// dApps check for wallet providers very early, so we must inject before async operations.
+function injectDAppScriptImmediately(): void {
+  if (
+    window.location.protocol === 'chrome-extension:' ||
+    window.location.protocol === 'moz-extension:'
+  ) {
+    return;
+  }
+  
+  try {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('dappInpage.js');
+    script.id = 'aintivirus-dapp-provider';
+    script.onload = () => script.remove();
+    
+    // Inject as early as possible - before head even exists if necessary
+    const target = document.head || document.documentElement;
+    if (target) {
+      target.insertBefore(script, target.firstChild);
+    } else {
+      // If no target yet, wait for documentElement
+      const observer = new MutationObserver(() => {
+        const t = document.head || document.documentElement;
+        if (t) {
+          t.insertBefore(script, t.firstChild);
+          observer.disconnect();
+        }
+      });
+      observer.observe(document, { childList: true, subtree: true });
+    }
+  } catch {
+    // Best effort - don't break page scripts
+  }
+}
+
 if (extWindow[INJECTION_SYMBOL]) {
   // Guard against double-injection (content scripts can run multiple times per page lifecycle).
 } else {
   extWindow[INJECTION_SYMBOL] = true;
+  
+  // Inject dApp provider script FIRST, synchronously
+  injectDAppScriptImmediately();
+  
+  // Then continue with async initialization
   initContentScript().catch(() => {
     // Best-effort initialization: if something fails here, we avoid breaking page scripts.
   });

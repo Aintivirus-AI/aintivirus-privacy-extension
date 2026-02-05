@@ -1,9 +1,9 @@
 [Adblock Plus 1.1]
-! Version: 202602040146
+! Version: 202602050204
 ! Title: EasyPrivacy
-! Last modified: 04 Feb 2026 01:46 UTC
+! Last modified: 05 Feb 2026 02:04 UTC
 ! Expires: 4 days (update frequency)
-! Commit: 8abcbf0586324b54a00c8201aa2660ff6737edd0
+! Commit: fb2494f8a19c7d9b98c3c04334c22d7fa4799727
 ! *** easylist:template_header.txt ***
 ! 
 ! Please report any unblocked adverts or problems
@@ -2730,8 +2730,10 @@
 /web-analytics.js
 /web-api/log/*
 /web-data-ingress?
+/web-pixel-*/worker.modern.js
 /web-pixel-shopify-app-pixel@
 /web-pixel-shopify-custom-pixel@
+/web-pixels@*/web-pixel-*/sandbox/modern/*
 /web-vitals-analytics.js
 /web-vitals.iife.js
 /web/push?
@@ -7081,6 +7083,7 @@ omni.soundestlink.com$image
 ||doggieshome.com^
 ||dollardelta.com^
 ||dollarthrill.com^
+||domaincolumn.com^
 ||doomhedge.com^
 ||doubledefend.com^
 ||doubtdrawer.com^
@@ -7716,6 +7719,7 @@ omni.soundestlink.com$image
 ||motionlessbelief.com^
 ||motionlessmeeting.com^
 ||mountedbattery.com^
+||movableobject.com^
 ||movemeal.com^
 ||mowgoats.com^
 ||muddledaftermath.com^
@@ -7782,6 +7786,7 @@ omni.soundestlink.com$image
 ||objectsnetwork.com^
 ||oblivionfleet.com^
 ||obscenesidewalk.com^
+||obscurespace.com^
 ||obsidiangems.com^
 ||octaneblood.com^
 ||offerniche.com^
@@ -7816,6 +7821,7 @@ omni.soundestlink.com$image
 ||overconfidentfood.com^
 ||overkick.com^
 ||overratedchalk.com^
+||owlbees.com^
 ||owlreporter.com^
 ||owlsr.us^
 ||owlstwo.com^
@@ -7844,6 +7850,7 @@ omni.soundestlink.com$image
 ||pawsnug.com^
 ||peacefullimit.com^
 ||pedropanther.com^
+||peeringhost.net^
 ||pegsbuttons.com^
 ||perceivequarter.com^
 ||perfectfetch.com^
@@ -10119,6 +10126,7 @@ $third-party,xmlhttprequest,domain=opensubtitles.org
 ||api.june.so^
 ||api.mambasms.com/monitorEvent/
 ||api.picox.bendingspoons.com/v1/events
+||api.reo.dev^$third-party
 ||api.sardine.ai/assets/loader.min.js$third-party
 ||api.sovendus.com/js/landing.js
 ||api.visitorapi.com^$third-party
@@ -12645,6 +12653,7 @@ $third-party,xmlhttprequest,domain=opensubtitles.org
 ||vissle.me/track/
 ||visual.ly/track.php?
 ||visualstudio.com/_da.gif?
+||visualwebsiteoptimizer.com/analysis/
 ||visualwebsiteoptimizer.com/cdn/analysis/
 ||visualwebsiteoptimizer.com/dyn
 ||visualwebsiteoptimizer.com/ee.gif?
