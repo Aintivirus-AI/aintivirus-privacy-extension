@@ -4,9 +4,10 @@ import type { WalletState, SendTransactionResult } from '@shared/types';
 import { sendToBackground } from '@shared/messaging';
 import type { CartItem } from './StoreTab';
 import { getTreasuryAddress, getAintiTokenConfig, isPaymentProgramConfigured } from '../utils/solanaPayment';
+import { getStoreApiUrl } from '../utils/storeApi';
 
-// API URL
-const API_URL = 'https://api.v2.aintivirus.ai';
+// API URL (from shared env-based config)
+const API_URL = getStoreApiUrl();
 const AINTIVIRUS_STORE_URL = 'https://aintivirus.ai/merch';
 
 // AINTI Token configuration (loaded from solanaPayment utility)

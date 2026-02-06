@@ -62,7 +62,17 @@ export const AINTI_TOKEN_ETH_ADDRESS =
   process.env.AINTI_TOKEN_ETH_ADDRESS || 
   ''; // Set when AINTI token launches on ETH
 
-export const AINTI_TOKEN_SOL_MINT = 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW';
+export const AINTI_TOKEN_SOL_MINT = process.env.AINTI_TOKEN_SOL_MINT || '';
+
+// Warn at startup if critical env vars are missing (development only)
+if (process.env.NODE_ENV !== 'production') {
+  if (!SOLANA_PAYMENT_PROGRAM_ID) {
+    console.warn('[Store API] SOLANA_PAYMENT_PROGRAM_ID is not configured');
+  }
+  if (!AINTI_TOKEN_SOL_MINT) {
+    console.warn('[Store API] AINTI_TOKEN_SOL_MINT is not configured — token operations will not work');
+  }
+}
 
 // Token decimals
 export const AINTI_TOKEN_ETH_DECIMALS = 18;
@@ -520,19 +530,19 @@ export const ERC20_ABI = [
 ] as const;
 
 /**
- * Convert order ID string to bytes32 for EVM contracts
+ * Convert order ID string to bytes32 for EVM contracts.
+ * Uses SHA-256 via Web Crypto API to produce a deterministic 32-byte hash.
+ * This is an async function because crypto.subtle.digest is async.
  */
-export function orderIdToBytes32(orderId: string): string {
-  // Simple hash using TextEncoder
+export async function orderIdToBytes32(orderId: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(orderId);
-  
-  // Create a simple hash (in production, use proper keccak256)
-  let hash = '';
-  for (let i = 0; i < 32; i++) {
-    const byte = data[i % data.length] ^ (i * 17);
-    hash += byte.toString(16).padStart(2, '0');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = new Uint8Array(hashBuffer);
+
+  let hex = '0x';
+  for (let i = 0; i < hashArray.length; i++) {
+    hex += hashArray[i].toString(16).padStart(2, '0');
   }
-  
-  return '0x' + hash;
+  return hex;
 }

@@ -498,7 +498,13 @@ export interface WalletMessagePayloads {
   WALLET_GET_NETWORK: undefined;
   WALLET_GET_NETWORK_STATUS: undefined;
   WALLET_SIGN_TRANSACTION: { serializedTransaction: string };
-  WALLET_SIGN_MESSAGE: { message: string };
+  WALLET_SIGN_MESSAGE: {
+    message: string;
+    chainType?: 'solana' | 'evm';
+    address?: string;
+    /** JSON string of EIP-712 typed data (for eth_signTypedData_v*) */
+    typedData?: string;
+  };
   WALLET_GET_SETTINGS: undefined;
   WALLET_SET_SETTINGS: Partial<WalletSettings>;
 

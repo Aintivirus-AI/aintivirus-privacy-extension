@@ -699,9 +699,9 @@ async function handleGetEvmNativePrice(payload: { evmChainId: string }): Promise
   }
 }
 
-async function handleGetTokenPrices(payload: { mints: string[] }): Promise<MessageResponse> {
+async function handleGetTokenPrices(payload: { mints: string[]; chainId?: string }): Promise<MessageResponse> {
   try {
-    const prices = await getTokenPrices(payload.mints);
+    const prices = await getTokenPrices(payload.mints, payload.chainId);
     const pricesObj: Record<string, number> = {};
     prices.forEach((price, mint) => {
       pricesObj[mint] = price;

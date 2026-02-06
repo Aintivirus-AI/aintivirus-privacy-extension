@@ -79,20 +79,30 @@ async function solanaRpcCall(body: object): Promise<Response> {
   
   throw new Error('All Solana RPC endpoints failed');
 }
-const AINTI_TOKEN_MINT = 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW';
+const AINTI_TOKEN_MINT = process.env.AINTI_TOKEN_SOL_MINT || '';
 const AINTI_TOKEN_DECIMALS = 6;
 
 // Payment Program ID - matches the website's NEXT_PUBLIC_SOLANA_PAYMENT_PROGRAM_ID
 // This is the deployed Anchor program that handles payments on mainnet
 // IMPORTANT: This must match the website's program ID for payment verification
-const SOLANA_PAYMENT_PROGRAM_ID = 
-  process.env.SOLANA_PAYMENT_PROGRAM_ID || 'tAGZHAnxidA1o7KrZtCHpiCZ69mfSSKju3cLPaXQWQH';
+// Configure via .env: SOLANA_PAYMENT_PROGRAM_ID
+const SOLANA_PAYMENT_PROGRAM_ID = process.env.SOLANA_PAYMENT_PROGRAM_ID || '';
 
 // Merchant/Treasury address (matches website's NEXT_PUBLIC_MERCHANT_SOL_ADDRESS)
 // This is the treasury wallet that receives payments
 // Used as fallback if treasury cannot be read from the on-chain vault
-const MERCHANT_SOL_ADDRESS = 
-  process.env.MERCHANT_SOL_ADDRESS || 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW';
+// Configure via .env: MERCHANT_SOL_ADDRESS
+const MERCHANT_SOL_ADDRESS = process.env.MERCHANT_SOL_ADDRESS || '';
+
+// Warn at startup if critical payment env vars are missing
+if (process.env.NODE_ENV !== 'production') {
+  if (!AINTI_TOKEN_MINT) {
+    console.warn('[Solana Payment] AINTI_TOKEN_SOL_MINT is not configured — token payments will not work');
+  }
+  if (!SOLANA_PAYMENT_PROGRAM_ID && !MERCHANT_SOL_ADDRESS) {
+    console.warn('[Solana Payment] Neither SOLANA_PAYMENT_PROGRAM_ID nor MERCHANT_SOL_ADDRESS is configured — payments are unavailable');
+  }
+}
 
 // Cache for treasury address to avoid repeated RPC/API calls
 let cachedTreasuryAddress: string | null = null;

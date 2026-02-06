@@ -96,13 +96,18 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
         isNative: true,
       },
-      {
-        address: 'BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW',
-        symbol: 'AINTI',
-        name: 'Aintivirus',
-        decimals: 6,
-        logoUri: 'https://tokens.jup.ag/token/BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW/logo',
-      },
+      // AINTI token is only included when the mint address is configured via env
+      ...(process.env.AINTI_TOKEN_SOL_MINT
+        ? [
+            {
+              address: process.env.AINTI_TOKEN_SOL_MINT,
+              symbol: 'AINTI',
+              name: 'Aintivirus',
+              decimals: 6,
+              logoUri: `https://tokens.jup.ag/token/${process.env.AINTI_TOKEN_SOL_MINT}/logo`,
+            },
+          ]
+        : []),
       {
         address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
         symbol: 'USDC',

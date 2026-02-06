@@ -110,7 +110,7 @@ import {
   getRecentBlockhash,
 } from './rpc';
 import { generateAddressQR } from './qr';
-import { validateMnemonic } from './keychain';
+import { validateMnemonic, evmKeypairToWallet } from './keychain';
 import bs58 from 'bs58';
 
 import { sendSol, sendSPLToken, processStorePayment, estimateTransactionFee } from './transactions';
@@ -714,6 +714,12 @@ async function handleSignTransaction(
 async function handleSignMessage(
   payload: WalletMessagePayloads['WALLET_SIGN_MESSAGE'],
 ): Promise<{ signature: string }> {
+  // Route to EVM signing if chainType is 'evm'
+  if (payload.chainType === 'evm') {
+    return handleSignMessageEVM(payload.message, payload.address, payload.typedData);
+  }
+
+  // Default: Solana Ed25519 signing
   const keypair = getUnlockedKeypair();
 
   if (!keypair) {
@@ -737,6 +743,114 @@ async function handleSignMessage(
     };
   } catch (error) {
     throw new WalletError(WalletErrorCode.SIGNING_FAILED, 'Failed to sign message');
+  }
+}
+
+/**
+ * Sign a message using EVM secp256k1 (EIP-191 personal_sign).
+ *
+ * ethers Wallet.signMessage() automatically:
+ *   1. Prepends the EIP-191 prefix: "\x19Ethereum Signed Message:\n{length}"
+ *   2. Hashes with keccak256
+ *   3. Signs with secp256k1
+ *   4. Returns a hex-encoded 65-byte signature (r + s + v)
+ */
+async function handleSignMessageEVM(
+  message: string,
+  requestedAddress?: string,
+  typedData?: string,
+): Promise<{ signature: string }> {
+  const evmKeypair = getUnlockedEVMKeypair();
+
+  if (!evmKeypair) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'EVM wallet is locked or no EVM keypair available. Please unlock to sign messages.',
+    );
+  }
+
+  // Verify the requested address matches the unlocked wallet to prevent
+  // signing on behalf of an address the wallet doesn't control.
+  if (requestedAddress) {
+    const walletAddress = evmKeypair.address.toLowerCase();
+    const requested = requestedAddress.toLowerCase();
+    if (walletAddress !== requested) {
+      throw new WalletError(
+        WalletErrorCode.SIGNING_FAILED,
+        `Address mismatch: dApp requested signing for ${requestedAddress} but wallet address is ${evmKeypair.address}`,
+      );
+    }
+  }
+
+  // Use the proven evmKeypairToWallet utility (same one used for transaction signing)
+  const wallet = evmKeypairToWallet(evmKeypair);
+
+  // EIP-712 typed data signing (eth_signTypedData_v3 / v4)
+  if (typedData) {
+    try {
+      const parsed = JSON.parse(typedData);
+
+      // Validate required EIP-712 fields
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Typed data must be a JSON object');
+      }
+      if (!parsed.domain || typeof parsed.domain !== 'object') {
+        throw new Error('Typed data missing required field: domain');
+      }
+      if (!parsed.types || typeof parsed.types !== 'object') {
+        throw new Error('Typed data missing required field: types');
+      }
+      if (parsed.message === undefined || parsed.message === null) {
+        throw new Error('Typed data missing required field: message');
+      }
+
+      // primaryType is also present in the spec but ethers infers it from types
+      const { domain, types, message: value } = parsed;
+      // ethers.js requires EIP712Domain to be omitted from the types object
+      const signingTypes = { ...types };
+      delete signingTypes.EIP712Domain;
+      const signature = await wallet.signTypedData(domain, signingTypes, value);
+      return { signature };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new WalletError(
+        WalletErrorCode.SIGNING_FAILED,
+        `Failed to sign EVM typed data: ${detail}`,
+      );
+    }
+  }
+
+  // personal_sign: messages from dApps are typically hex-encoded byte strings.
+  // If the message starts with 0x and looks like valid hex, decode to bytes first
+  // so ethers signs the raw bytes rather than the hex-encoded ASCII text.
+  try {
+    let messageData: string | Uint8Array;
+    if (
+      message.length > 2 &&
+      message.startsWith('0x') &&
+      /^0x[0-9a-fA-F]+$/.test(message) &&
+      message.length % 2 === 0
+    ) {
+      // Decode hex to bytes — no dynamic import needed
+      const hex = message.slice(2);
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+      }
+      messageData = bytes;
+    } else {
+      // Plain text message — sign as UTF-8
+      messageData = message;
+    }
+
+    const signature = await wallet.signMessage(messageData);
+    return { signature };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new WalletError(
+      WalletErrorCode.SIGNING_FAILED,
+      `Failed to sign EVM message: ${detail}`,
+    );
   }
 }
 

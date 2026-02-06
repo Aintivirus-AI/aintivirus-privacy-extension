@@ -30,6 +30,9 @@ module.exports = (env, argv) => {
     'SOLANA_PAYMENT_PROGRAM_ID',
     'MERCHANT_SOL_ADDRESS',
     'MERCHANT_ETH_ADDRESS',
+    // AINTI token addresses (required for store balance checks and payments)
+    'AINTI_TOKEN_SOL_MINT',
+    'AINTI_TOKEN_ETH_ADDRESS',
     // Store environment: 'production' or 'staging' (staging has $1 test products)
     'STORE_ENVIRONMENT',
   ];

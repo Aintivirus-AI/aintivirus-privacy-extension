@@ -11,7 +11,11 @@ export const PROVIDER_INFO = {
   VERSION: '1.0.0',
 
   EVM: {
-    IS_METAMASK: false,
+    // Many dApps (especially older ones or those using wagmi/web3-react) only check
+    // window.ethereum.isMetaMask to detect a compatible EIP-1193 provider.
+    // Setting this to true is standard practice for wallet extensions
+    // (Rabby, Rainbow, Coinbase Wallet, etc.) to ensure broad compatibility.
+    IS_METAMASK: true,
     IS_AINTIVIRUS: true,
   },
 

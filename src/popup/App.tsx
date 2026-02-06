@@ -2132,7 +2132,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
               const addresses = fetchedEvmTokens.map((t: EVMTokenBalance) => t.address.toLowerCase());
               const evmTokenPricesRes = await sendToBackground({
                 type: 'GET_TOKEN_PRICES',
-                payload: { mints: addresses },
+                payload: { mints: addresses, chainId: activeChainId || activeEVMChain || 'ethereum' },
               });
               // Store prices with lowercase keys for consistent lookup
               const normalizedPrices: Record<string, number> = {};
@@ -4100,9 +4100,20 @@ const SendForm: React.FC<SendFormProps> = ({
               setTokenPrice(prices[selectedToken.mint]);
             }
           }
-        } else if (selectedToken?.chain === 'evm' && activeChain === 'evm') {
-          // For ERC20 tokens, we don't have a price endpoint yet, so set to null
-          setTokenPrice(null);
+        } else if (selectedToken?.chain === 'evm' && selectedToken.address && activeChain === 'evm') {
+          // For ERC20 tokens, fetch price using the chain-aware token price API
+          const chainId = activeChainId || activeEVMChain || 'ethereum';
+          const priceRes = await sendToBackground({
+            type: 'GET_TOKEN_PRICES',
+            payload: { mints: [selectedToken.address.toLowerCase()], chainId },
+          });
+          if (priceRes.success && priceRes.data) {
+            const prices = priceRes.data as Record<string, number>;
+            const price = prices[selectedToken.address.toLowerCase()];
+            if (price) {
+              setTokenPrice(price);
+            }
+          }
         } else if (activeChain === 'solana') {
           const priceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
           if (priceRes.success && priceRes.data) {

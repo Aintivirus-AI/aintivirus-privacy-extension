@@ -74,6 +74,11 @@ if (extWindow[INJECTION_SYMBOL]) {
   // Inject dApp provider script FIRST, synchronously
   injectDAppScriptImmediately();
   
+  // Initialize the dApp bridge IMMEDIATELY so the content bridge is ready to receive
+  // messages from the injected provider script. This must happen before any async work
+  // because dappInpage.js sends _getProviderState right after loading.
+  initializeDAppBridge();
+  
   // Then continue with async initialization
   initContentScript().catch(() => {
     // Best-effort initialization: if something fails here, we avoid breaking page scripts.
@@ -119,7 +124,9 @@ async function initContentScript(): Promise<void> {
   injectSecurityScript();
   setupSecurityMessageListener();
 
-  initializeDAppBridge();
+  // NOTE: initializeDAppBridge() is called synchronously at script load time
+  // (before initContentScript) to avoid a race condition with dappInpage.js.
+  // It has an internal guard so calling it again here would be a harmless no-op.
 
   initializeFloatingPanel();
 

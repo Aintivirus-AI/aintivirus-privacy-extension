@@ -584,7 +584,7 @@ export type SecuritySetProgramTrustMessage = BaseMessage<
 export type GetSolPriceMessage = BaseMessage<'GET_SOL_PRICE'>;
 export type GetEthPriceMessage = BaseMessage<'GET_ETH_PRICE'>;
 export type GetEvmNativePriceMessage = BaseMessage<'GET_EVM_NATIVE_PRICE', { evmChainId: string }>;
-export type GetTokenPricesMessage = BaseMessage<'GET_TOKEN_PRICES', { mints: string[] }>;
+export type GetTokenPricesMessage = BaseMessage<'GET_TOKEN_PRICES', { mints: string[]; chainId?: string }>;
 
 export type DappRequestMessage = BaseMessage<
   'DAPP_REQUEST',

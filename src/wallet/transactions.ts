@@ -677,10 +677,39 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
   }
 }
 
-const AINTI_PAYMENT_PROGRAM_ID = new PublicKey('tAGZHAnxidA1o7KrZtCHpiCZ69mfSSKju3cLPaXQWQH');
-
-const AINTI_TOKEN_MINT = new PublicKey('BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW');
+// Configure via .env: SOLANA_PAYMENT_PROGRAM_ID, AINTI_TOKEN_SOL_MINT
+// Lazily initialized to avoid crashing at module load when env vars are not set.
+let _aintiPaymentProgramId: PublicKey | null = null;
+let _aintiTokenMint: PublicKey | null = null;
 const AINTI_TOKEN_DECIMALS = 6;
+
+function getAintiPaymentProgramId(): PublicKey {
+  if (!_aintiPaymentProgramId) {
+    const id = process.env.SOLANA_PAYMENT_PROGRAM_ID;
+    if (!id) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'SOLANA_PAYMENT_PROGRAM_ID is not configured. Store payments are unavailable.',
+      );
+    }
+    _aintiPaymentProgramId = new PublicKey(id);
+  }
+  return _aintiPaymentProgramId;
+}
+
+function getAintiTokenMint(): PublicKey {
+  if (!_aintiTokenMint) {
+    const mint = process.env.AINTI_TOKEN_SOL_MINT;
+    if (!mint) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'AINTI_TOKEN_SOL_MINT is not configured. Store payments are unavailable.',
+      );
+    }
+    _aintiTokenMint = new PublicKey(mint);
+  }
+  return _aintiTokenMint;
+}
 
 let cachedDiscriminator: Uint8Array | null = null;
 
@@ -728,7 +757,7 @@ function orderIdToBytes32(orderId: string): Uint8Array {
 function derivePaymentVaultPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('payment_vault')],
-    AINTI_PAYMENT_PROGRAM_ID
+    getAintiPaymentProgramId(),
   );
 }
 
@@ -736,7 +765,7 @@ function derivePaymentRecordPDA(orderId: string): [PublicKey, number] {
   const orderIdBytes = orderIdToBytes32(orderId);
   return PublicKey.findProgramAddressSync(
     [Buffer.from('payment'), Buffer.from(orderIdBytes)],
-    AINTI_PAYMENT_PROGRAM_ID
+    getAintiPaymentProgramId(),
   );
 }
 
@@ -798,7 +827,7 @@ export async function processStorePayment(
         amountRaw: amountRaw.toString(),
         paymentVaultPDA: paymentVaultPDA.toBase58(),
         paymentRecordPDA: paymentRecordPDA.toBase58(),
-        programId: AINTI_PAYMENT_PROGRAM_ID.toBase58(),
+        programId: getAintiPaymentProgramId().toBase58(),
       });
     }
 
@@ -816,8 +845,9 @@ export async function processStorePayment(
 
     const treasuryWallet = extractTreasuryFromVaultData(vaultAccount.data);
 
-    const buyerTokenAccount = getAssociatedTokenAddressSync(AINTI_TOKEN_MINT, keypair.publicKey);
-    const treasuryTokenAccount = getAssociatedTokenAddressSync(AINTI_TOKEN_MINT, treasuryWallet);
+    const tokenMint = getAintiTokenMint();
+    const buyerTokenAccount = getAssociatedTokenAddressSync(tokenMint, keypair.publicKey);
+    const treasuryTokenAccount = getAssociatedTokenAddressSync(tokenMint, treasuryWallet);
 
     if (process.env.NODE_ENV !== 'production') {
       console.log('[Payment] Accounts:', {
@@ -825,21 +855,21 @@ export async function processStorePayment(
         buyerTokenAccount: buyerTokenAccount.toBase58(),
         treasuryWallet: treasuryWallet.toBase58(),
         treasuryTokenAccount: treasuryTokenAccount.toBase58(),
-        tokenMint: AINTI_TOKEN_MINT.toBase58(),
+        tokenMint: tokenMint.toBase58(),
       });
     }
 
     const instructionData = await buildProcessPaymentInstructionData(orderId, amountRaw);
 
     const instruction = new TransactionInstruction({
-      programId: AINTI_PAYMENT_PROGRAM_ID,
+      programId: getAintiPaymentProgramId(),
       keys: [
         { pubkey: paymentRecordPDA, isSigner: false, isWritable: true },
         { pubkey: paymentVaultPDA, isSigner: false, isWritable: true },
         { pubkey: keypair.publicKey, isSigner: true, isWritable: true },
         { pubkey: buyerTokenAccount, isSigner: false, isWritable: true },
         { pubkey: treasuryTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: AINTI_TOKEN_MINT, isSigner: false, isWritable: false },
+        { pubkey: tokenMint, isSigner: false, isWritable: false },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],

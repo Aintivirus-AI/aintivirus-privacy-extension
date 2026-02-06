@@ -18,6 +18,8 @@ import {
 import { approveConnection } from '../../security/connectionMonitor';
 import { getWalletState as getWalletStateFromStorage } from '../../wallet/storage';
 import { handleWalletMessage } from '../../wallet';
+import { getNumericChainId, DEFAULT_EVM_CHAIN } from '../../wallet/chains/config';
+import type { EVMChainId } from '../../wallet/chains/types';
 import type { WalletMessageType } from '../../wallet/types';
 import {
   getPermission,
@@ -459,17 +461,27 @@ async function processConnectApproval(
 }
 
 async function processSignMessageApproval(request: QueuedRequest): Promise<unknown> {
-  const { chainType, params } = request;
+  const { chainType, method, params } = request;
 
   if (chainType === 'evm') {
-    const [message, address] = params as [string, string];
+    const isTypedData =
+      method === 'eth_signTypedData' ||
+      method === 'eth_signTypedData_v3' ||
+      method === 'eth_signTypedData_v4';
 
-    const result = await signEVMMessage(message, address);
-    return result;
+    if (isTypedData) {
+      // eth_signTypedData params: [address, typedDataJSON]
+      // Note: param order is REVERSED compared to personal_sign
+      const [address, typedDataJSON] = params as [string, string];
+      return signEVMTypedData(typedDataJSON, address);
+    } else {
+      // personal_sign / eth_sign params: [message, address]
+      const [message, address] = params as [string, string];
+      return signEVMMessage(message, address);
+    }
   } else {
     const { message } = params as { message: string };
-    const result = await signSolanaMessage(message);
-    return result;
+    return signSolanaMessage(message);
   }
 }
 
@@ -549,6 +561,17 @@ async function signEVMMessage(message: string, address: string): Promise<string>
     message,
     address,
     chainType: 'evm',
+  })) as { signature: string };
+
+  return result.signature;
+}
+
+async function signEVMTypedData(typedDataJSON: string, address: string): Promise<string> {
+  const result = (await handleWalletMessage('WALLET_SIGN_MESSAGE' as WalletMessageType, {
+    message: '', // Not used for typed data; routing is based on typedData presence
+    address, // Verified against unlocked wallet in handleSignMessageEVM
+    chainType: 'evm',
+    typedData: typedDataJSON,
   })) as { signature: string };
 
   return result.signature;
@@ -669,11 +692,20 @@ async function handleGetProviderState(
   const permission = origin ? await getPermission(origin, chainType) : null;
 
   if (chainType === 'evm') {
+    const activeChain = (walletState.activeEVMChain || DEFAULT_EVM_CHAIN) as EVMChainId;
+    const testnet = walletState.networkEnvironment === 'testnet';
+    let numericChainId: number;
+    try {
+      numericChainId = getNumericChainId(activeChain, testnet);
+    } catch {
+      // Fallback to Ethereum mainnet if chain config is missing
+      numericChainId = 1;
+    }
     const state: EVMProviderState = {
       isConnected: !!permission,
-      chainId: toHexChainId(walletState.activeEVMChain === 'ethereum' ? 1 : 137),
+      chainId: toHexChainId(numericChainId),
       accounts: permission?.accounts || [],
-      networkVersion: '1',
+      networkVersion: numericChainId.toString(),
     };
     return { success: true, data: state };
   } else {

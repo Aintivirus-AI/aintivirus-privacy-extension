@@ -382,14 +382,30 @@ async function getJupiterTokenPrices(mints: string[]): Promise<Map<string, numbe
 
 interface DexScreenerPriceResponse {
   pairs?: Array<{
+    chainId?: string;
     baseToken: {
       address: string;
     };
     priceUsd?: string;
+    liquidity?: {
+      usd?: number;
+    };
   }>;
 }
 
-async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number>> {
+// Map our internal chain IDs to DexScreener chain IDs
+const DEXSCREENER_CHAIN_IDS: Record<string, string> = {
+  ethereum: 'ethereum',
+  bnb: 'bsc',
+  polygon: 'polygon',
+  arbitrum: 'arbitrum',
+  optimism: 'optimism',
+  base: 'base',
+  avalanche: 'avalanche',
+  solana: 'solana',
+};
+
+async function getDexScreenerPrices(mints: string[], chainId?: string): Promise<Map<string, number>> {
   const result = new Map<string, number>();
 
   if (mints.length === 0) {
@@ -397,6 +413,8 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
   }
 
   const addressesParam = mints.join(',');
+  // Resolve the DexScreener chain ID for filtering
+  const dexScreenerChainId = chainId ? DEXSCREENER_CHAIN_IDS[chainId] : undefined;
 
   try {
     const response = await fetchWithTimeout(
@@ -411,7 +429,21 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
     const data: DexScreenerPriceResponse = await response.json();
 
     if (data.pairs) {
-      for (const pair of data.pairs) {
+      // Sort pairs by liquidity (highest first) so we prefer the most liquid pair
+      const sortedPairs = [...data.pairs].sort((a, b) => {
+        const liqA = a.liquidity?.usd ?? 0;
+        const liqB = b.liquidity?.usd ?? 0;
+        return liqB - liqA;
+      });
+
+      for (const pair of sortedPairs) {
+        // Filter by chain if specified - DexScreener returns pairs from ALL chains
+        // (e.g., PulseChain forks share the same contract addresses as Ethereum
+        // but have vastly different prices)
+        if (dexScreenerChainId && pair.chainId && pair.chainId !== dexScreenerChainId) {
+          continue;
+        }
+
         if (pair.priceUsd && pair.baseToken.address) {
           const price = parseFloat(pair.priceUsd);
           const rawAddress = pair.baseToken.address;
@@ -441,7 +473,7 @@ function isEVMAddress(address: string): boolean {
   return address.startsWith('0x') && address.length === 42;
 }
 
-export async function getTokenPrices(mints: string[]): Promise<Map<string, number>> {
+export async function getTokenPrices(mints: string[], chainId?: string): Promise<Map<string, number>> {
   const result = new Map<string, number>();
   const mintsToFetch: string[] = [];
 
@@ -490,7 +522,7 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
         }
 
         if (stillMissing.length > 0) {
-          const dexScreenerPrices = await getDexScreenerPrices(stillMissing);
+          const dexScreenerPrices = await getDexScreenerPrices(stillMissing, chainId || 'solana');
 
           const afterDexScreener: string[] = [];
           for (const mint of stillMissing) {
@@ -534,7 +566,9 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
       }
 
       if (evmAddresses.length > 0) {
-        const dexScreenerPrices = await getDexScreenerPrices(evmAddresses);
+        // Pass chain ID to DexScreener so it filters to the correct chain
+        // This prevents cross-chain price pollution (e.g., PulseChain USDT ≠ Ethereum USDT)
+        const dexScreenerPrices = await getDexScreenerPrices(evmAddresses, chainId || 'ethereum');
 
         let stillMissing: string[] = [];
         for (const address of evmAddresses) {
