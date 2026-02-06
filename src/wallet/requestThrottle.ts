@@ -1,5 +1,3 @@
-// Request throttle guards ensure we stay within RPC/external API rate limits
-// while also coalescing closely timed calls.
 export interface ThrottleConfig {
   maxRequests: number;
 

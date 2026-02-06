@@ -1,8 +1,3 @@
-/**
- * TRON chain support
- */
-
-// Types
 export type {
   TronAccountInfo,
   TronTransaction,
@@ -16,7 +11,6 @@ export type {
   TronNetworkConfig,
 } from './types';
 
-// Configuration
 export {
   TRON_NETWORKS,
   TRON_CONSTANTS,
@@ -27,7 +21,6 @@ export {
   trxToSun,
 } from './config';
 
-// Address utilities
 export {
   deriveTronKeypair,
   getTronAddressFromMnemonic,
@@ -55,5 +48,4 @@ export {
   accountExists,
 } from './client';
 
-// Adapter
 export { TronAdapter, createTronAdapter } from './adapter';

@@ -1,8 +1,3 @@
-/**
- * Bitcoin-family chain types
- * Supports Bitcoin, Bitcoin Cash, Litecoin, and Zcash (transparent)
- */
-
 export type BitcoinChainId = 'bitcoin' | 'bitcoincash' | 'litecoin' | 'zcash';
 
 export type BitcoinAddressType = 'legacy' | 'segwit' | 'native-segwit' | 'taproot';

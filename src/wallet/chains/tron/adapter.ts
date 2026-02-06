@@ -1,9 +1,3 @@
-/**
- * TRON Chain Adapter
- * 
- * Implements the ChainAdapter interface for TRON blockchain.
- */
-
 import type {
   ChainAdapter,
   ChainBalance,
@@ -45,11 +39,8 @@ import {
 } from './client';
 import { validateMnemonic, normalizeMnemonic } from '../../keychain';
 
-/**
- * TRON chain adapter
- */
 export class TronAdapter implements ChainAdapter {
-  readonly chainType = 'evm' as const; // Use 'evm' for compatibility, actual family is 'tron'
+  readonly chainType = 'evm' as const;
   readonly chainName = 'TRON';
   readonly nativeSymbol = 'TRX';
 
@@ -214,7 +205,6 @@ export class TronAdapter implements ChainAdapter {
         };
       }
 
-      // Default fee estimate
       return {
         fee: BigInt(0), // Most TRX transfers are free with bandwidth
         feeFormatted: 0,
@@ -402,9 +392,6 @@ export class TronAdapter implements ChainAdapter {
   }
 }
 
-/**
- * Create a TRON adapter
- */
 export function createTronAdapter(network: NetworkEnvironment = 'mainnet'): TronAdapter {
   return new TronAdapter(network);
 }

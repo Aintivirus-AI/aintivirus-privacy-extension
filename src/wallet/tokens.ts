@@ -23,7 +23,6 @@ import {
   METADATA_CACHE_TTL,
 } from './requestDedup';
 
-// Token helpers look up SPL balances, enrich metadata, and manage custom tokens.
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
@@ -171,7 +170,6 @@ export async function fetchJupiterTokenMetadata(mint: string): Promise<TokenMeta
       if (metadata) {
         tokenMetadataCache.set(mint, metadata);
 
-        // Also save to persistent storage
         await saveTokenMetadataToCache(mint, {
           symbol: metadata.symbol,
           name: metadata.name,
@@ -675,7 +673,6 @@ async function fetchTokenBalancesInternal(address: string): Promise<SPLTokenBala
     // Sort tokens by balance (highest first), then by zero balance
     const finalTokens = tokens;
     finalTokens.sort((a, b) => {
-      // Tokens with balance come first
       if (a.uiBalance > 0 && b.uiBalance === 0) return -1;
       if (a.uiBalance === 0 && b.uiBalance > 0) return 1;
       // Sort by balance descending
@@ -729,7 +726,6 @@ function parseTokenAccount(account: {
   try {
     const data = account.account.data;
 
-    // Accept both standard SPL tokens and Token2022 (used by pump.fun and many newer tokens)
     if (data.program !== 'spl-token' && data.program !== 'spl-token-2022') {
       return null;
     }
@@ -767,7 +763,7 @@ function parseTokenAccount(account: {
         name: metadata.name,
         decimals: metadata.decimals,
         logoUri: metadata.logoUri,
-      }).catch(() => {}); // Fire and forget
+      }).catch(() => {});
     }
 
     return tokenBalance;
@@ -791,7 +787,6 @@ async function enrichTokenWithJupiterMetadata(token: SPLTokenBalance): Promise<S
       logoUri: jupiterMetadata.logoUri || token.logoUri,
     };
 
-    // Cache to persistent storage
     await saveTokenMetadataToCache(token.mint, {
       symbol: enriched.symbol,
       name: enriched.name,
@@ -989,10 +984,8 @@ export function getTokenLogoUrls(token: SPLTokenBalance): string[] {
     urls.push(token.logoUri);
   }
 
-  // Jupiter CDN is more reliable than deprecated solana-labs token-list
   urls.push(`https://tokens.jup.ag/token/${token.mint}/logo`);
 
-  // jsDelivr CDN as fallback
   urls.push(
     `https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/${token.mint}/logo.png`,
   );

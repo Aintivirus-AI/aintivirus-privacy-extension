@@ -6,7 +6,6 @@ import { createBitcoinAdapter, BitcoinAdapter, type BitcoinChainId } from './bit
 import { createTronAdapter, TronAdapter } from './tron';
 import { createMoneroAdapter, MoneroAdapter } from './monero';
 
-// Import from registry for the new dynamic chain support
 import {
   CHAIN_REGISTRY,
   getChain,
@@ -20,8 +19,6 @@ import {
   type ChainConfig,
   type ChainFamily,
 } from './registry';
-
-// Chain selector layer that caches adapters and exposes Solana/EVM helpers.
 
 const adapterCache: Map<string, ChainAdapter> = new Map();
 
@@ -93,17 +90,12 @@ export function getChainAdapter(
   return adapter;
 }
 
-/**
- * Get an adapter for a chain by its registry ID (new interface)
- * This is the preferred way to get adapters - just use the chain ID from the registry
- */
 export function getAdapterForChain(
   chainId: string,
   network: NetworkEnvironment = 'mainnet',
 ): ChainAdapter {
   const chain = getChainOrThrow(chainId);
   
-  // Use adapter cache
   const cacheKey = `${chainId}-${network}`;
   const cached = adapterCache.get(cacheKey);
   if (cached) {
@@ -115,7 +107,6 @@ export function getAdapterForChain(
   
   let adapter: ChainAdapter;
   
-  // Create adapter based on chain family
   switch (chain.family) {
     case 'solana':
       adapter = createSolanaAdapter(network);
@@ -174,10 +165,6 @@ export function clearAdapterCache(): void {
   adapterCache.clear();
 }
 
-/**
- * Get supported chains (legacy interface)
- * @deprecated Use getAllChainIds() or getChainsByFamily() from registry instead
- */
 export function getSupportedChains(): {
   solana: true;
   evm: EVMChainId[];
@@ -188,25 +175,15 @@ export function getSupportedChains(): {
   };
 }
 
-/**
- * Get all chain IDs from the registry
- */
 export function getAllChainIds(): string[] {
   return Object.keys(CHAIN_REGISTRY);
 }
 
-/**
- * Get chain config by ID
- */
 export { getChain, getChainOrThrow };
 
 export * from './types';
 
-// ============================================================================
-// Registry Exports (New Dynamic Chain Support)
-// ============================================================================
 export {
-  // Registry and config
   CHAIN_REGISTRY,
   getChainByNumericId,
   getChainsByFamily,
@@ -215,30 +192,22 @@ export {
   isSolanaChain,
   legacyToChainId,
   chainIdToLegacy,
-  // Explorer URLs (from registry)
   getExplorerUrl,
   getExplorerApiUrl,
   getAddressExplorerUrl,
   getTxExplorerUrl,
-  // RPC
   getRpcUrls,
   getNumericChainId as getChainNumericId,
-  // L2 helpers
   isL2Chain as isL2,
   getL2Type as getChainL2Type,
-  // Derivation
   getDerivationPath,
-  // Tokens
   getPopularTokens,
   getNativeToken,
   isSwapEnabled,
   getSwapProvider,
-  // Chain keys
   buildChainKey,
-  // Constants
   EVM_NATIVE_TOKEN_ADDRESS,
   WRAPPED_SOL_ADDRESS,
-  // Types
   type ChainConfig,
   type ChainFamily,
   type ChainToken,
@@ -246,7 +215,6 @@ export {
   type L2Type,
 } from './registry';
 
-// Chain utilities
 export {
   getChainsForSelector,
   getChainDisplayName,
@@ -271,9 +239,6 @@ export {
   type SwapToken,
 } from './utils';
 
-// ============================================================================
-// Legacy Exports (Backward Compatibility)
-// ============================================================================
 export {
   EVM_CHAINS,
   SOLANA_CHAINS,

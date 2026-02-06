@@ -10,7 +10,6 @@ import type { EVMChainId } from '../types';
 import { ChainError, ChainErrorCode } from '../types';
 import { getNumericChainId, getEVMRpcUrls, MAX_RPC_RETRIES, RPC_TIMEOUT } from '../config';
 
-// EVM RPC client manages cached providers, retries, and endpoint health tracking.
 interface RpcEndpointHealth {
   url: string;
   latencyMs: number;

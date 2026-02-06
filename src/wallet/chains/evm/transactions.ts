@@ -29,7 +29,6 @@ import {
 import { estimateNativeTransferGas, estimateTokenTransferGas, type GasEstimate } from './gas';
 import { evmKeypairToWallet, isValidEVMAddress } from '../../keychain';
 
-// Transaction builders, signing, and broadcasting helpers for EVM networks.
 export interface NativeTransferParams {
   from: string;
   to: string;
@@ -255,7 +254,6 @@ export async function createContractCall(
     };
   }
 
-  // Legacy transaction
   return {
     chainId: numericChainId,
     to,

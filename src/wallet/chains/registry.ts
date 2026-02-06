@@ -1,161 +1,66 @@
-/**
- * Chain Registry - Single source of truth for all blockchain networks
- *
- * To add a new network:
- * 1. Add a new entry to CHAIN_REGISTRY with all required fields
- * 2. The chain will automatically appear in:
- *    - Chain selector UI
- *    - Wallet settings
- *    - Transaction history
- *    - Fee estimation
- *    - Token swaps (if swapTokens defined)
- */
-
-// ============================================================================
-// Core Types
-// ============================================================================
-
-/**
- * Chain family determines the underlying protocol and adapter to use.
- * Add new families here when supporting fundamentally different chains.
- */
 export type ChainFamily = 'evm' | 'solana' | 'bitcoin' | 'tron' | 'monero' | 'cosmos' | 'sui' | 'aptos';
 
-/**
- * Network environment for mainnet/testnet switching
- */
 export type NetworkEnvironment = 'mainnet' | 'testnet';
 
-/**
- * L2 type for fee estimation purposes
- */
 export type L2Type = 'optimism' | 'arbitrum' | 'zk-rollup';
 
-/**
- * Token definition for swap interfaces and popular token lists
- */
 export interface ChainToken {
-  /** Contract address (or special address for native tokens) */
   address: string;
-  /** Token symbol (e.g., ETH, USDC) */
   symbol: string;
-  /** Human-readable name */
   name: string;
-  /** Token decimals */
   decimals: number;
-  /** Logo URL */
   logoUri: string;
-  /** Whether this is the native gas token */
   isNative?: boolean;
 }
 
-/**
- * Testnet configuration
- */
 export interface TestnetConfig {
-  /** Numeric chain ID for testnet */
   chainId: number;
-  /** RPC endpoints for testnet */
   rpcUrls: string[];
-  /** Block explorer URL for testnet */
   explorerUrl: string;
-  /** Block explorer API URL for testnet (optional) */
   explorerApiUrl?: string;
 }
 
-/**
- * Complete chain configuration - all data needed to support a network
- */
 export interface ChainConfig {
-  // ============ Identity ============
-  /** Unique identifier used as key (e.g., 'ethereum', 'solana', 'polygon') */
   id: string;
-  /** Chain family determines which adapter to use */
   family: ChainFamily;
-  /** Human-readable chain name */
   name: string;
-  /** Native token symbol */
   symbol: string;
-  /** Native token decimals */
   decimals: number;
-  /** Numeric chain ID (for EVM chains, this is the EIP-155 chain ID) */
   chainId: number;
 
-  // ============ Network ============
-  /** Primary RPC endpoints (ordered by preference) */
   rpcUrls: string[];
-  /** Fallback RPC endpoints */
   fallbackRpcUrls?: string[];
-  /** Block explorer URL */
   explorerUrl: string;
-  /** Block explorer API URL (for transaction history) */
   explorerApiUrl?: string;
-  /** Testnet configuration */
   testnet?: TestnetConfig;
 
-  // ============ Features ============
-  /** Whether this is an L2 chain */
   isL2?: boolean;
-  /** L2 type for fee estimation */
   l2Type?: L2Type;
-  /** Whether EIP-1559 is supported */
   supportsEIP1559?: boolean;
-  /** Whether swaps are available */
   swapEnabled?: boolean;
-  /** Swap router/aggregator to use */
   swapProvider?: 'jupiter' | 'paraswap' | '1inch' | 'uniswap';
 
-  // ============ Derivation ============
-  /** BIP-44 coin type (e.g., 60 for ETH, 501 for SOL) */
   coinType: number;
-  /** Default derivation path template (use {index} for account index) */
   derivationPath: string;
-  /** Alternative derivation paths (e.g., Ledger Live) */
   alternativeDerivationPaths?: Record<string, string>;
 
-  // ============ Display ============
-  /** Icon identifier for UI (corresponds to SVG component) */
   iconId: string;
-  /** Chain color for UI theming */
   color: string;
-  /** Short description for UI */
   description?: string;
 
-  // ============ Tokens ============
-  /** Native token address (use special address for native gas tokens) */
   nativeTokenAddress: string;
-  /** Popular tokens for this chain (for swaps, portfolio view) */
   popularTokens?: ChainToken[];
 
-  // ============ Gas ============
-  /** Default gas limit for native transfers */
   defaultGasLimit?: bigint;
-  /** Default gas limit for token transfers */
   tokenGasLimit?: bigint;
-  /** Gas price multiplier for fast transactions */
   gasPriceMultiplier?: number;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-/** Native token address used by many aggregators for EVM chains */
 export const EVM_NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
-/** Wrapped SOL address */
 export const WRAPPED_SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
 
-// ============================================================================
-// Chain Registry
-// ============================================================================
-
-/**
- * The master registry of all supported chains.
- * Add new chains here and they'll be available throughout the app.
- */
 export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
-  // ============ Solana ============
   solana: {
     id: 'solana',
     family: 'solana',
@@ -243,7 +148,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Ethereum ============
   ethereum: {
     id: 'ethereum',
     family: 'evm',
@@ -325,7 +229,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Polygon ============
   polygon: {
     id: 'polygon',
     family: 'evm',
@@ -393,7 +296,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Arbitrum ============
   arbitrum: {
     id: 'arbitrum',
     family: 'evm',
@@ -465,7 +367,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Optimism ============
   optimism: {
     id: 'optimism',
     family: 'evm',
@@ -534,7 +435,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Base ============
   base: {
     id: 'base',
     family: 'evm',
@@ -603,7 +503,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ BNB Smart Chain ============
   bnb: {
     id: 'bnb',
     family: 'evm',
@@ -714,7 +613,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     swapEnabled: false,
   },
 
-  // ============ Bitcoin Cash ============
   bitcoincash: {
     id: 'bitcoincash',
     family: 'bitcoin',
@@ -733,7 +631,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     swapEnabled: false,
   },
 
-  // ============ Litecoin ============
   litecoin: {
     id: 'litecoin',
     family: 'bitcoin',
@@ -755,7 +652,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     swapEnabled: false,
   },
 
-  // ============ Zcash ============
   zcash: {
     id: 'zcash',
     family: 'bitcoin',
@@ -774,7 +670,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     swapEnabled: false,
   },
 
-  // ============ TRON ============
   tron: {
     id: 'tron',
     family: 'tron',
@@ -831,7 +726,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Monero (Watch-Only) ============
   monero: {
     id: 'monero',
     family: 'monero',
@@ -860,59 +754,12 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     // Note: This is a watch-only implementation
     // Users import their address and view key
   },
-
-  // ============================================================================
-  // TEMPLATE: Add new chains below following this pattern
-  // ============================================================================
-  /*
-  newchain: {
-    id: 'newchain',
-    family: 'evm', // or 'solana', 'cosmos', etc.
-    name: 'New Chain',
-    symbol: 'TOKEN',
-    decimals: 18,
-    chainId: 12345,
-    rpcUrls: ['https://rpc.newchain.io'],
-    explorerUrl: 'https://explorer.newchain.io',
-    testnet: {
-      chainId: 12346,
-      rpcUrls: ['https://testnet-rpc.newchain.io'],
-      explorerUrl: 'https://testnet.explorer.newchain.io',
-    },
-    coinType: 60,
-    derivationPath: "m/44'/60'/0'/0/{index}",
-    iconId: 'newchain',
-    color: '#123456',
-    nativeTokenAddress: EVM_NATIVE_TOKEN_ADDRESS,
-    swapEnabled: false,
-    popularTokens: [
-      {
-        address: EVM_NATIVE_TOKEN_ADDRESS,
-        symbol: 'TOKEN',
-        name: 'New Chain',
-        decimals: 18,
-        logoUri: 'https://example.com/logo.png',
-        isNative: true,
-      },
-    ],
-  },
-  */
 };
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get a chain configuration by ID
- */
 export function getChain(chainId: string): ChainConfig | undefined {
   return CHAIN_REGISTRY[chainId];
 }
 
-/**
- * Get a chain configuration by ID, throwing if not found
- */
 export function getChainOrThrow(chainId: string): ChainConfig {
   const chain = CHAIN_REGISTRY[chainId];
   if (!chain) {
@@ -921,9 +768,6 @@ export function getChainOrThrow(chainId: string): ChainConfig {
   return chain;
 }
 
-/**
- * Get chain by numeric chain ID (useful for EVM chains)
- */
 export function getChainByNumericId(numericChainId: number, testnet = false): ChainConfig | undefined {
   return Object.values(CHAIN_REGISTRY).find((chain) => {
     if (testnet && chain.testnet) {
@@ -933,30 +777,18 @@ export function getChainByNumericId(numericChainId: number, testnet = false): Ch
   });
 }
 
-/**
- * Get all chains of a specific family
- */
 export function getChainsByFamily(family: ChainFamily): ChainConfig[] {
   return Object.values(CHAIN_REGISTRY).filter((chain) => chain.family === family);
 }
 
-/**
- * Get all EVM chains
- */
 export function getEVMChains(): ChainConfig[] {
   return getChainsByFamily('evm');
 }
 
-/**
- * Get all chain IDs
- */
 export function getAllChainIds(): string[] {
   return Object.keys(CHAIN_REGISTRY);
 }
 
-/**
- * Get all supported chains as display items for UI
- */
 export function getSupportedChainsForDisplay(): Array<{
   id: string;
   family: ChainFamily;
@@ -986,9 +818,6 @@ export function getRpcUrls(chainId: string, testnet = false): string[] {
   return chain.rpcUrls;
 }
 
-/**
- * Get explorer URL for a chain
- */
 export function getExplorerUrl(chainId: string, testnet = false): string {
   const chain = getChainOrThrow(chainId);
   if (testnet && chain.testnet) {
@@ -997,9 +826,6 @@ export function getExplorerUrl(chainId: string, testnet = false): string {
   return chain.explorerUrl;
 }
 
-/**
- * Get explorer API URL for a chain
- */
 export function getExplorerApiUrl(chainId: string, testnet = false): string | undefined {
   const chain = getChainOrThrow(chainId);
   if (testnet && chain.testnet) {
@@ -1008,9 +834,6 @@ export function getExplorerApiUrl(chainId: string, testnet = false): string | un
   return chain.explorerApiUrl;
 }
 
-/**
- * Get address explorer URL
- */
 export function getAddressExplorerUrl(chainId: string, address: string, testnet = false): string {
   const explorerUrl = getExplorerUrl(chainId, testnet);
   const chain = getChainOrThrow(chainId);
@@ -1038,9 +861,6 @@ export function getTxExplorerUrl(chainId: string, txHash: string, testnet = fals
   return `${explorerUrl}/tx/${txHash}`;
 }
 
-/**
- * Get numeric chain ID for a chain
- */
 export function getNumericChainId(chainId: string, testnet = false): number {
   const chain = getChainOrThrow(chainId);
   if (testnet && chain.testnet) {
@@ -1049,17 +869,11 @@ export function getNumericChainId(chainId: string, testnet = false): number {
   return chain.chainId;
 }
 
-/**
- * Check if a chain is an L2
- */
 export function isL2Chain(chainId: string): boolean {
   const chain = getChain(chainId);
   return chain?.isL2 ?? false;
 }
 
-/**
- * Get L2 type for fee estimation
- */
 export function getL2Type(chainId: string): L2Type | undefined {
   const chain = getChain(chainId);
   return chain?.l2Type;
@@ -1078,17 +892,11 @@ export function getDerivationPath(chainId: string, index = 0, pathType?: string)
   return chain.derivationPath.replace('{index}', index.toString());
 }
 
-/**
- * Get popular tokens for a chain (for swaps, portfolio)
- */
 export function getPopularTokens(chainId: string): ChainToken[] {
   const chain = getChain(chainId);
   return chain?.popularTokens ?? [];
 }
 
-/**
- * Get native token for a chain
- */
 export function getNativeToken(chainId: string): ChainToken | undefined {
   const tokens = getPopularTokens(chainId);
   return tokens.find((t) => t.isNative);
@@ -1102,9 +910,6 @@ export function isSwapEnabled(chainId: string): boolean {
   return chain?.swapEnabled ?? false;
 }
 
-/**
- * Get swap provider for a chain
- */
 export function getSwapProvider(chainId: string): string | undefined {
   const chain = getChain(chainId);
   return chain?.swapProvider;
@@ -1119,28 +924,15 @@ export function buildChainKey(chainId: string, testnet = false): string {
   return `${chain.family}:${numericId}`;
 }
 
-// ============================================================================
-// Type Guards
-// ============================================================================
-
-/**
- * Check if a chain ID is valid
- */
 export function isValidChainId(chainId: string): boolean {
   return chainId in CHAIN_REGISTRY;
 }
 
-/**
- * Check if a chain is EVM-compatible
- */
 export function isEVMChain(chainId: string): boolean {
   const chain = getChain(chainId);
   return chain?.family === 'evm';
 }
 
-/**
- * Check if a chain is Solana
- */
 export function isSolanaChain(chainId: string): boolean {
   const chain = getChain(chainId);
   return chain?.family === 'solana';
@@ -1157,10 +949,6 @@ export function isSolanaChain(chainId: string): boolean {
 export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';
 export type ChainType = 'solana' | 'evm';
 
-/**
- * Get supported EVM chain IDs (for backward compatibility)
- * @deprecated Use getChainsByFamily('evm') instead
- */
 export function getSupportedEVMChains(): EVMChainId[] {
   return getChainsByFamily('evm').map((chain) => chain.id as EVMChainId);
 }
@@ -1175,22 +963,14 @@ export function legacyToChainId(chainType: ChainType, evmChainId?: EVMChainId | 
   return evmChainId ?? 'ethereum';
 }
 
-/**
- * Convert new chain ID to legacy format
- */
 export function chainIdToLegacy(chainId: string): { chainType: ChainType; evmChainId?: EVMChainId } {
   const chain = getChainOrThrow(chainId);
   if (chain.family === 'solana') {
     return { chainType: 'solana' };
   }
-  // Only EVM chains should return evmChainId
-  // For other chains (bitcoin, tron, monero), we return 'evm' type for backwards compatibility
-  // but the actual adapter selection is handled by getAdapterForChain using chain.family
   if (chain.family === 'evm') {
     return { chainType: 'evm', evmChainId: chainId as EVMChainId };
   }
-  // For non-EVM, non-Solana chains, return 'evm' type with chain ID
-  // This maintains backwards compatibility while allowing proper adapter selection
   return { chainType: 'evm', evmChainId: chainId as EVMChainId };
 }
 

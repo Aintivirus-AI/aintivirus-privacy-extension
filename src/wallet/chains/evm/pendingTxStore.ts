@@ -1,7 +1,6 @@
 import type { EVMChainId } from '../types';
 import { getTransactionReceipt, getTransactionCount } from './client';
 
-// Tracks pending EVM transactions, polls their status, and exposes helpers needed for replacements.
 export type PendingTxStatus = 'pending' | 'mined' | 'failed' | 'dropped' | 'replaced';
 
 export interface PendingEVMTransaction {

@@ -1,10 +1,3 @@
-/**
- * Bitcoin Transaction Construction and Signing
- * 
- * Handles UTXO selection, transaction building, and signing.
- * Supports both legacy P2PKH and SegWit P2WPKH transactions.
- */
-
 import { sha256 } from '@noble/hashes/sha256';
 import { ripemd160 } from '@noble/hashes/ripemd160';
 import { blake2b } from '@noble/hashes/blake2b';
@@ -22,7 +15,6 @@ import type {
 import { getBitcoinChainConfig } from './config';
 import { getUtxos, getFeeEstimate } from './client';
 
-// Opcodes
 const OP_DUP = 0x76;
 const OP_HASH160 = 0xa9;
 const OP_EQUALVERIFY = 0x88;
@@ -78,13 +70,7 @@ function getConsensusBranchId(blockHeight: number): number {
   }
 }
 
-/**
- * Calculate Zcash fee according to ZIP 317
- * conventional_fee = max(10000, 5000 * max(2, logical_actions))
- * where logical_actions = max(t_in, t_out, nSpendsSapling + nOutputsSapling, 2 * nJoinSplit)
- */
 function calculateZcashFee(inputCount: number, outputCount: number): number {
-  // For transparent-only transactions
   const logicalActions = Math.max(inputCount, outputCount);
   const fee = Math.max(10000, 5000 * Math.max(2, logicalActions));
   return fee;

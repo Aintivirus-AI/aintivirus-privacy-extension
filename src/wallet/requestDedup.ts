@@ -1,5 +1,3 @@
-// Lightweight deduplication/cache helpers so wallet RPCs reuse in-flight requests
-// and keep results cached per key.
 interface PendingRequest<T> {
   promise: Promise<T>;
   timestamp: number;
@@ -11,7 +9,6 @@ interface CachedResult<T> {
   ttl: number;
 }
 
-// Dedup class tracks pending promises and caches results to avoid duplicate RPC calls.
 export class RequestDeduplicator {
   private pendingRequests: Map<string, PendingRequest<any>> = new Map();
   private resultCache: Map<string, CachedResult<any>> = new Map();

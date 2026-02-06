@@ -1,11 +1,6 @@
-/**
- * Tests for EVM gas estimation functions
- */
-
 import { formatGasPrice, formatFee, calculateMaxSendable, GasEstimate } from '../gas';
 import { parseUnits, formatUnits } from 'ethers';
 
-// Mock dependencies
 jest.mock('../../config', () => ({
   getEVMChainConfig: jest.fn(() => ({
     chainId: 1,
@@ -121,7 +116,6 @@ describe('Gas Functions', () => {
 
       const maxSendable = calculateMaxSendable(balance, gasEstimate);
 
-      // Should be balance - total fee
       expect(maxSendable).toBe(balance - gasEstimate.totalFee);
     });
 

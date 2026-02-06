@@ -1,10 +1,5 @@
-/**
- * Bitcoin-family chain configurations
- */
-
 import type { BitcoinChainConfig, BitcoinChainId } from './types';
 
-// Bitcoin mainnet network parameters
 const BITCOIN_MAINNET = {
   messagePrefix: '\x18Bitcoin Signed Message:\n',
   bech32: 'bc',
@@ -17,7 +12,6 @@ const BITCOIN_MAINNET = {
   wif: 0x80,
 };
 
-// Bitcoin testnet network parameters
 const BITCOIN_TESTNET = {
   messagePrefix: '\x18Bitcoin Signed Message:\n',
   bech32: 'tb',
@@ -30,7 +24,6 @@ const BITCOIN_TESTNET = {
   wif: 0xef,
 };
 
-// Litecoin mainnet network parameters
 const LITECOIN_MAINNET = {
   messagePrefix: '\x19Litecoin Signed Message:\n',
   bech32: 'ltc',
@@ -43,7 +36,6 @@ const LITECOIN_MAINNET = {
   wif: 0xb0,
 };
 
-// Litecoin testnet network parameters
 const LITECOIN_TESTNET = {
   messagePrefix: '\x19Litecoin Signed Message:\n',
   bech32: 'tltc',
@@ -69,18 +61,15 @@ const BITCOINCASH_MAINNET = {
   wif: 0x80,
 };
 
-// Zcash mainnet network parameters (transparent addresses only)
-// Zcash uses 2-byte version prefixes for addresses
 const ZCASH_MAINNET = {
   messagePrefix: '\x18Zcash Signed Message:\n',
-  bech32: '', // Zcash transparent doesn't use bech32
+  bech32: '',
   bip32: {
     public: 0x0488b21e,
     private: 0x0488ade4,
   },
-  // Zcash t-addresses use 2-byte prefixes (stored as arrays)
-  pubKeyHash: [0x1c, 0xb8], // 0x1CB8 - produces 't1' addresses
-  scriptHash: [0x1c, 0xbd],  // 0x1CBD - produces 't3' addresses
+  pubKeyHash: [0x1c, 0xb8],
+  scriptHash: [0x1c, 0xbd],
   wif: 0x80,
 };
 

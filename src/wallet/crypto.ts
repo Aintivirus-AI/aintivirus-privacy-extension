@@ -1,8 +1,5 @@
 import { PBKDF2_ITERATIONS, SALT_LENGTH, IV_LENGTH, WalletError, WalletErrorCode } from './types';
 
-// Crypto support for deriving encryption keys, AES-GCM, and zeroing secrets for
-// the wallet vault.
-
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -131,28 +128,11 @@ export async function decrypt(
   }
 }
 
-/**
- * Attempts to clear sensitive string data from memory.
- * 
- * SECURITY LIMITATION: JavaScript strings are immutable and this function cannot
- * actually clear the original string from memory. The original string data may
- * remain in memory until garbage collection, which is non-deterministic. For truly
- * sensitive data (private keys, mnemonics), prefer using Uint8Array with zeroOutArray()
- * where possible, as typed arrays can be reliably zeroed.
- * 
- * This function returns an empty string as a signal to replace variable references,
- * but callers should be aware of this limitation when handling highly sensitive data.
- */
 export function clearSensitiveString(sensitiveData: string): string {
-  void sensitiveData; // Acknowledge parameter to satisfy linter
+  void sensitiveData;
   return '';
 }
 
-/**
- * Securely zeros out a typed array. Unlike strings, Uint8Array contents can be
- * reliably overwritten, making this the preferred method for clearing sensitive
- * binary data (keys, seeds) from memory.
- */
 export function zeroOutArray(array: Uint8Array): void {
   array.fill(0);
 }

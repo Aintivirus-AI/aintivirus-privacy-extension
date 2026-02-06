@@ -1,4 +1,3 @@
-// Barrel file exposing the EVM adapter plus gas, transactions, allowances, and helpers.
 export { EVMAdapter, createEVMAdapter } from './adapter';
 
 export {

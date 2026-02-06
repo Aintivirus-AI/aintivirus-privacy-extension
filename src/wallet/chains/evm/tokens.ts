@@ -4,7 +4,6 @@ import { ChainError, ChainErrorCode } from '../types';
 import { call, withFailover, getBestProvider } from './client';
 import { isValidEVMAddress } from '../../keychain';
 
-// Token helpers for EVM (ERC-20) metadata lookups, balances, and popular token lists.
 export interface TokenMetadata {
   address: string;
   name: string;
@@ -370,7 +369,6 @@ export async function getPopularTokenBalances(
   return results.filter((b): b is ERC20Balance => b !== null);
 }
 
-// Pre-known metadata for custom tokens to skip RPC calls (like Solana does)
 export interface PreKnownTokenMeta {
   symbol?: string;
   name?: string;
@@ -393,17 +391,13 @@ export async function getMultipleTokenBalances(
   const queryFunctions = tokenAddresses.map((address) => async (): Promise<ERC20Balance> => {
     const normalizedAddress = address.toLowerCase();
     const preKnown = knownMetadata?.get(normalizedAddress);
-    
+
     try {
-      // For custom tokens, ALWAYS skip slow RPC metadata fetch (like Solana does)
-      // Just get the balance and use whatever metadata we have (or placeholders)
-      // This prevents the plugin from hanging on slow/unresponsive RPCs
       if (preKnown) {
         const balance = await getTokenBalance(chainId, testnet, address, ownerAddress);
         const decimals = preKnown.decimals ?? 18;
         const uiBalance = parseFloat(formatUnits(balance, decimals));
-        
-        // Generate a short address label if no symbol provided
+
         const shortAddr = `${address.slice(0, 6)}...`;
         
         return {
@@ -416,9 +410,7 @@ export async function getMultipleTokenBalances(
           logoUri: preKnown.logoUri || getTokenLogoUri(chainId, address),
         };
       }
-      
-      // No pre-known metadata at all - this shouldn't happen for custom tokens
-      // but handle it gracefully by just getting balance with placeholder metadata
+
       const balance = await getTokenBalance(chainId, testnet, address, ownerAddress);
       return {
         address: address,
@@ -468,9 +460,6 @@ export async function isERC20Token(
 }
 
 export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): string | undefined {
-  // Only return logo for known/popular tokens
-  // Don't generate TrustWallet URLs for unknown tokens (causes 403 errors)
-  // External sources (DexScreener, CoinGecko) are used in swapTokens.ts for unknown tokens
   const popularTokens = POPULAR_TOKENS[chainId] || [];
   const known = popularTokens.find((t) => t.address.toLowerCase() === tokenAddress.toLowerCase());
 
@@ -478,7 +467,6 @@ export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): stri
     return known.logoUri;
   }
 
-  // No fallback URL - let the caller fetch from DexScreener/CoinGecko instead
   return undefined;
 }
 

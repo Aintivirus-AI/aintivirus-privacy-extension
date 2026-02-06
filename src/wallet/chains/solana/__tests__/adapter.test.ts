@@ -1,10 +1,5 @@
-/**
- * Tests for Solana chain adapter functionality
- */
-
 import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
-// Mock the entire module
 jest.mock('@solana/web3.js', () => {
   const actual = jest.requireActual('@solana/web3.js');
   return {

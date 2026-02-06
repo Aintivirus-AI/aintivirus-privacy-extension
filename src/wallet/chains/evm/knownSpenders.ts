@@ -1,6 +1,5 @@
 import type { EVMChainId } from '../types';
 
-// Known spender addresses provide friendly labels for popular DEXes/bridges.
 export interface SpenderInfo {
   address: string;
 

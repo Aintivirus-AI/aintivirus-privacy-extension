@@ -1,4 +1,3 @@
-// Simple TTL caches for balances, nonces, gas price, receipts, etc. used across EVM helpers.
 interface CacheEntry<T> {
   value: T;
   timestamp: number;

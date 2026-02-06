@@ -1,4 +1,3 @@
-// Alchemy API client for transaction history across ETH and SOL networks
 import { parseUnits } from 'ethers';
 import type { EVMChainId } from './types';
 
@@ -94,9 +93,6 @@ function getAlchemyEVMUrl(evmChainId: EVMChainId, testnet: boolean): string | nu
   return testnet ? urls.testnet : urls.mainnet;
 }
 
-/**
- * Get Alchemy API URL for Solana
- */
 function getAlchemySolanaUrl(testnet: boolean): string | null {
   if (!ALCHEMY_API_KEY) {
     return null;
@@ -121,9 +117,6 @@ interface EVMSwapInfo {
   };
 }
 
-/**
- * Fetch EVM transaction history using Alchemy's Asset Transfers API
- */
 export async function getAlchemyEVMHistory(
   evmChainId: EVMChainId,
   address: string,
@@ -155,12 +148,9 @@ export async function getAlchemyEVMHistory(
   }
 
   try {
-    // Note: 'internal' category is ONLY supported for ETH and MATIC (Polygon) in Alchemy
-    // All other chains will error if 'internal' is included
     const supportedCategories: Record<EVMChainId, string[]> = {
       ethereum: ['external', 'erc20', 'erc721', 'erc1155', 'internal'],
       polygon: ['external', 'erc20', 'erc721', 'erc1155', 'internal'],
-      // Arbitrum, Optimism, Base, and BNB do NOT support 'internal' category
       arbitrum: ['external', 'erc20', 'erc721', 'erc1155'],
       optimism: ['external', 'erc20', 'erc721', 'erc1155'],
       base: ['external', 'erc20', 'erc721', 'erc1155'],
@@ -183,9 +173,8 @@ export async function getAlchemyEVMHistory(
     const sentParams = { ...baseParams, fromAddress: address };
     const receivedParams = { ...baseParams, toAddress: address };
 
-    // Fetch BOTH sent and received transactions in parallel with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s total timeout
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const fetchTransfers = async (params: any, id: number): Promise<AlchemyEVMTransaction[]> => {
       try {
@@ -220,13 +209,9 @@ export async function getAlchemyEVMHistory(
 
     clearTimeout(timeoutId);
 
-    // Tag each transaction with its direction based on which query it came from
-    // This is more reliable than comparing from/to addresses (which can be misleading for internal txs)
     const taggedSent = sentTransfers.map(tx => ({ ...tx, _direction: 'sent' as const }));
     const taggedReceived = receivedTransfers.map(tx => ({ ...tx, _direction: 'received' as const }));
 
-    // Group all transfers by transaction hash to detect swaps
-    // A swap has both sent and received transfers in the same tx hash
     const txHashToTransfers = new Map<string, Array<AlchemyEVMTransaction & { _direction: 'sent' | 'received' }>>();
     
     for (const tx of [...taggedSent, ...taggedReceived]) {
@@ -235,7 +220,6 @@ export async function getAlchemyEVMHistory(
       txHashToTransfers.set(tx.hash, existing);
     }
     
-    // Build unique transaction list with swap detection
     type ProcessedTx = AlchemyEVMTransaction & { 
       _direction: 'sent' | 'received' | 'self';
       _swapInfo?: EVMSwapInfo;
@@ -251,9 +235,7 @@ export async function getAlchemyEVMHistory(
       const sentTxs = transfers.filter(t => t._direction === 'sent');
       const receivedTxs = transfers.filter(t => t._direction === 'received');
       
-      // Check if this is a swap (has both sent and received with different assets)
       if (sentTxs.length > 0 && receivedTxs.length > 0) {
-        // Find the first sent and received with different assets (swap)
         const sentTx = sentTxs[0];
         const receivedTx = receivedTxs.find(r => 
           (r.asset || 'ETH') !== (sentTx.asset || 'ETH') || 
@@ -267,7 +249,6 @@ export async function getAlchemyEVMHistory(
           sentTx.rawContract?.address !== receivedTx.rawContract?.address;
         
         if (isDifferentAsset) {
-          // Parse amounts for swap info
           const parseAmount = (tx: AlchemyEVMTransaction): number => {
             if (tx.rawContract?.value) {
               try {
@@ -309,42 +290,33 @@ export async function getAlchemyEVMHistory(
       }
     }
 
-    // Sort by block number (descending)
     processedTxs.sort((a, b) => {
       const blockA = parseInt(a.blockNum, 16);
       const blockB = parseInt(b.blockNum, 16);
       return blockB - blockA;
     });
 
-    // Helper to convert Alchemy's decimal value to Wei string
     const toWeiString = (decimalValue: string, decimals: number = 18): string => {
       try {
         if (!decimalValue || decimalValue === '0') return '0';
-        // parseUnits handles decimal strings properly (e.g., "0.00118" -> "1180000000000000")
         return parseUnits(decimalValue, decimals).toString();
       } catch {
-        // If parsing fails, return 0
         return '0';
       }
     };
 
     const transactions = processedTxs.slice(0, limit).map((tx) => {
-      // For token transfers, use rawContract.value (already in smallest units as hex)
-      // For native transfers, convert the decimal value to Wei
       let valueInWei: string;
       if (tx.rawContract?.value) {
-        // Token transfer - rawContract.value is hex, convert to decimal string
         try {
           valueInWei = BigInt(tx.rawContract.value).toString();
         } catch {
           valueInWei = '0';
         }
       } else {
-        // Native transfer - value is decimal (e.g., "0.00118"), convert to Wei
         valueInWei = toWeiString(tx.value || '0', 18);
       }
 
-      // Parse timestamp from metadata.blockTimestamp (ISO 8601 format from Alchemy)
       let parsedTimestamp = 0;
       const blockTimestamp = tx.metadata?.blockTimestamp;
       if (blockTimestamp) {
@@ -362,7 +334,7 @@ export async function getAlchemyEVMHistory(
         hash: tx.hash,
         from: tx.from,
         to: tx.to || '',
-        value: valueInWei, // Now always in Wei as a string
+        value: valueInWei,
         blockNum: tx.blockNum,
         timestamp: parsedTimestamp,
         category: tx.category,
@@ -370,18 +342,15 @@ export async function getAlchemyEVMHistory(
         tokenAddress: tx.rawContract?.address,
         tokenValue: tx.rawContract?.value,
         tokenDecimals: tx.rawContract?.decimal ? parseInt(tx.rawContract.decimal) : undefined,
-        direction: tx._direction, // Pass the tagged direction from the query type
-        swapInfo: tx._swapInfo, // Include swap info if detected
+        direction: tx._direction,
+        swapInfo: tx._swapInfo,
       };
     });
 
-    // For transactions with missing timestamps, fetch block timestamps
     const txsWithoutTimestamp = transactions.filter(tx => !tx.timestamp);
     if (txsWithoutTimestamp.length > 0) {
-      // Get unique block numbers
       const uniqueBlocks = [...new Set(txsWithoutTimestamp.map(tx => tx.blockNum))];
       
-      // Fetch block timestamps (limit to first 10 blocks to avoid too many requests)
       const blocksToFetch = uniqueBlocks.slice(0, 10);
       const blockTimestamps: Record<string, number> = {};
       
@@ -403,13 +372,11 @@ export async function getAlchemyEVMHistory(
               blockTimestamps[blockNum] = parseInt(data.result.timestamp, 16);
             }
           } catch {
-            // Ignore errors for individual blocks
           }
         });
         
         await Promise.all(blockPromises);
         
-        // Update transactions with block timestamps
         transactions.forEach(tx => {
           if (!tx.timestamp && blockTimestamps[tx.blockNum]) {
             tx.timestamp = blockTimestamps[tx.blockNum];
@@ -433,15 +400,6 @@ export async function getAlchemyEVMHistory(
   }
 }
 
-/**
- * Alchemy Solana support is limited to RPC endpoints (configured in network settings).
- * Enhanced APIs like transaction history are not yet available for Solana.
- * Solana history is fetched via standard RPC methods in history.ts.
- */
-
-/**
- * Check if Alchemy is configured
- */
 export function isAlchemyConfigured(): boolean {
   return !!ALCHEMY_API_KEY;
 }

@@ -1,14 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 
-// Shared wallet type definitions, enums, and constants used across Solana/EVM flows.
 export type SolanaNetwork = 'mainnet-beta' | 'devnet';
 
-/**
- * Build-time injected API key for Alchemy (supports both ETH and Solana).
- *
- * - In development, you can provide it via a local `.env` file (not committed).
- * - In CI/production builds, inject it as an environment variable.
- */
 const ALCHEMY_API_KEY = process.env.AINTIVIRUS_ALCHEMY_API_KEY;
 
 function getAlchemySolanaRpcUrl(network: SolanaNetwork): string | null {
@@ -31,7 +24,6 @@ export interface NetworkConfig {
 export const NETWORK_CONFIGS: Record<SolanaNetwork, NetworkConfig> = {
   'mainnet-beta': {
     name: 'mainnet-beta',
-    // Use Alchemy if available, otherwise fallback to public RPCs
     rpcUrl: getAlchemySolanaRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://solana-mainnet.rpc.extrnode.com'],
     explorerUrl: 'https://explorer.solana.com',
@@ -76,7 +68,6 @@ export interface WalletState {
 
   activeEVMChain: EVMChainId | null;
 
-  /** For non-EVM/Solana chains, this stores the actual chain ID from the registry */
   activeChainId?: string | null;
 
   evmAddress: string | null;
@@ -111,13 +102,9 @@ export interface RecentRecipient {
 export type RecentRecipientsMap = Record<RecentRecipientChainId, RecentRecipient[]>;
 
 export interface SpamFilterSettings {
-  /** Enable spam token detection (default: true) */
   enabled: boolean;
-  /** Auto-hide tokens detected as spam (default: false - show with warning instead) */
   autoHide: boolean;
-  /** Minimum confidence threshold 0-100 to flag as spam (default: 70) */
   confidenceThreshold: number;
-  /** User-whitelisted token addresses (never flag as spam) */
   whitelistedTokens: string[];
 }
 
@@ -152,15 +139,12 @@ export interface WalletSettings {
 
   recentRecipients?: RecentRecipientsMap;
 
-  /** Monero watch-only configuration (address and view key) */
   moneroWatchOnly?: {
     address: string;
     viewKey: string;
-    /** Optional restore height for faster sync */
     restoreHeight?: number;
   };
 
-  /** Spam token filter settings */
   spamFilter?: SpamFilterSettings;
 }
 
@@ -1296,16 +1280,11 @@ export interface ChainDisplayInfo {
   isTestnet: boolean;
 }
 
-/**
- * Dynamically generated list of supported chains from the registry.
- * New chains are added via CHAIN_REGISTRY in src/wallet/chains/registry.ts.
- */
 import { CHAIN_REGISTRY, type ChainFamily as RegistryChainFamily } from './chains/registry';
 
 function buildSupportedChains(): ChainDisplayInfo[] {
   const chains: ChainDisplayInfo[] = [];
 
-  // Define family priority for sorting
   const familyOrder: Record<string, number> = {
     solana: 0,
     evm: 1,
@@ -1325,32 +1304,27 @@ function buildSupportedChains(): ChainDisplayInfo[] {
     bnb: 5,
   };
 
-  // Sort chains by family, then by custom order (for EVM), then alphabetically
   const sortedChains = Object.values(CHAIN_REGISTRY).sort((a, b) => {
     const orderA = familyOrder[a.family] ?? 99;
     const orderB = familyOrder[b.family] ?? 99;
     if (orderA !== orderB) return orderA - orderB;
-    
-    // Within EVM family, use custom display order
+
     if (a.family === 'evm' && b.family === 'evm') {
       const evmOrderA = evmDisplayOrder[a.id] ?? 99;
       const evmOrderB = evmDisplayOrder[b.id] ?? 99;
       if (evmOrderA !== evmOrderB) return evmOrderA - evmOrderB;
     }
-    
+
     return a.name.localeCompare(b.name);
   });
 
   for (const chain of sortedChains) {
-    // Legacy type: for backwards compatibility with UI components
     const legacyType: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
-    
-    // Map registry chain family to our ChainFamily type
+
     const family = ['solana', 'evm', 'bitcoin', 'tron', 'monero'].includes(chain.family)
       ? (chain.family as ChainFamily)
       : 'evm';
-    
-    // Only set evmChainId for actual EVM chains
+
     const evmChainIdValue = chain.family === 'evm' ? (chain.id as EVMChainId) : undefined;
     
     chains.push({

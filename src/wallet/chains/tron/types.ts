@@ -1,10 +1,6 @@
-/**
- * TRON chain types
- */
-
 export interface TronAccountInfo {
   address: string;
-  balance: number; // in SUN (1 TRX = 1,000,000 SUN)
+  balance: number;
   bandwidth: {
     freeNetLimit: number;
     freeNetUsed: number;

@@ -1,11 +1,3 @@
-/**
- * Jupiter Swap Service with Referral Program Support
- *
- * This module integrates with Jupiter's swap API to provide token swaps
- * with referral fee support. For more information, see:
- * https://dev.jup.ag/tool-kits/referral-program
- */
-
 import {
   Connection,
   PublicKey,
@@ -19,50 +11,29 @@ import { executeWithFailover, getConnection } from './solanaClient';
 import { confirmTransaction } from './transactions';
 import { getTransactionExplorerUrl } from './rpc';
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-/**
- * Jupiter Referral Program Configuration
- *
- * To earn referral fees:
- * 1. Create a referral account at https://referral.jup.ag
- * 2. Replace REFERRAL_ACCOUNT with your referral account public key
- * 3. Initialize token accounts for tokens you want to receive fees in
- */
 export const JUPITER_REFERRAL_CONFIG = {
-  // Your referral account public key from https://referral.jup.ag (injected at build time).
-  // If not provided, referral fees are disabled.
   REFERRAL_ACCOUNT: process.env.AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT || '',
 
-  // Fee in basis points (100 = 1%, 50 = 0.5%, 20 = 0.2%)
-  // Jupiter allows up to 100 bps (1%) for referral fees
   FEE_BPS: (() => {
     const raw = process.env.AINTIVIRUS_JUPITER_REFERRAL_FEE_BPS;
     const parsed = raw ? Number.parseInt(raw, 10) : 50;
-    // Clamp to Jupiter's documented max (100 bps) and avoid negative values.
     return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 50;
   })(),
 
-  // Whether referral fees are enabled
   ENABLED:
     (process.env.AINTIVIRUS_JUPITER_REFERRAL_ENABLED || '').toLowerCase() === 'true' &&
     Boolean(process.env.AINTIVIRUS_JUPITER_REFERRAL_ACCOUNT),
 };
 
-// Jupiter API endpoints (v1 with API key required)
 const JUPITER_API_BASE = 'https://api.jup.ag/swap/v1';
 const JUPITER_QUOTE_ENDPOINT = `${JUPITER_API_BASE}/quote`;
 const JUPITER_SWAP_ENDPOINT = `${JUPITER_API_BASE}/swap`;
 const JUPITER_SWAP_INSTRUCTIONS_ENDPOINT = `${JUPITER_API_BASE}/swap-instructions`;
 
-// Jupiter API Key - injected at build time (e.g. from CI or local `.env`).
 const JUPITER_API_KEY = process.env.AINTIVIRUS_JUPITER_API_KEY || '';
 
-// Common token mints for Solana
 export const COMMON_TOKEN_MINTS = {
-  SOL: 'So11111111111111111111111111111111111111112', // Wrapped SOL
+  SOL: 'So11111111111111111111111111111111111111112',
   USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   JUP: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
@@ -71,18 +42,13 @@ export const COMMON_TOKEN_MINTS = {
   RAY: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
 };
 
-// Request timeout
 const API_TIMEOUT = 30000;
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface JupiterQuoteParams {
   inputMint: string;
   outputMint: string;
-  amount: string; // In smallest units (lamports for SOL)
-  slippageBps?: number; // Default 50 (0.5%)
+  amount: string;
+  slippageBps?: number;
   onlyDirectRoutes?: boolean;
   asLegacyTransaction?: boolean;
   maxAccounts?: number;
@@ -141,7 +107,7 @@ export interface JupiterSwapParams {
 }
 
 export interface JupiterSwapResponse {
-  swapTransaction: string; // Base64 encoded transaction
+  swapTransaction: string;
   lastValidBlockHeight: number;
   prioritizationFeeLamports?: number;
   computeUnitLimit?: number;
@@ -212,7 +178,6 @@ function parseSwapSimulationError(errorMsg: string): string {
     return 'Slippage tolerance exceeded - the price changed between quote and execution. Fix: Increase slippage to 2%, 5%, or even 10% for volatile tokens and retry.';
   }
   
-  // Check for invalid amount errors
   if (lowerError.includes('0x1772') || lowerError.includes('error: 6002') ||
       lowerError.includes('0x1773') || lowerError.includes('error: 6003') ||
       lowerError.includes('invalid input') || lowerError.includes('invalid output')) {
@@ -227,7 +192,6 @@ function parseSwapSimulationError(errorMsg: string): string {
     return 'Insufficient balance. Please check that you have enough tokens to swap AND at least 0.01 SOL for transaction fees. If swapping SOL, leave some for fees.';
   }
   
-  // Token account issues
   if (lowerError.includes('account not found') || lowerError.includes('account does not exist') || lowerError.includes('owner does not match')) {
     return 'Token account issue. You may need to have a small SOL balance (at least 0.002 SOL) to create the token account for receiving the output token.';
   }
@@ -237,7 +201,6 @@ function parseSwapSimulationError(errorMsg: string): string {
     return 'Transaction too complex. Try swapping a smaller amount or use a direct route.';
   }
   
-  // Generic program error 0x0
   if (lowerError.includes('custom program error: 0x0')) {
     return 'Transaction failed (error 0x0). This may be due to low liquidity, pool state change, or network congestion. Try a smaller amount or try again in a moment.';
   }
@@ -247,7 +210,6 @@ function parseSwapSimulationError(errorMsg: string): string {
     return 'Transaction expired. The network is congested. Please try again.';
   }
   
-  // Rent issues
   if (lowerError.includes('rent') && lowerError.includes('lamports')) {
     return 'Insufficient SOL for rent. You need at least 0.01 SOL to cover account creation fees.';
   }
@@ -258,7 +220,6 @@ function parseSwapSimulationError(errorMsg: string): string {
     return 'Price impact too high. The swap amount is too large for the available liquidity. Try a smaller amount.';
   }
   
-  // If error contains specific numbers, show them
   const hexMatch = errorMsg.match(/0x[0-9a-f]+/i);
   const decimalMatch = errorMsg.match(/error[:\s]+(\d+)/i);
   
@@ -267,7 +228,6 @@ function parseSwapSimulationError(errorMsg: string): string {
     return `Swap failed with error code ${code}. This may be a liquidity or routing issue. Try: 1) Smaller amount, 2) Higher slippage (5-10%), 3) Wait and retry. Raw: ${errorMsg.slice(0, 200)}`;
   }
   
-  // Return original error with context if no pattern matched
   return `Swap simulation failed: ${errorMsg.slice(0, 300)}. Try with a smaller amount, higher slippage, or wait a moment and retry.`;
 }
 
@@ -296,7 +256,6 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
       },
     };
 
-    // Add Content-Type for POST requests
     if (options.method === 'POST' && options.body) {
       (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/json';
     }
@@ -308,10 +267,6 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
   }
 }
 
-/**
- * Derives the referral token account for a specific token mint
- * This is used to collect referral fees in that token
- */
 export function deriveReferralTokenAccount(referralAccount: string, tokenMint: string): PublicKey {
   const REFERRAL_PROGRAM_ID = new PublicKey('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3');
 
@@ -347,10 +302,6 @@ function getFeeAccount(outputMint: string): string | undefined {
   }
 }
 
-/**
- * Check if we should include platform fee in quote
- * Only include if referral is enabled AND we have a valid referral account
- */
 function shouldIncludePlatformFee(): boolean {
   return JUPITER_REFERRAL_CONFIG.ENABLED && 
          Boolean(JUPITER_REFERRAL_CONFIG.REFERRAL_ACCOUNT) &&
@@ -374,7 +325,6 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
     asLegacyTransaction = false,
   } = params;
 
-  // Build query parameters
   const queryParams = new URLSearchParams({
     inputMint,
     outputMint,
@@ -408,13 +358,10 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
 
     const quoteResponse: JupiterQuoteResponse = await response.json();
 
-    // Format route labels
     const routeLabels = quoteResponse.routePlan.map((step) => step.swapInfo.label || 'Unknown DEX');
 
-    // Calculate minimum received (considering slippage)
     const minimumReceived = quoteResponse.otherAmountThreshold;
 
-    // Format output for display
     const quote: SwapQuote = {
       inputMint: quoteResponse.inputMint,
       outputMint: quoteResponse.outputMint,
@@ -451,9 +398,6 @@ export async function getSwapQuote(params: JupiterQuoteParams): Promise<SwapQuot
   }
 }
 
-/**
- * Build and get the swap transaction
- */
 export async function getSwapTransaction(
   quote: SwapQuote,
   userPublicKey: string,
@@ -461,19 +405,16 @@ export async function getSwapTransaction(
 ): Promise<JupiterSwapResponse> {
   const feeAccount = getFeeAccount(quote.outputMint);
 
-  // Try first without shared accounts, then with if that fails
   const baseParams: JupiterSwapParams = {
     quoteResponse: quote.rawQuote,
     userPublicKey,
     wrapAndUnwrapSol: true,
-    // Disable shared accounts initially - can cause "0x1" errors on some tokens
     useSharedAccounts: false,
     dynamicComputeUnitLimit: true,
-    // Use higher priority fee for better success rate
     prioritizationFeeLamports: {
       priorityLevelWithMaxLamports: {
-        maxLamports: 2000000, // 0.002 SOL max priority fee
-        priorityLevel: 'high', // Use high priority for better success
+        maxLamports: 2000000,
+        priorityLevel: 'high',
       },
     },
     skipUserAccountsRpcCalls: false,
@@ -485,7 +426,6 @@ export async function getSwapTransaction(
     baseParams.feeAccount = feeAccount;
   }
 
-  // Helper function to make the swap request
   const makeSwapRequest = async (params: JupiterSwapParams): Promise<JupiterSwapResponse> => {
     const response = await fetchWithTimeout(JUPITER_SWAP_ENDPOINT, {
       method: 'POST',
@@ -517,7 +457,6 @@ export async function getSwapTransaction(
   };
 
   try {
-    // First attempt: without shared accounts
     const swapResponse = await makeSwapRequest(baseParams);
 
     if (swapResponse.simulationError) {
@@ -526,7 +465,6 @@ export async function getSwapTransaction(
           ? swapResponse.simulationError
           : JSON.stringify(swapResponse.simulationError);
       
-      // Second attempt: with shared accounts enabled
       const retryParams = { ...baseParams, useSharedAccounts: true };
       const retryResponse = await makeSwapRequest(retryParams);
       
@@ -536,7 +474,6 @@ export async function getSwapTransaction(
             ? retryResponse.simulationError
             : JSON.stringify(retryResponse.simulationError);
         
-        // Third attempt: without fee account (in case referral isn't initialized for this token)
         if (baseParams.feeAccount) {
           const noFeeParams = { ...retryParams };
           delete noFeeParams.feeAccount;
@@ -598,17 +535,13 @@ export async function executeSwap(
 
   const userPublicKey = keypair.publicKey.toBase58();
 
-  // Get the swap transaction
   const swapResponse = await getSwapTransaction(quote, userPublicKey);
 
-  // Deserialize the transaction
   const swapTransactionBuf = Buffer.from(swapResponse.swapTransaction, 'base64');
   const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
-  // Sign the transaction
   transaction.sign([keypair]);
 
-  // Get connection and send
   const settings = await getWalletSettings();
 
   try {
@@ -645,7 +578,6 @@ export async function executeSwap(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const lowerError = errorMessage.toLowerCase();
 
-    // Parse common error patterns for better user messages
     if (lowerError.includes('insufficient') || lowerError.includes('0x1')) {
       throw new WalletError(
         WalletErrorCode.INSUFFICIENT_FUNDS,
@@ -702,7 +634,6 @@ export async function getFormattedSwapQuote(
   platformFeeFormatted: string | null;
   route: string;
 }> {
-  // Convert input amount to smallest units
   const inputAmountRaw = Math.floor(
     parseFloat(inputAmount) * Math.pow(10, inputDecimals),
   ).toString();
@@ -739,10 +670,6 @@ export async function getFormattedSwapQuote(
   };
 }
 
-/**
- * Perform a complete swap with quote and execution
- * This is the main function to call when executing a swap
- */
 export async function performSwap(
   inputMint: string,
   outputMint: string,
@@ -787,13 +714,6 @@ export async function performSwap(
   }
 }
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Check if Jupiter swap is available (mainnet only)
- */
 export async function isSwapAvailable(): Promise<boolean> {
   const settings = await getWalletSettings();
   return settings.network === 'mainnet-beta';
@@ -816,9 +736,6 @@ export function getReferralStatus(): {
   };
 }
 
-/**
- * Format token amount for display
- */
 export function formatTokenAmount(
   amount: string | number,
   decimals: number,
@@ -827,14 +744,10 @@ export function formatTokenAmount(
   const num = typeof amount === 'string' ? parseInt(amount) : amount;
   const formatted = num / Math.pow(10, decimals);
 
-  // Use fewer decimals for display
   const displayDecimals = Math.min(decimals, maxDecimals);
   return formatted.toFixed(displayDecimals).replace(/\.?0+$/, '');
 }
 
-/**
- * Parse user input amount to raw amount
- */
 export function parseInputAmount(amount: string, decimals: number): string {
   const num = parseFloat(amount);
   if (isNaN(num) || num < 0) {

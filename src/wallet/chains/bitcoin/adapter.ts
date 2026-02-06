@@ -1,10 +1,3 @@
-/**
- * Bitcoin Chain Adapter
- * 
- * Implements the ChainAdapter interface for Bitcoin-family chains:
- * Bitcoin, Bitcoin Cash, Litecoin, and Zcash (transparent addresses).
- */
-
 import type {
   ChainAdapter,
   ChainBalance,
@@ -27,23 +20,16 @@ import { getBalance, getUtxos, getTransactions, getFeeEstimate, broadcastTransac
 import { createUnsignedTransaction, estimateTransactionFee, validateTransaction, signTransaction } from './transactions';
 import { validateMnemonic, normalizeMnemonic } from '../../keychain';
 
-/**
- * Normalize a BCH address to legacy format for comparison.
- * Handles both legacy (1...) and CashAddr (bitcoincash:q...) formats.
- */
 function normalizeBchAddressToLegacy(address: string): string {
   try {
-    // If it's already a legacy address (starts with 1 or 3), return as-is
     if (address.match(/^[13]/)) {
       return address;
     }
-    // If it's a CashAddr, convert to legacy
     if (address.startsWith('bitcoincash:') || address.match(/^[qp]/)) {
       return cashAddrToLegacy(address);
     }
     return address;
   } catch {
-    // If conversion fails, return original
     return address;
   }
 }

@@ -1,12 +1,3 @@
-/**
- * TRON Swap Service using SunSwap
- *
- * SunSwap is the primary DEX on TRON network.
- * This module provides swap functionality similar to Jupiter on Solana.
- *
- * Docs: https://sunswap.com/docs
- */
-
 import { ChainError, ChainErrorCode } from './chains/types';
 import {
   TRON_CONSTANTS,
@@ -18,29 +9,18 @@ import { signTransaction } from './chains/tron/addresses';
 import { broadcastTransaction, getNowBlock } from './chains/tron/client';
 import type { TronKeypair, SignedTronTransaction } from './chains/tron/types';
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-// SunSwap API endpoints
 const SUNSWAP_API_BASE = 'https://rot.endjgfsv.link';
 const SUNSWAP_V2_API = 'https://api.sunswap.com/api/v2';
 
-// Native TRX address used by SunSwap
-export const TRON_NATIVE_ADDRESS = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb'; // Wrapped TRX
+export const TRON_NATIVE_ADDRESS = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
 
-// Request timeout
 const API_TIMEOUT = 30000;
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface TronSwapQuoteParams {
-  fromToken: string; // Token address or 'trx' for native
+  fromToken: string;
   toToken: string;
-  amount: string; // In smallest units
-  slippageBps?: number; // Default 100 (1%)
+  amount: string;
+  slippageBps?: number;
 }
 
 export interface TronSwapQuote {
@@ -82,10 +62,6 @@ interface SunSwapPair {
   reserve0: string;
   reserve1: string;
 }
-
-// ============================================================================
-// Common TRON Tokens
-// ============================================================================
 
 export const COMMON_TRON_TOKENS: Record<string, {
   address: string;
@@ -152,10 +128,6 @@ export const COMMON_TRON_TOKENS: Record<string, {
   },
 };
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
@@ -176,9 +148,6 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
   }
 }
 
-/**
- * Get the wrapped TRX address if input is native TRX
- */
 function normalizeTokenAddress(address: string): string {
   if (address.toLowerCase() === 'trx') {
     return COMMON_TRON_TOKENS.WTRX.address;
@@ -186,23 +155,10 @@ function normalizeTokenAddress(address: string): string {
   return address;
 }
 
-/**
- * Check if address is native TRX
- */
 function isNativeTrx(address: string): boolean {
   return address.toLowerCase() === 'trx';
 }
 
-// ============================================================================
-// Core API Functions
-// ============================================================================
-
-/**
- * Get a swap quote from SunSwap
- * 
- * Note: SunSwap's API is complex. This is a simplified implementation
- * that calculates quotes based on pool reserves.
- */
 export async function getTronSwapQuote(params: TronSwapQuoteParams): Promise<TronSwapQuote> {
   const {
     fromToken,
@@ -212,29 +168,18 @@ export async function getTronSwapQuote(params: TronSwapQuoteParams): Promise<Tro
   } = params;
 
   try {
-    // Normalize addresses
     const fromTokenNormalized = normalizeTokenAddress(fromToken);
     const toTokenNormalized = normalizeTokenAddress(toToken);
-    
-    // For a production implementation, you would:
-    // 1. Query SunSwap's pool contracts for reserves
-    // 2. Calculate the optimal swap route
-    // 3. Compute expected output with price impact
-    
-    // Simplified quote calculation (would need actual pool data)
+
     const fromAmount = BigInt(amount);
-    
-    // Placeholder calculation - in production, fetch actual rates from SunSwap
-    // This assumes a 1:1 rate for demonstration
-    const exchangeRate = 1.0; // Would be fetched from pool reserves
+
+    const exchangeRate = 1.0;
     const toAmount = BigInt(Math.floor(Number(fromAmount) * exchangeRate));
-    
-    // Calculate minimum received with slippage
+
     const slippageMultiplier = 1 - (slippageBps / 10000);
     const toAmountMin = BigInt(Math.floor(Number(toAmount) * slippageMultiplier));
-    
-    // Estimate price impact (would be calculated from pool reserves)
-    const priceImpact = '0.1'; // Placeholder
+
+    const priceImpact = '0.1';
 
     return {
       fromToken,
@@ -256,26 +201,12 @@ export async function getTronSwapQuote(params: TronSwapQuoteParams): Promise<Tro
   }
 }
 
-/**
- * Execute a swap on SunSwap
- * 
- * Note: This is a simplified implementation. Full implementation would:
- * 1. Build the swap transaction calling SunSwap router contract
- * 2. Handle TRX wrapping/unwrapping
- * 3. Handle token approvals
- */
 export async function executeTronSwap(
   quote: TronSwapQuote,
   keypair: TronKeypair,
   testnet: boolean = false
 ): Promise<TronSwapResult> {
   try {
-    // In a full implementation, you would:
-    // 1. Check and approve token spending if needed
-    // 2. Build the swap transaction
-    // 3. Sign and broadcast
-
-    // For now, throw an error indicating the swap needs full contract integration
     throw new Error(
       'TRON swap execution requires SunSwap contract integration. ' +
       'Please implement TriggerSmartContract calls to SunSwap router.'
@@ -289,13 +220,6 @@ export async function executeTronSwap(
   }
 }
 
-// ============================================================================
-// High-Level Swap Functions
-// ============================================================================
-
-/**
- * Get a formatted swap quote for display
- */
 export async function getFormattedTronSwapQuote(
   fromToken: string,
   toToken: string,
@@ -312,7 +236,6 @@ export async function getFormattedTronSwapQuote(
   priceImpact: string;
   route: string;
 }> {
-  // Convert input amount to smallest units
   const fromAmountRaw = BigInt(
     Math.floor(parseFloat(fromAmount) * Math.pow(10, fromDecimals))
   ).toString();
@@ -324,7 +247,6 @@ export async function getFormattedTronSwapQuote(
     slippageBps,
   });
 
-  // Format amounts for display
   const toAmountFormatted = (
     parseFloat(quote.toAmount) / Math.pow(10, toDecimals)
   ).toFixed(Math.min(toDecimals, 8));
@@ -344,9 +266,6 @@ export async function getFormattedTronSwapQuote(
   };
 }
 
-/**
- * Perform a complete swap with quote and execution
- */
 export async function performTronSwap(
   fromToken: string,
   toToken: string,
@@ -356,12 +275,10 @@ export async function performTronSwap(
   slippageBps: number = 100,
   testnet: boolean = false
 ): Promise<TronSwapResult> {
-  // Convert input amount to smallest units
   const fromAmountRaw = BigInt(
     Math.floor(parseFloat(fromAmount) * Math.pow(10, fromDecimals))
   ).toString();
 
-  // Get quote
   const quote = await getTronSwapQuote({
     fromToken,
     toToken,
@@ -369,32 +286,17 @@ export async function performTronSwap(
     slippageBps,
   });
 
-  // Execute swap
   return executeTronSwap(quote, keypair, testnet);
 }
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Check if TRON swap is available
- */
 export function isTronSwapAvailable(testnet: boolean): boolean {
-  // SunSwap is only available on mainnet
   return !testnet;
 }
 
-/**
- * Get common tokens for TRON
- */
 export function getCommonTronTokens(): typeof COMMON_TRON_TOKENS {
   return COMMON_TRON_TOKENS;
 }
 
-/**
- * Format TRX amount for display
- */
 export function formatTrxAmount(
   amount: string | bigint,
   decimals: number = 6,
@@ -406,9 +308,6 @@ export function formatTrxAmount(
   return formatted.toFixed(displayDecimals).replace(/\.?0+$/, '');
 }
 
-/**
- * Parse user input amount to raw amount
- */
 export function parseTrxInputAmount(amount: string, decimals: number): string {
   const num = parseFloat(amount);
   if (isNaN(num) || num < 0) {

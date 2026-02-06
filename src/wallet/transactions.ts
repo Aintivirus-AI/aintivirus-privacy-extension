@@ -21,7 +21,6 @@ import { getUnlockedKeypair, getPublicAddress } from './storage';
 import { isValidSolanaAddress } from './keychain';
 import bs58 from 'bs58';
 
-// Transaction helpers build, sign, and broadcast SOL/SPL transactions with retries.
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
@@ -231,15 +230,11 @@ export async function createTransferTransaction(
   }
 }
 
-/**
- * Parse Solana transaction error and return a user-friendly message
- */
 function parseTransactionError(err: unknown): string {
   if (typeof err === 'string') {
     return err;
   }
 
-  // Handle InstructionError format: {"InstructionError":[index,{"Custom":code}]}
   if (typeof err === 'object' && err !== null) {
     const errObj = err as Record<string, unknown>;
 
@@ -249,7 +244,6 @@ function parseTransactionError(err: unknown): string {
       if (typeof errorDetail === 'object' && errorDetail !== null) {
         const detail = errorDetail as Record<string, unknown>;
 
-        // SPL Token program error codes
         if ('Custom' in detail && typeof detail.Custom === 'number') {
           const customCode = detail.Custom;
           switch (customCode) {
@@ -284,14 +278,12 @@ function parseTransactionError(err: unknown): string {
           }
         }
 
-        // Other instruction errors
         if ('InsufficientFunds' in detail) {
           return 'Insufficient SOL balance for transaction fees.';
         }
       }
     }
 
-    // Generic error with message field
     if ('message' in errObj && typeof errObj.message === 'string') {
       return errObj.message;
     }
@@ -381,7 +373,6 @@ export async function sendSol(params: SendTransactionParams): Promise<SendTransa
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        // Log transaction error details for debugging in development
         if (error instanceof SendTransactionError && process.env.NODE_ENV === 'development') {
           console.debug('[Wallet] Transaction send error logs:', error.logs);
         }
@@ -399,11 +390,9 @@ export async function sendSol(params: SendTransactionParams): Promise<SendTransa
       );
     }
 
-    const confirmResult = await confirmTransaction(signature);
+    await confirmTransaction(signature);
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
-    // Transaction submitted - confirmation status is informational only
-    // The transaction was successfully broadcast regardless of confirmation
     return {
       signature,
       explorerUrl,
@@ -526,12 +515,10 @@ export function formatSolAmount(sol: number, decimals: number = 6): string {
 export function parseSolInput(input: string): number | null {
   const cleaned = input.trim().replace(/,/g, '');
 
-  // Check if the cleaned string is empty
   if (cleaned === '') {
     return null;
   }
 
-  // Validate that it's a valid number format (digits with optional single decimal point)
   const validNumberRegex = /^[0-9]+(\.[0-9]+)?$/;
   if (!validNumberRegex.test(cleaned)) {
     return null;
@@ -645,7 +632,6 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        // Log transaction error details for debugging in development
         if (error instanceof SendTransactionError && process.env.NODE_ENV === 'development') {
           console.debug('[Wallet] Token transfer error logs:', error.logs);
         }
@@ -663,11 +649,9 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
       );
     }
 
-    const confirmResult = await confirmTransaction(signature);
+    await confirmTransaction(signature);
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
-    // Transaction submitted - confirmation status is informational only
-    // The transaction was successfully broadcast regardless of confirmation
     return {
       signature,
       explorerUrl,
@@ -693,67 +677,44 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
   }
 }
 
-// ============================================================================
-// AINTI Store Payment Processing (via Anchor Payment Program)
-// ============================================================================
-
-// Payment Program ID - must match website's NEXT_PUBLIC_SOLANA_PAYMENT_PROGRAM_ID
 const AINTI_PAYMENT_PROGRAM_ID = new PublicKey('tAGZHAnxidA1o7KrZtCHpiCZ69mfSSKju3cLPaXQWQH');
 
-// AINTI Token configuration
 const AINTI_TOKEN_MINT = new PublicKey('BAezfVmia8UYLt4rst6PCU4dvL2i2qHzqn4wGhytpNJW');
 const AINTI_TOKEN_DECIMALS = 6;
 
-// Cache for the computed discriminator
 let cachedDiscriminator: Uint8Array | null = null;
 
-/**
- * Compute Anchor instruction discriminator for a given instruction name
- * Discriminator = SHA256("global:<instruction_name>")[0..8]
- */
 async function computeAnchorDiscriminator(instructionName: string): Promise<Uint8Array> {
   const preimage = `global:${instructionName}`;
   const encoder = new TextEncoder();
   const data = encoder.encode(preimage);
-  
-  // Use Web Crypto API to compute SHA256
+
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = new Uint8Array(hashBuffer);
-  
-  // Return first 8 bytes
+
   return hashArray.slice(0, 8);
 }
 
-/**
- * Get the process_payment instruction discriminator (cached after first computation)
- */
 async function getProcessPaymentDiscriminator(): Promise<Uint8Array> {
   if (cachedDiscriminator) {
     return cachedDiscriminator;
   }
-  
+
   cachedDiscriminator = await computeAnchorDiscriminator('process_payment');
-  
-  // Log for debugging
+
   if (process.env.NODE_ENV !== 'production') {
     console.log('[Payment] Computed discriminator:', Array.from(cachedDiscriminator));
   }
-  
+
   return cachedDiscriminator;
 }
 
 export interface ProcessStorePaymentParams {
   orderId: string;
-  amount: number; // Human-readable AINTI amount (e.g., 100.5)
+  amount: number;
 }
 
-/**
- * Convert order ID string to [u8; 32] array
- * Must match website's implementation in aintivirus-payment-solana.ts
- */
 function orderIdToBytes32(orderId: string): Uint8Array {
-  // Hash the orderId to get a 32-byte array
-  // Using the same approach as the website: btoa(orderId).slice(0, 32).padEnd(32, '0')
   const hash = new Uint8Array(32);
   const hashStr = btoa(orderId).slice(0, 32).padEnd(32, '0');
   
@@ -764,10 +725,6 @@ function orderIdToBytes32(orderId: string): Uint8Array {
   return hash;
 }
 
-/**
- * Derive Payment Vault PDA
- * Seeds: ['payment_vault']
- */
 function derivePaymentVaultPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('payment_vault')],
@@ -775,10 +732,6 @@ function derivePaymentVaultPDA(): [PublicKey, number] {
   );
 }
 
-/**
- * Derive Payment Record PDA from order ID
- * Seeds: ['payment', orderId bytes32]
- */
 function derivePaymentRecordPDA(orderId: string): [PublicKey, number] {
   const orderIdBytes = orderIdToBytes32(orderId);
   return PublicKey.findProgramAddressSync(
@@ -787,57 +740,28 @@ function derivePaymentRecordPDA(orderId: string): [PublicKey, number] {
   );
 }
 
-/**
- * Extract treasury wallet from payment vault account data
- * 
- * Vault structure:
- * - 8 bytes: Anchor discriminator
- * - 32 bytes: authority (PublicKey)
- * - 32 bytes: treasury_wallet (PublicKey)  <-- We want this
- * - 32 bytes: ainti_token_mint (PublicKey)
- * - 8 bytes: total_volume (u64)
- * - 8 bytes: payment_count (u64)
- * - 1 byte: is_paused (bool)
- * - 1 byte: bump (u8)
- */
 function extractTreasuryFromVaultData(data: Buffer): PublicKey {
   if (data.length < 72) {
     throw new Error('Payment vault data too short');
   }
-  // Skip 8-byte discriminator and 32-byte authority
-  // Treasury wallet starts at byte 40 and is 32 bytes
   return new PublicKey(data.slice(40, 72));
 }
 
-/**
- * Build processPayment instruction data
- * Format: discriminator (8) + orderId (32) + amount (8, little-endian u64)
- */
 async function buildProcessPaymentInstructionData(orderId: string, amount: bigint): Promise<Buffer> {
   const orderIdBytes = orderIdToBytes32(orderId);
   const discriminator = await getProcessPaymentDiscriminator();
-  
-  // Instruction data: discriminator (8) + orderId (32) + amount (8)
+
   const data = Buffer.alloc(8 + 32 + 8);
-  
-  // Write discriminator
+
   data.set(discriminator, 0);
-  
-  // Write orderId bytes
+
   data.set(orderIdBytes, 8);
-  
-  // Write amount as little-endian u64
+
   data.writeBigUInt64LE(amount, 40);
-  
+
   return data;
 }
 
-/**
- * Process payment through the AINTI Payment Program
- * 
- * This creates an on-chain PaymentRecord that the backend uses to verify payments.
- * Unlike a simple token transfer, this ties the payment to a specific order ID.
- */
 export async function processStorePayment(
   params: ProcessStorePaymentParams
 ): Promise<SendTransactionResult> {
@@ -861,15 +785,12 @@ export async function processStorePayment(
 
   try {
     const connection = await getCurrentConnection();
-    
-    // Convert amount to smallest unit (u64)
+
     const amountRaw = BigInt(Math.floor(amount * Math.pow(10, AINTI_TOKEN_DECIMALS)));
 
-    // Derive PDAs
     const [paymentVaultPDA] = derivePaymentVaultPDA();
     const [paymentRecordPDA] = derivePaymentRecordPDA(orderId);
 
-    // Log for debugging
     if (process.env.NODE_ENV !== 'production') {
       console.log('[Payment] Processing payment:', {
         orderId,
@@ -881,7 +802,6 @@ export async function processStorePayment(
       });
     }
 
-    // Get payment vault account to find treasury wallet
     const vaultAccount = await connection.getAccountInfo(paymentVaultPDA);
     if (!vaultAccount) {
       throw new WalletError(
@@ -890,19 +810,15 @@ export async function processStorePayment(
       );
     }
 
-    // Log vault data for debugging
     if (process.env.NODE_ENV !== 'production') {
       console.log('[Payment] Vault account data length:', vaultAccount.data.length);
     }
 
-    // Extract treasury wallet from vault data
     const treasuryWallet = extractTreasuryFromVaultData(vaultAccount.data);
 
-    // Get token accounts
     const buyerTokenAccount = getAssociatedTokenAddressSync(AINTI_TOKEN_MINT, keypair.publicKey);
     const treasuryTokenAccount = getAssociatedTokenAddressSync(AINTI_TOKEN_MINT, treasuryWallet);
 
-    // Log accounts for debugging
     if (process.env.NODE_ENV !== 'production') {
       console.log('[Payment] Accounts:', {
         buyer: keypair.publicKey.toBase58(),
@@ -913,10 +829,8 @@ export async function processStorePayment(
       });
     }
 
-    // Build instruction data (async - computes discriminator on first call)
     const instructionData = await buildProcessPaymentInstructionData(orderId, amountRaw);
 
-    // Build the processPayment instruction
     const instruction = new TransactionInstruction({
       programId: AINTI_PAYMENT_PROGRAM_ID,
       keys: [
@@ -932,7 +846,6 @@ export async function processStorePayment(
       data: instructionData,
     });
 
-    // Build transaction
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
     const transaction = new Transaction();
     transaction.add(instruction);
@@ -940,7 +853,6 @@ export async function processStorePayment(
     transaction.feePayer = keypair.publicKey;
     transaction.lastValidBlockHeight = lastValidBlockHeight;
 
-    // Simulate first
     const simulation = await simulateTransaction(transaction);
     if (!simulation.success) {
       throw new WalletError(
@@ -949,10 +861,8 @@ export async function processStorePayment(
       );
     }
 
-    // Sign transaction
     transaction.sign(keypair);
 
-    // Send with retries
     let signature: string | null = null;
     let lastError: Error | null = null;
 
@@ -967,7 +877,6 @@ export async function processStorePayment(
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        // Always log payment errors for debugging
         console.error('[Payment] Transaction error:', lastError.message);
         if (error instanceof SendTransactionError) {
           console.error('[Payment] Transaction logs:', error.logs);
@@ -980,15 +889,12 @@ export async function processStorePayment(
     }
 
     if (!signature) {
-      // Parse the error to provide better messages
       const errorMsg = lastError?.message || 'Unknown error';
-      
-      // Check for specific program errors
+
       if (errorMsg.includes('custom program error: 0x')) {
         const hexMatch = errorMsg.match(/0x([0-9a-fA-F]+)/);
         if (hexMatch) {
           const errorCode = parseInt(hexMatch[1], 16);
-          // Anchor errors start at 6000
           if (errorCode >= 6000) {
             const anchorErrors: Record<number, string> = {
               6000: 'Payment system is paused',
@@ -1000,7 +906,6 @@ export async function processStorePayment(
             const friendlyMsg = anchorErrors[errorCode] || `Payment program error (code ${errorCode})`;
             throw new WalletError(WalletErrorCode.TRANSACTION_FAILED, friendlyMsg);
           }
-          // Token program errors
           if (errorCode === 1) {
             throw new WalletError(WalletErrorCode.INSUFFICIENT_FUNDS, 'Insufficient AINTI token balance');
           }
@@ -1013,7 +918,6 @@ export async function processStorePayment(
       );
     }
 
-    // Confirm transaction
     await confirmTransaction(signature);
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
@@ -1028,7 +932,6 @@ export async function processStorePayment(
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    // Provide user-friendly error messages
     if (errorMessage.includes('InsufficientFundsForRent')) {
       throw new WalletError(
         WalletErrorCode.INSUFFICIENT_FUNDS,

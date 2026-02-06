@@ -1,7 +1,5 @@
 import type { EVMChainConfig, EVMChainId, SolanaChainConfig } from './types';
 
-// Chain configuration data (RPC urls, explorers, derivation paths) for Solana/EVM networks.
-
 export const EVM_CHAINS: Record<EVMChainId, EVMChainConfig> = {
   ethereum: {
     chainId: 1,

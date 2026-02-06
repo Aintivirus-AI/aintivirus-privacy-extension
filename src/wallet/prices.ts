@@ -1,8 +1,5 @@
 import { priceDedup, priceKey, batchPriceKey, PRICE_CACHE_TTL } from './requestDedup';
 
-// Price helpers cache USD quotes from CoinGecko/Jupiter so the wallet UI can
-// display native token valuations without flooding the APIs.
-
 const COINGECKO_SIMPLE_PRICE_API = 'https://api.coingecko.com/api/v3/simple/price';
 const COINGECKO_TOKEN_PRICE_SOLANA_API =
   'https://api.coingecko.com/api/v3/simple/token_price/solana';
@@ -25,47 +22,38 @@ const ETH_CACHE_KEY = 'ethereum-native';
 
 const BNB_CACHE_KEY = 'bnb-native';
 
-// Map of ALL chain IDs to their CoinGecko IDs (including non-EVM chains)
 const CHAIN_COINGECKO_IDS: Record<string, string> = {
-  // EVM chains
   ethereum: 'ethereum',
   bnb: 'binancecoin',
   polygon: 'polygon-ecosystem-token',
-  arbitrum: 'ethereum', // Arbitrum uses ETH
-  optimism: 'ethereum', // Optimism uses ETH
-  base: 'ethereum', // Base uses ETH
+  arbitrum: 'ethereum',
+  optimism: 'ethereum',
+  base: 'ethereum',
   avalanche: 'avalanche-2',
-  // Bitcoin family
   bitcoin: 'bitcoin',
   bitcoincash: 'bitcoin-cash',
   litecoin: 'litecoin',
   zcash: 'zcash',
-  // Other chains
   tron: 'tron',
   monero: 'monero',
 };
 
-// Map of ALL chain IDs to their cache keys
 const CHAIN_CACHE_KEYS: Record<string, string> = {
-  // EVM chains
   ethereum: ETH_CACHE_KEY,
   bnb: BNB_CACHE_KEY,
   polygon: 'polygon-native',
-  arbitrum: ETH_CACHE_KEY, // Arbitrum uses ETH
-  optimism: ETH_CACHE_KEY, // Optimism uses ETH
-  base: ETH_CACHE_KEY, // Base uses ETH
+  arbitrum: ETH_CACHE_KEY,
+  optimism: ETH_CACHE_KEY,
+  base: ETH_CACHE_KEY,
   avalanche: 'avalanche-native',
-  // Bitcoin family
   bitcoin: 'bitcoin-native',
   bitcoincash: 'bitcoincash-native',
   litecoin: 'litecoin-native',
   zcash: 'zcash-native',
-  // Other chains
   tron: 'tron-native',
   monero: 'monero-native',
 };
 
-// Legacy aliases for backward compatibility
 const EVM_CHAIN_COINGECKO_IDS = CHAIN_COINGECKO_IDS;
 const EVM_CHAIN_CACHE_KEYS = CHAIN_CACHE_KEYS;
 
@@ -124,7 +112,6 @@ export async function getSolPrice(): Promise<number | null> {
   return result?.price ?? null;
 }
 
-// Helper to store price in cache
 function storePriceInCache(
   data: CoinGeckoPriceData,
   coingeckoId: string,
@@ -147,19 +134,18 @@ function storePriceInCache(
 
 async function fetchBatchedNativePrices(): Promise<void> {
   try {
-    // Fetch all native token prices in one request - includes all supported chains
     const allIds = [
-      SOL_COINGECKO_ID,      // solana
-      ETH_COINGECKO_ID,      // ethereum
-      BNB_COINGECKO_ID,      // binancecoin
-      'polygon-ecosystem-token', // polygon (POL - formerly MATIC)
-      'avalanche-2',         // avalanche
-      'bitcoin',             // bitcoin
-      'bitcoin-cash',        // bitcoin cash
-      'litecoin',            // litecoin
-      'zcash',               // zcash
-      'tron',                // tron
-      'monero',              // monero
+      SOL_COINGECKO_ID,
+      ETH_COINGECKO_ID,
+      BNB_COINGECKO_ID,
+      'polygon-ecosystem-token',
+      'avalanche-2',
+      'bitcoin',
+      'bitcoin-cash',
+      'litecoin',
+      'zcash',
+      'tron',
+      'monero',
     ];
     const response = await fetchWithTimeout(
       `${COINGECKO_SIMPLE_PRICE_API}?ids=${allIds.join(',')}&vs_currencies=usd&include_24hr_change=true`,
@@ -172,10 +158,8 @@ async function fetchBatchedNativePrices(): Promise<void> {
     const data: CoinGeckoPriceData = await response.json();
     const now = Date.now();
 
-    // Store SOL price (uses special mint address as key)
     storePriceInCache(data, SOL_COINGECKO_ID, SOL_MINT, now);
     
-    // Store all chain prices using the mapping
     storePriceInCache(data, 'ethereum', ETH_CACHE_KEY, now);
     storePriceInCache(data, 'binancecoin', BNB_CACHE_KEY, now);
     storePriceInCache(data, 'polygon-ecosystem-token', 'polygon-native', now);
@@ -187,7 +171,6 @@ async function fetchBatchedNativePrices(): Promise<void> {
     storePriceInCache(data, 'tron', 'tron-native', now);
     storePriceInCache(data, 'monero', 'monero-native', now);
   } catch {
-    // Batch price fetch failed; caller will handle missing prices
   }
 }
 
@@ -284,10 +267,6 @@ export async function getEthPriceWithChange(): Promise<PriceWithChange | null> {
   );
 }
 
-/**
- * Get native token price for any chain (EVM or non-EVM)
- * @param chainId - The chain ID (e.g., 'bnb', 'polygon', 'ethereum', 'bitcoin', 'tron', 'monero')
- */
 export async function getChainNativePriceWithChange(chainId: string): Promise<PriceWithChange | null> {
   return getEvmNativePriceWithChange(chainId);
 }
@@ -326,7 +305,6 @@ export async function getEvmNativePriceWithChange(evmChainId: string): Promise<P
           };
         }
 
-        // Fall back to ETH price if chain-specific price not found
         const ethCached = priceCache.get(ETH_CACHE_KEY);
         const ethCached24h = priceCache.get(`${ETH_CACHE_KEY}_24h`);
         if (ethCached) {
@@ -397,7 +375,6 @@ async function getJupiterTokenPrices(mints: string[]): Promise<Map<string, numbe
       }
     }
   } catch {
-    // Jupiter API errors are non-fatal; return partial results
   }
 
   return result;
@@ -455,7 +432,6 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
       }
     }
   } catch {
-    // DexScreener API errors are non-fatal; return partial results
   }
 
   return result;
@@ -594,7 +570,6 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
               }
             }
           } catch {
-            // CoinGecko Ethereum API errors are non-fatal; return partial results
           }
         }
       }

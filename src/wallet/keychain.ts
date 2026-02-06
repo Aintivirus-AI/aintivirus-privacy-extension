@@ -12,9 +12,6 @@ import {
 } from './types';
 import { DERIVATION_PATHS } from './chains/config';
 
-// Key derivation utilities for Solana and EVM wallets, including mnemonic
-// generation and address validation.
-
 export interface EVMKeypair {
   address: string;
 

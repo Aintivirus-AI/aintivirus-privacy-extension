@@ -1,4 +1,3 @@
-// Chain-specific type definitions shared between Solana and EVM adapters.
 export type ChainType = 'solana' | 'evm';
 
 export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';

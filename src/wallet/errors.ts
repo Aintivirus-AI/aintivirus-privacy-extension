@@ -1,7 +1,5 @@
 import { WalletError, WalletErrorCode } from './types';
 
-// Provides user-friendly text, categorization, and retry helpers for wallet
-// errors so the UI can present consistent messages and failure behavior.
 const ERROR_MESSAGES: Record<WalletErrorCode, string> = {
   [WalletErrorCode.WALLET_NOT_INITIALIZED]:
     'No wallet found. Please create or import a wallet first.',
@@ -227,7 +225,6 @@ export function logError(error: unknown, context?: string, level: LogLevel = 'er
 
   const logMessage = `${prefix}${contextStr} ${message}${code ? ` (${code})` : ''}`;
 
-  // Only log in development mode to avoid exposing sensitive info in production
   if (process.env.NODE_ENV === 'development') {
     switch (level) {
       case 'debug':

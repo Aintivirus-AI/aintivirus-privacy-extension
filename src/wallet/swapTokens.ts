@@ -1,27 +1,14 @@
-/**
- * Dynamic Token List Services for Swap
- * 
- * Provides token discovery and search for:
- * - Solana (via DexScreener API)
- * - EVM chains (via ParaSwap tokens API)
- */
-
 import type { EVMChainId } from './chains/types';
 import { getTokenMetadata } from './chains/evm/tokens';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface SwapToken {
-  address: string; // mint for Solana, contract address for EVM
+  address: string;
   symbol: string;
   name: string;
   decimals: number;
   logoUri: string;
   chainId?: string;
   verified?: boolean;
-  // Optional: balance info if user holds this token
   balance?: string;
   usdValue?: number;
 }
@@ -34,15 +21,8 @@ interface ParaSwapToken {
   network?: number;
 }
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-// ParaSwap Token API - for EVM tokens (may be geo-blocked in some countries)
 const PARASWAP_TOKEN_API = 'https://api.paraswap.io/tokens';
 
-// Fallback: TrustWallet token lists on jsDelivr CDN (works globally, no geo-blocking)
-// These are static JSON files served via CDN, so they work even in OFAC-sanctioned countries
 const TRUSTWALLET_TOKEN_LISTS: Record<EVMChainId, string> = {
   ethereum: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/tokenlist.json',
   polygon: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/tokenlist.json',
@@ -52,7 +32,6 @@ const TRUSTWALLET_TOKEN_LISTS: Record<EVMChainId, string> = {
   bnb: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/smartchain/tokenlist.json',
 };
 
-// Chain ID mapping for ParaSwap
 const PARASWAP_CHAIN_IDS: Record<EVMChainId, number> = {
   ethereum: 1,
   polygon: 137,
@@ -62,23 +41,16 @@ const PARASWAP_CHAIN_IDS: Record<EVMChainId, number> = {
   bnb: 56,
 };
 
-// API timeout
 const API_TIMEOUT = 15000;
 
-// Cache duration (5 minutes)
 const CACHE_DURATION = 5 * 60 * 1000;
 
-// Token list caches
 interface TokenCache {
   tokens: SwapToken[];
   timestamp: number;
 }
 
 const tokenCache: Map<string, TokenCache> = new Map();
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 async function fetchWithTimeout(url: string, timeout: number = API_TIMEOUT): Promise<Response> {
   const controller = new AbortController();
@@ -106,7 +78,6 @@ function isCacheValid(cache: TokenCache | undefined): boolean {
   return Date.now() - cache.timestamp < CACHE_DURATION;
 }
 
-// DexScreener chain IDs for logo fetching
 const DEXSCREENER_CHAIN_IDS: Record<EVMChainId, string> = {
   ethereum: 'ethereum',
   polygon: 'polygon',
@@ -116,17 +87,12 @@ const DEXSCREENER_CHAIN_IDS: Record<EVMChainId, string> = {
   bnb: 'bsc',
 };
 
-/**
- * Try to fetch token logo from multiple sources
- * This helps for tokens not in standard lists
- */
 async function fetchTokenLogo(
   address: string,
   chainId: EVMChainId
 ): Promise<string | undefined> {
   const dexScreenerChain = DEXSCREENER_CHAIN_IDS[chainId];
   
-  // Try DexScreener first - has logos for many DEX-listed tokens
   if (dexScreenerChain) {
     try {
       const response = await fetchWithTimeout(
@@ -135,10 +101,8 @@ async function fetchTokenLogo(
       );
       if (response.ok) {
         const data = await response.json();
-        // DexScreener returns pairs array with token info
         if (data.pairs && data.pairs.length > 0) {
           const pair = data.pairs[0];
-          // Check baseToken and quoteToken for the logo
           if (pair.baseToken?.address?.toLowerCase() === address.toLowerCase() && pair.info?.imageUrl) {
             return pair.info.imageUrl;
           }
@@ -148,11 +112,9 @@ async function fetchTokenLogo(
         }
       }
     } catch {
-      // DexScreener failed, continue to next source
     }
   }
   
-  // Try CoinGecko by contract address
   try {
     const cgPlatforms: Record<EVMChainId, string> = {
       ethereum: 'ethereum',
@@ -176,20 +138,11 @@ async function fetchTokenLogo(
       }
     }
   } catch {
-    // CoinGecko failed, continue
   }
   
   return undefined;
 }
 
-// ============================================================================
-// Solana Token Functions (DexScreener-based)
-// ============================================================================
-
-/**
- * Get popular/default Solana tokens
- * Returns hardcoded popular tokens - reliable and fast
- */
 export async function fetchSolanaTokens(): Promise<SwapToken[]> {
   const cacheKey = getCacheKey('solana');
   const cached = tokenCache.get(cacheKey);
@@ -198,38 +151,25 @@ export async function fetchSolanaTokens(): Promise<SwapToken[]> {
     return cached!.tokens;
   }
 
-  // Return popular tokens (hardcoded for reliability)
   const tokens = getDefaultSolanaTokens();
   
-  // Cache the results
   tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
 
   return tokens;
 }
 
-// DexScreener API for searching any token
 const DEXSCREENER_SEARCH_API = 'https://api.dexscreener.com/latest/dex/search';
 const DEXSCREENER_TOKEN_API = 'https://api.dexscreener.com/latest/dex/tokens';
 
-// Jupiter Token API for token metadata (decimals, name, etc.)
 const JUPITER_TOKEN_API = 'https://tokens.jup.ag/token';
 
-/**
- * Get token logo from DexScreener's info or fallback to Jupiter CDN
- */
 function getDexScreenerLogo(pair: { info?: { imageUrl?: string }; baseToken: { address: string; symbol: string } }): string {
-  // DexScreener provides image URL in pair.info.imageUrl
   if (pair.info?.imageUrl) {
     return pair.info.imageUrl;
   }
-  // Fallback to Jupiter CDN
   return `https://img.jup.ag/tokens/${pair.baseToken.address}`;
 }
 
-/**
- * Fetch token decimals from Jupiter API
- * This is crucial for correct swap calculations
- */
 async function getTokenDecimalsFromJupiter(address: string): Promise<number | null> {
   try {
     const response = await fetchWithTimeout(
@@ -244,7 +184,6 @@ async function getTokenDecimalsFromJupiter(address: string): Promise<number | nu
       }
     }
   } catch {
-    // Jupiter lookup failed
   }
   return null;
 }
@@ -278,13 +217,10 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
     for (const pair of pairs) {
       if (pair.chainId !== 'solana') continue;
       
-      // If searching by address, only return exact matches
       if (isAddressQuery) {
-        // Check both baseToken and quoteToken for exact address match
         if (pair.baseToken?.address === query.trim()) {
           if (!seenAddresses.has(pair.baseToken.address)) {
             seenAddresses.add(pair.baseToken.address);
-            // Fetch correct decimals from Jupiter (pump.fun tokens are typically 6 decimals)
             const decimals = await getTokenDecimalsFromJupiter(pair.baseToken.address) ?? 6;
             tokens.push({
               address: pair.baseToken.address,
@@ -302,7 +238,6 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
         if (pair.quoteToken?.address === query.trim()) {
           if (!seenAddresses.has(pair.quoteToken.address)) {
             seenAddresses.add(pair.quoteToken.address);
-            // Fetch correct decimals from Jupiter
             const decimals = await getTokenDecimalsFromJupiter(pair.quoteToken.address) ?? 6;
             tokens.push({
               address: pair.quoteToken.address,
@@ -319,16 +254,15 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
         continue;
       }
       
-      // For non-address search, add base token if not seen
       if (pair.baseToken && !seenAddresses.has(pair.baseToken.address)) {
         seenAddresses.add(pair.baseToken.address);
         tokens.push({
           address: pair.baseToken.address,
           symbol: pair.baseToken.symbol,
           name: pair.baseToken.name || pair.baseToken.symbol,
-          decimals: 6, // Default to 6 for pump.fun tokens, will be enriched below
+          decimals: 6,
           logoUri: getDexScreenerLogo(pair),
-          verified: false, // DexScreener tokens are not verified by default
+          verified: false,
           chainId: 'solana',
         });
       }
@@ -351,13 +285,8 @@ async function searchDexScreener(query: string): Promise<SwapToken[]> {
   }
 }
 
-/**
- * Check if a string looks like a Solana address (base58 encoded, 32-44 chars)
- * Solana addresses use base58 characters: 1-9, A-H, J-N, P-Z, a-k, m-z (no 0, I, O, l)
- */
 function isSolanaAddress(str: string): boolean {
   if (str.length < 32 || str.length > 44) return false;
-  // Base58 alphabet (no 0, I, O, l)
   const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
   return base58Regex.test(str);
 }
@@ -371,27 +300,21 @@ export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
   const normalizedQuery = trimmedQuery.toLowerCase();
   
   if (!trimmedQuery) {
-    // Return default tokens when no query
     return getDefaultSolanaTokens();
   }
 
-  // Check if it's an address search (Solana addresses are base58, case-sensitive)
-  // IMPORTANT: Don't lowercase the address - Solana addresses are case-sensitive!
   if (isSolanaAddress(trimmedQuery)) {
-    // Try to fetch token info for the address (use original case)
     const tokenInfo = await fetchSolanaTokenByAddress(trimmedQuery);
     if (tokenInfo) return [tokenInfo];
     
-    // If DexScreener didn't find it, try Jupiter API as fallback
     const jupiterToken = await fetchTokenFromJupiter(trimmedQuery);
     if (jupiterToken) return [jupiterToken];
     
     return [];
   }
 
-  // Check if searching for native SOL (DexScreener doesn't return native tokens)
   const defaultTokens = getDefaultSolanaTokens();
-  const solToken = defaultTokens[0]; // SOL is first in the list
+  const solToken = defaultTokens[0];
   const solMatches = normalizedQuery === 'sol' || 
                      normalizedQuery === 'solana' ||
                      'solana'.startsWith(normalizedQuery) ||
@@ -410,8 +333,7 @@ export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
     }
   }
 
-  // Also check for other default tokens (USDC, USDT, JUP, BONK) by name/symbol
-  for (const token of defaultTokens.slice(1)) { // Skip SOL, already handled
+  for (const token of defaultTokens.slice(1)) {
     const matches = token.symbol.toLowerCase().startsWith(normalizedQuery) ||
                     token.name.toLowerCase().startsWith(normalizedQuery);
     if (matches && !results.some(t => t.address === token.address)) {
@@ -419,7 +341,6 @@ export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
     }
   }
 
-  // Sort: exact symbol match first, then by symbol starts with query
   return results.sort((a, b) => {
     const aExact = a.symbol.toLowerCase() === normalizedQuery;
     const bExact = b.symbol.toLowerCase() === normalizedQuery;
@@ -436,18 +357,12 @@ export async function searchSolanaTokens(query: string): Promise<SwapToken[]> {
   }).slice(0, 100);
 }
 
-/**
- * Fetch a single Solana token by address (for custom token input)
- * Uses DexScreener for token info and Jupiter for decimals
- */
 export async function fetchSolanaTokenByAddress(address: string): Promise<SwapToken | null> {
-  // First try Jupiter API as it has correct decimals
   const jupiterToken = await fetchTokenFromJupiter(address);
   if (jupiterToken) {
     return jupiterToken;
   }
 
-  // Fallback to DexScreener if Jupiter doesn't have the token
   try {
     const dexResponse = await fetchWithTimeout(
       `${DEXSCREENER_TOKEN_API}/${address}`,
@@ -458,18 +373,14 @@ export async function fetchSolanaTokenByAddress(address: string): Promise<SwapTo
       const data = await dexResponse.json();
       const pairs = data.pairs || [];
       
-      // Find a Solana pair for this token
       const solanaPair = pairs.find((p: { chainId: string }) => p.chainId === 'solana');
       if (solanaPair) {
-        // Determine if this address is base or quote token
         const isBaseToken = solanaPair.baseToken?.address === address;
         const tokenData = isBaseToken ? solanaPair.baseToken : solanaPair.quoteToken;
         
         if (tokenData) {
-          // Get logo from DexScreener info if available
           const logoUri = solanaPair.info?.imageUrl || getTokenLogoUrl(tokenData.address, tokenData.symbol);
           
-          // Fetch correct decimals from Jupiter API (pump.fun tokens are typically 6 decimals)
           const decimals = await getTokenDecimalsFromJupiter(tokenData.address) ?? 6;
           
           return {
@@ -485,16 +396,11 @@ export async function fetchSolanaTokenByAddress(address: string): Promise<SwapTo
       }
     }
   } catch {
-    // DexScreener lookup failed; return null to try other sources
   }
 
   return null;
 }
 
-/**
- * Fetch token metadata from Jupiter API (fallback for DexScreener)
- * Jupiter has comprehensive token data for all tradeable Solana tokens
- */
 async function fetchTokenFromJupiter(address: string): Promise<SwapToken | null> {
   try {
     const response = await fetchWithTimeout(
@@ -533,13 +439,7 @@ function getDefaultSolanaLogo(_symbol: string): string {
   return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%239CA3AF"%3E%3Ccircle cx="12" cy="12" r="10" stroke="%236B7280" stroke-width="1" fill="%231F2937"/%3E%3Ctext x="12" y="16" text-anchor="middle" font-size="10" fill="%239CA3AF"%3E%3F%3C/text%3E%3C/svg%3E';
 }
 
-/**
- * Get token logo URL - prefer Jupiter's CDN which has logos for most tradeable tokens
- * Returns the Jupiter CDN URL for the token address
- */
 function getTokenLogoUrl(address: string, _symbol: string): string {
-  // Jupiter's logo CDN - this endpoint serves logos for all tokens in their registry
-  // Format: https://img.jup.ag/tokens/{address}
   return `https://img.jup.ag/tokens/${address}`;
 }
 
@@ -588,14 +488,6 @@ function getDefaultSolanaTokens(): SwapToken[] {
   ];
 }
 
-// ============================================================================
-// EVM Token Functions (ParaSwap)
-// ============================================================================
-
-/**
- * Fetch tokens from TrustWallet CDN (fallback for geo-blocked users)
- * TrustWallet token lists are static JSON on jsDelivr CDN, which works globally
- */
 async function fetchTrustWalletTokens(chainId: EVMChainId): Promise<SwapToken[]> {
   const listUrl = TRUSTWALLET_TOKEN_LISTS[chainId];
   if (!listUrl) return [];
@@ -605,7 +497,6 @@ async function fetchTrustWalletTokens(chainId: EVMChainId): Promise<SwapToken[]>
     if (!response.ok) return [];
     
     const data = await response.json();
-    // TrustWallet format: { tokens: [{ address, symbol, name, decimals, logoURI }] }
     const tokenList = data.tokens || [];
     
     return tokenList
@@ -619,16 +510,12 @@ async function fetchTrustWalletTokens(chainId: EVMChainId): Promise<SwapToken[]>
         verified: true,
         chainId,
       }))
-      .slice(0, 200); // Limit to 200 tokens for performance
+      .slice(0, 200);
   } catch {
     return [];
   }
 }
 
-/**
- * Fetch all tokens for an EVM chain
- * Tries ParaSwap first, falls back to TrustWallet CDN for geo-blocked regions
- */
 export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<SwapToken[]> {
   const cacheKey = getCacheKey('evm', chainId);
   const cached = tokenCache.get(cacheKey);
@@ -639,7 +526,6 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
 
   let tokens: SwapToken[] = [];
 
-  // Try ParaSwap first (may be geo-blocked in some countries like Venezuela)
   try {
     const networkId = PARASWAP_CHAIN_IDS[chainId];
     const response = await fetchWithTimeout(`${PARASWAP_TOKEN_API}/${networkId}`);
@@ -651,7 +537,7 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
       tokens = tokenList.map((token) => ({
         address: token.address,
         symbol: token.symbol,
-        name: token.symbol, // ParaSwap doesn't always provide name
+        name: token.symbol,
         decimals: token.decimals,
         logoUri: token.img || getDefaultEVMLogo(chainId),
         verified: true,
@@ -669,7 +555,6 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
     tokens = await fetchTrustWalletTokens(chainId);
   }
 
-  // If still empty, use hardcoded defaults
   if (tokens.length === 0) {
     return getDefaultEVMTokens(chainId);
   }
@@ -686,16 +571,11 @@ export async function fetchEVMTokens(chainId: EVMChainId = 'ethereum'): Promise<
     return a.symbol.localeCompare(b.symbol);
   });
 
-  // Cache the results
   tokenCache.set(cacheKey, { tokens, timestamp: Date.now() });
 
   return tokens;
 }
 
-/**
- * Search EVM tokens by symbol, name, or address
- * Includes custom tokens from wallet settings and cached metadata
- */
 export async function searchEVMTokens(
   query: string,
   chainId: EVMChainId = 'ethereum'
@@ -704,10 +584,9 @@ export async function searchEVMTokens(
   const normalizedQuery = query.toLowerCase().trim();
   
   if (!normalizedQuery) {
-    return allTokens.slice(0, 50); // Return top 50 by default
+    return allTokens.slice(0, 50);
   }
 
-  // Get custom tokens from wallet settings (these should always be searchable)
   let customTokens: SwapToken[] = [];
   try {
     const { getWalletSettings, getCachedTokenMetadata } = await import('./storage');
@@ -716,9 +595,7 @@ export async function searchEVMTokens(
       (t) => t.mint.startsWith('0x') && t.mint.length === 42
     );
     
-    // Convert custom tokens to SwapToken format
     for (const ct of evmCustomTokens) {
-      // First check metadata cache for this token
       const cachedMeta = await getCachedTokenMetadata(ct.mint.toLowerCase());
       
       customTokens.push({
@@ -746,7 +623,6 @@ export async function searchEVMTokens(
     );
     if (exactMatch) return [exactMatch];
     
-    // Check if it's a custom token the user already added
     const customMatch = customTokens.find(
       (t) => t.address.toLowerCase() === normalizedQuery
     );
@@ -754,7 +630,6 @@ export async function searchEVMTokens(
       return [customMatch];
     }
     
-    // Check metadata cache before hitting RPC
     try {
       const { getCachedTokenMetadata, saveTokenMetadataToCache } = await import('./storage');
       const cachedMeta = await getCachedTokenMetadata(normalizedQuery);
@@ -777,7 +652,6 @@ export async function searchEVMTokens(
               });
             }
           } catch {
-            // Logo fetch failed, continue without
           }
         }
         
@@ -799,16 +673,13 @@ export async function searchEVMTokens(
     try {
       const metadata = await getTokenMetadata(chainId, false, normalizedQuery);
       
-      // Check if we got valid metadata (not just defaults)
       if (metadata && metadata.symbol !== '???' && metadata.name !== 'Unknown Token') {
-        // If no logo, try to fetch from external sources (DexScreener, CoinGecko)
         let logoUri = metadata.logoUri || '';
         if (!logoUri) {
           try {
             const fetchedLogo = await fetchTokenLogo(normalizedQuery, chainId);
             if (fetchedLogo) {
               logoUri = fetchedLogo;
-              // Cache the logo for future use
               try {
                 const { saveTokenMetadataToCache } = await import('./storage');
                 await saveTokenMetadataToCache(normalizedQuery, {
@@ -864,8 +735,6 @@ export async function searchEVMTokens(
       console.warn('[swapTokens] Failed to fetch on-chain token metadata:', error);
     }
     
-    // If custom match exists but metadata is incomplete, return it anyway
-    // User added it, so they should be able to select it
     if (customMatch) {
       return [customMatch];
     }
@@ -880,7 +749,6 @@ export async function searchEVMTokens(
     return symbolMatch || nameMatch;
   });
   
-  // Also search custom tokens by name/symbol
   const customResults = customTokens.filter((token) => {
     const symbolMatch = token.symbol.toLowerCase().includes(normalizedQuery);
     const nameMatch = token.name.toLowerCase().includes(normalizedQuery);
@@ -922,7 +790,6 @@ function getDefaultEVMLogo(chainId: EVMChainId): string {
   }
 }
 
-// Native token address used by ParaSwap for all EVM chains
 const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
 function getDefaultEVMTokens(chainId: EVMChainId): SwapToken[] {
@@ -1114,13 +981,6 @@ function getDefaultEVMTokens(chainId: EVMChainId): SwapToken[] {
   return commonTokens[chainId] || commonTokens.ethereum;
 }
 
-// ============================================================================
-// Unified Search Functions
-// ============================================================================
-
-/**
- * Search tokens across the appropriate chain
- */
 export async function searchSwapTokens(
   query: string,
   chainType: 'solana' | 'evm',
@@ -1148,9 +1008,6 @@ export async function getPopularTokens(
   return tokens.slice(0, limit);
 }
 
-/**
- * Clear token cache (useful when switching networks)
- */
 export function clearTokenCache(): void {
   tokenCache.clear();
 }

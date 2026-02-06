@@ -2,7 +2,6 @@ import type { EVMChainId } from '../types';
 import { getTransactionCount } from './client';
 import { getPendingTxsForAccount, type PendingEVMTransaction } from './pendingTxStore';
 
-// Nonce utilities ensure pending transactions and on-chain integers stay in sync.
 export interface NonceGapResult {
   hasGap: boolean;
 

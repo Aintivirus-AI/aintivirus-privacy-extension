@@ -1,5 +1,3 @@
-// Utilities for interpreting transaction confirmation progress and mapping it to
-// badge metadata the UI can render.
 export type TxDisplayStatus =
   | 'pending'
   | 'confirming'

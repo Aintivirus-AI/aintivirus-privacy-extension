@@ -1,9 +1,3 @@
-/**
- * Chain Registry Tests
- * 
- * Tests for the chain registry and all registered chains.
- */
-
 import {
   CHAIN_REGISTRY,
   getChain,
@@ -17,7 +11,6 @@ import {
 describe('Chain Registry', () => {
   describe('CHAIN_REGISTRY', () => {
     it('should contain expected chains', () => {
-      // Original chains
       expect(CHAIN_REGISTRY.solana).toBeDefined();
       expect(CHAIN_REGISTRY.ethereum).toBeDefined();
       expect(CHAIN_REGISTRY.polygon).toBeDefined();
@@ -25,7 +18,6 @@ describe('Chain Registry', () => {
       expect(CHAIN_REGISTRY.optimism).toBeDefined();
       expect(CHAIN_REGISTRY.base).toBeDefined();
 
-      // New chains
       expect(CHAIN_REGISTRY.bnb).toBeDefined();
       expect(CHAIN_REGISTRY.bitcoin).toBeDefined();
       expect(CHAIN_REGISTRY.bitcoincash).toBeDefined();
@@ -81,7 +73,7 @@ describe('Chain Registry', () => {
   describe('getAllChainIds', () => {
     it('should return all chain IDs', () => {
       const chainIds = getAllChainIds();
-      expect(chainIds.length).toBeGreaterThanOrEqual(13); // At least the chains we added
+      expect(chainIds.length).toBeGreaterThanOrEqual(13);
     });
   });
 
@@ -94,7 +86,7 @@ describe('Chain Registry', () => {
 
     it('should filter by Bitcoin family', () => {
       const btcChains = getChainsByFamily('bitcoin');
-      expect(btcChains.length).toBe(4); // btc, bch, ltc, zec
+      expect(btcChains.length).toBe(4);
       expect(btcChains.every((c: ChainConfig) => c.family === 'bitcoin')).toBe(true);
     });
 
@@ -177,7 +169,6 @@ describe('Chain Registry', () => {
         expect(tron.symbol).toBe('TRX');
         expect(tron.decimals).toBe(6);
         expect(tron.coinType).toBe(195);
-        // Swap is disabled until SunSwap integration is complete
         expect(tron.swapEnabled).toBe(false);
       });
 

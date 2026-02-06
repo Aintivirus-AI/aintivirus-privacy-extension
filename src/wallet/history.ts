@@ -22,21 +22,13 @@ import {
 import { historyDedup, historyKey, HISTORY_CACHE_TTL } from './requestDedup';
 import { getTokenMetadata } from './tokens';
 
-// Builds Solana transaction history results, merges token transfers, and
-// maintains a small cache so the UI can refresh without hitting RPC too often.
-
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
-/**
- * Get a display-friendly token name with fallback.
- * If symbol is available, use it. Otherwise, use truncated mint address.
- */
 function getTokenDisplayName(symbol: string | undefined | null, mint: string | undefined | null): string {
   if (symbol && symbol.trim()) {
     return symbol;
   }
   if (mint && mint.length > 8) {
-    // Show first 4 and last 4 characters of mint: "EPjF...1v"
     return `${mint.slice(0, 4)}...${mint.slice(-2)}`;
   }
   return 'Token';
@@ -137,11 +129,6 @@ async function fetchHistoryInternal(
   limit: number,
   before?: string,
 ): Promise<TransactionHistoryResult> {
-  // Note: Alchemy's Solana offering doesn't have enhanced transaction APIs like ETH
-  // We use standard RPC calls which work with Alchemy's RPC endpoint (configured in network settings)
-  // This provides the benefit of Alchemy's reliable infrastructure without needing special API methods
-  
-  // Use direct RPC calls for Solana transaction history
   try {
     const connection = await getCurrentConnection();
     const publicKey = new PublicKey(address);
@@ -154,7 +141,6 @@ async function fetchHistoryInternal(
         before: before || undefined,
       });
     } catch {
-      // RPC call failed; continue with empty signatures
     }
 
     let tokenAccountSignatures: ConfirmedSignatureInfo[] = [];
@@ -170,11 +156,9 @@ async function fetchHistoryInternal(
           const sigs = await connection.getSignaturesForAddress(account.pubkey, { limit: 10 });
           tokenAccountSignatures.push(...sigs);
         } catch {
-          // Skip this account on error
         }
       }
     } catch {
-      // Token account history is supplementary; continue without it
     }
 
     const allSignatures = [...walletSignatures];
@@ -286,12 +270,11 @@ async function fetchTransactionDetails(
         item.tokenInfo = await enrichTokenInfo(item.tokenInfo);
       }
 
-      // Enrich swap token info
       if (item.swapInfo) {
         if (item.swapInfo.fromToken.mint) {
           const enrichedFrom = await enrichTokenInfo({
             mint: item.swapInfo.fromToken.mint,
-            decimals: 0, // Not used for swap display
+            decimals: 0,
             amount: item.swapInfo.fromToken.amount,
             symbol: item.swapInfo.fromToken.symbol,
             logoUri: item.swapInfo.fromToken.logoUri,
@@ -302,7 +285,7 @@ async function fetchTransactionDetails(
         if (item.swapInfo.toToken.mint) {
           const enrichedTo = await enrichTokenInfo({
             mint: item.swapInfo.toToken.mint,
-            decimals: 0, // Not used for swap display
+            decimals: 0,
             amount: item.swapInfo.toToken.amount,
             symbol: item.swapInfo.toToken.symbol,
             logoUri: item.swapInfo.toToken.logoUri,
@@ -392,7 +375,6 @@ async function enrichTokenInfo(tokenInfo: ExtractedTokenInfo): Promise<Extracted
         logoUri: customToken.logoUri || tokenInfo.logoUri,
       };
 
-      // Cache this token metadata for future use
       await saveTokenMetadataToCache(mint, {
         symbol: enriched.symbol,
         name: enriched.name,
@@ -413,7 +395,6 @@ async function enrichTokenInfo(tokenInfo: ExtractedTokenInfo): Promise<Extracted
       logoUri: metadata.logoUri || tokenInfo.logoUri,
     };
 
-    // Cache this token metadata for future use
     await saveTokenMetadataToCache(mint, {
       symbol: enriched.symbol,
       name: enriched.name,
@@ -424,7 +405,6 @@ async function enrichTokenInfo(tokenInfo: ExtractedTokenInfo): Promise<Extracted
     return enriched;
   }
 
-  // Check the persistent cache (for tokens that were previously added but now removed)
   try {
     const cachedMetadata = await getCachedTokenMetadata(mint);
     if (cachedMetadata && (cachedMetadata.symbol || cachedMetadata.name)) {
@@ -463,10 +443,9 @@ function parseTransferInfo(
     };
   }
 
-  // Calculate SOL balance change first
   const accountKeys = message.accountKeys;
   const walletIndex = accountKeys.findIndex((key) => key.pubkey.toBase58() === walletAddress);
-  
+
   let solBalanceChange = 0;
   if (walletIndex !== -1) {
     const preBalance = meta.preBalances[walletIndex] || 0;
@@ -476,9 +455,7 @@ function parseTransferInfo(
 
   const tokenTransferInfo = parseTokenTransfer(parsed, walletAddress);
 
-  // Check if this is a swap (token transfer has swap info OR SOL + token change)
   if (tokenTransferInfo) {
-    // If we already detected a token-to-token swap
     if (tokenTransferInfo.swapInfo) {
       return {
         direction: 'self',
@@ -489,17 +466,14 @@ function parseTransferInfo(
         swapInfo: tokenTransferInfo.swapInfo,
       };
     }
-    
-    // Check for SOL <-> Token swap
-    // Significant SOL change (more than just fees, > 0.001 SOL = 1_000_000 lamports)
+
     const significantSolChange = Math.abs(solBalanceChange) > 1_000_000;
-    
+
     if (significantSolChange) {
       const solSent = solBalanceChange < 0;
       const tokenReceived = tokenTransferInfo.direction === 'received';
       const tokenSent = tokenTransferInfo.direction === 'sent';
-      
-      // SOL sent + Token received = Swap SOL -> Token
+
       if (solSent && tokenReceived) {
         const solAmount = (Math.abs(solBalanceChange) - meta.fee) / LAMPORTS_PER_SOL;
         return {
@@ -522,8 +496,7 @@ function parseTransferInfo(
           },
         };
       }
-      
-      // Token sent + SOL received = Swap Token -> SOL
+
       if (tokenSent && !solSent && solBalanceChange > 0) {
         const solAmount = solBalanceChange / LAMPORTS_PER_SOL;
         return {
@@ -547,8 +520,7 @@ function parseTransferInfo(
         };
       }
     }
-    
-    // Regular token transfer (not a swap)
+
     return {
       direction: tokenTransferInfo.direction,
       amount: 0,
@@ -626,10 +598,9 @@ function parseTokenTransfer(
 
   if (!meta) return null;
 
-  // Check for swap first: look for multiple token balance changes (one sent, one received)
   const preTokenBalances = meta.preTokenBalances || [];
   const postTokenBalances = meta.postTokenBalances || [];
-  
+
   if (preTokenBalances.length > 0 || postTokenBalances.length > 0) {
     const allChanges = findAllTokenBalanceChanges(
       preTokenBalances,
@@ -637,18 +608,16 @@ function parseTokenTransfer(
       walletAddress,
       parsed.transaction.message.accountKeys,
     );
-    
-    // Check if this is a swap (has both sent and received token changes)
+
     const sentChanges = allChanges.filter(c => c.direction === 'sent');
     const receivedChanges = allChanges.filter(c => c.direction === 'received');
-    
+
     if (sentChanges.length > 0 && receivedChanges.length > 0) {
-      // This is a swap! Use the first sent and first received
       const sentChange = sentChanges[0];
       const receivedChange = receivedChanges[0];
-      
+
       return {
-        direction: 'self', // Use 'self' to indicate swap
+        direction: 'self',
         counterparty: null,
         tokenInfo: {
           mint: sentChange.mint,
@@ -671,8 +640,7 @@ function parseTokenTransfer(
         },
       };
     }
-    
-    // Not a swap, just a single token transfer
+
     if (allChanges.length > 0) {
       const change = allChanges[0];
       return {
@@ -687,7 +655,6 @@ function parseTokenTransfer(
     }
   }
 
-  // Fall back to instruction parsing for simple transfers
   for (const instruction of instructions) {
     if ('program' in instruction && instruction.program === 'spl-token') {
       const parsedInstruction = instruction as {
@@ -783,7 +750,6 @@ function findAllTokenBalanceChanges(
     }
   }
 
-  // Check for changes in existing tokens
   for (const [mint, postData] of postMap) {
     const preData = preMap.get(mint);
     const preAmount = preData?.uiAmount || 0;
@@ -800,7 +766,6 @@ function findAllTokenBalanceChanges(
     }
   }
 
-  // Check for tokens that were fully sent (no longer in postBalances)
   for (const [mint, preData] of preMap) {
     if (!postMap.has(mint) && preData.uiAmount > 0) {
       changes.push({
@@ -812,7 +777,6 @@ function findAllTokenBalanceChanges(
     }
   }
 
-  // Check for newly received tokens (not in preBalances)
   for (const [mint, postData] of postMap) {
     if (!preMap.has(mint) && postData.uiAmount > 0) {
       changes.push({

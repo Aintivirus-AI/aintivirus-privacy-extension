@@ -4,7 +4,6 @@ import type { UnsignedEVMTransaction } from './transactions';
 import { type PendingEVMTransaction, parseHexBigInt } from './pendingTxStore';
 import { getNumericChainId } from '../config';
 
-// Replacement helpers calculate gas bumps and construct speed-up/cancel requests.
 export const MIN_FEE_BUMP_PERCENT = 10;
 
 export const DEFAULT_BUMP_PERCENT = 15;

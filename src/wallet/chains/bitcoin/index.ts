@@ -1,10 +1,3 @@
-/**
- * Bitcoin-family chain support
- * 
- * Supports Bitcoin, Bitcoin Cash, Litecoin, and Zcash (transparent addresses).
- */
-
-// Types
 export type {
   BitcoinChainId,
   BitcoinAddressType,
@@ -27,7 +20,6 @@ export {
   getBitcoinTxExplorerUrl,
 } from './config';
 
-// Address utilities
 export {
   deriveBitcoinKeypair,
   getBitcoinAddressFromMnemonic,
@@ -35,7 +27,6 @@ export {
   getAllBitcoinAddresses,
 } from './addresses';
 
-// API client
 export {
   getBalance,
   getUtxos,
@@ -55,5 +46,4 @@ export {
   validateTransaction,
 } from './transactions';
 
-// Adapter
 export { BitcoinAdapter, createBitcoinAdapter } from './adapter';

@@ -1,8 +1,3 @@
-/**
- * Bitcoin API Client
- * Uses external APIs (Blockstream, Mempool.space, Blockchair, NOWNodes) for blockchain data
- */
-
 import type { BitcoinChainId, UTXO, BitcoinTransaction, BitcoinBalance, BitcoinFeeEstimate } from './types';
 import { getBitcoinChainConfig } from './config';
 import { legacyToCashAddr } from './addresses';
@@ -22,7 +17,7 @@ interface CacheEntry<T> {
 
 const balanceCache = new Map<string, CacheEntry<BitcoinBalance>>();
 const transactionCache = new Map<string, CacheEntry<BitcoinTransaction[]>>();
-const CACHE_TTL_MS = 30000; // 30 seconds cache
+const CACHE_TTL_MS = 30000;
 
 function getCacheKey(chainId: string, address: string, extra?: string): string {
   return `${chainId}:${address}${extra ? `:${extra}` : ''}`;
