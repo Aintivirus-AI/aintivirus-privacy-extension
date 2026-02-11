@@ -1673,6 +1673,67 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     }
   }, [supportsTokens, activeTab]);
 
+  // Helper to fetch connected sites from dApp permissions
+  const refreshConnectedSites = async () => {
+    try {
+      const permissionsRes = await sendToBackground({
+        type: 'DAPP_GET_PERMISSIONS',
+        payload: undefined,
+      });
+      if (permissionsRes.success && permissionsRes.data) {
+        const permissions = permissionsRes.data as Array<{
+          origin: string;
+          chainType: string;
+          connectedAt: number;
+          accounts: string[];
+        }>;
+        const originMap = new Map<string, ConnectionRecordUI>();
+        for (const perm of permissions) {
+          if (!originMap.has(perm.origin)) {
+            let domain = perm.origin;
+            try {
+              domain = new URL(perm.origin).hostname;
+            } catch {
+              // Use origin as-is
+            }
+            originMap.set(perm.origin, {
+              id: perm.origin,
+              domain,
+              timestamp: perm.connectedAt,
+              approved: true,
+              revoked: false,
+            });
+          }
+        }
+        setConnections(Array.from(originMap.values()));
+      }
+    } catch {
+      // Best effort
+    }
+  };
+
+  // Refresh connected sites when switching to the security tab
+  useEffect(() => {
+    if (activeTab === 'security') {
+      refreshConnectedSites();
+    }
+  }, [activeTab]);
+
+  // Listen for dApp permission changes in real-time (e.g., when a new site is approved
+  // via the approval popup while the extension sidebar is open)
+  useEffect(() => {
+    const listener = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (areaName === 'local' && changes['dappPermissions']) {
+        refreshConnectedSites();
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
   // Clear stale data when switching chains to prevent showing old chain's data
   // This applies to ALL chain switches, not just EVM chains
   useEffect(() => {
@@ -2062,14 +2123,8 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         prevHistorySignatureRef.current = null; // Reset ref
       }
 
-      // Fetch security connections (light operation)
-      const connectionsRes = await sendToBackground({
-        type: 'SECURITY_GET_CONNECTIONS',
-        payload: { limit: 10 },
-      });
-      if (connectionsRes.success && connectionsRes.data) {
-        setConnections(connectionsRes.data as ConnectionRecordUI[]);
-      }
+      // Fetch connected sites from dApp permissions (the actual source of truth)
+      await refreshConnectedSites();
 
       // OPTIMIZATION: Only fetch prices for active chain to reduce API calls
       if (activeChain === 'solana') {
@@ -2406,17 +2461,25 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   };
 
   const handleRevokeConnection = async (domain: string) => {
+    // Find the origin for this domain from current connections
+    const conn = connections.find((c) => c.domain === domain);
+    const origin = conn?.id || domain; // id stores the full origin
+
+    // Revoke the actual dApp permission (this prevents auto-reconnect)
+    await sendToBackground({
+      type: 'DAPP_REVOKE_PERMISSION',
+      payload: { origin },
+    });
+
+    // Also clean up the security connection record
     await sendToBackground({
       type: 'SECURITY_CONNECTION_REVOKE',
       payload: { domain },
     });
-    const connectionsRes = await sendToBackground({
-      type: 'SECURITY_GET_CONNECTIONS',
-      payload: { limit: 10 },
-    });
-    if (connectionsRes.success && connectionsRes.data) {
-      setConnections(connectionsRes.data as ConnectionRecordUI[]);
-    }
+
+    // Refresh is handled automatically by the storage change listener,
+    // but also refresh explicitly for immediate feedback
+    await refreshConnectedSites();
   };
 
   const handleLock = async () => {

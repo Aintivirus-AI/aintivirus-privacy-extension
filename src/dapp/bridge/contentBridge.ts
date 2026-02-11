@@ -23,6 +23,10 @@ const MAX_PENDING_REQUESTS = 100;
 
 const REQUEST_EXPIRY_MS = 5 * 60 * 1000;
 
+// User gesture tracking: only allow connect popups when user recently interacted
+const USER_GESTURE_WINDOW_MS = 5000; // 5 seconds
+let lastUserInteractionTime = 0;
+
 let isInitialized = false;
 
 let currentTabId: number | null = null;
@@ -167,6 +171,8 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
     nonce,
   });
 
+  const isUserInitiated = (Date.now() - lastUserInteractionTime) < USER_GESTURE_WINDOW_MS;
+
   const backgroundMessage: BackgroundMessage = {
     type: 'DAPP_REQUEST',
     payload: {
@@ -180,6 +186,7 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
       tabId: currentTabId,
       favicon: getFavicon(),
       title: document.title,
+      userInitiated: isUserInitiated,
     },
   };
 
@@ -397,6 +404,19 @@ function cleanupAndEnforceLimits(): void {
   }
 }
 
+function setupUserGestureTracking(): void {
+  const gestureEvents = ['click', 'keydown', 'mousedown', 'touchstart', 'pointerdown'];
+  for (const eventType of gestureEvents) {
+    document.addEventListener(
+      eventType,
+      () => {
+        lastUserInteractionTime = Date.now();
+      },
+      true, // capture phase to catch all events
+    );
+  }
+}
+
 export function initializeDAppBridge(): void {
   if (isInitialized) return;
   isInitialized = true;
@@ -407,6 +427,9 @@ export function initializeDAppBridge(): void {
   ) {
     return;
   }
+
+  // Start tracking user gestures to distinguish user-initiated vs auto-connect
+  setupUserGestureTracking();
 
   chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, (response) => {
     if (response && typeof response.tabId === 'number') {

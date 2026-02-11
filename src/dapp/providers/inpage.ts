@@ -86,7 +86,7 @@ function injectSolanaProvider(): AintivirusSolanaProvider | null {
   const provider = createSolanaProvider();
 
   try {
-    // Create our own namespace that's always available
+    // Create our own namespace that's always available for direct access
     Object.defineProperty(window, 'aintivirus', {
       value: {
         solana: provider,
@@ -96,35 +96,11 @@ function injectSolanaProvider(): AintivirusSolanaProvider | null {
       enumerable: true,
     });
 
-    // Try to set window.solana
-    const existingSolanaDescriptor = Object.getOwnPropertyDescriptor(window, 'solana');
-    if (!existingSolanaDescriptor || existingSolanaDescriptor.configurable) {
-      Object.defineProperty(window, 'solana', {
-        value: provider,
-        writable: true,
-        configurable: true,
-        enumerable: true,
-      });
-    }
-
-    // Also try to set window.phantom.solana for Phantom-compatible detection
-    // Many dApps check for window.phantom?.solana
-    try {
-      const existingPhantom = (window as unknown as { phantom?: { solana?: unknown } }).phantom;
-      if (!existingPhantom) {
-        Object.defineProperty(window, 'phantom', {
-          value: { solana: provider },
-          writable: true,
-          configurable: true,
-          enumerable: true,
-        });
-      } else if (!existingPhantom.solana) {
-        // Phantom namespace exists but no solana provider
-        existingPhantom.solana = provider;
-      }
-    } catch {
-      // Can't set phantom namespace, that's okay
-    }
+    // NOTE: We intentionally do NOT set window.solana or window.phantom.solana.
+    // Solana provider discovery should go through Wallet Standard only.
+    // Setting window.solana AND registering via wallet-standard causes duplicate
+    // entries in dApp wallet selection dialogs. Wallet Standard is the modern
+    // standard supported by all major dApp frameworks.
 
     return provider;
   } catch (error) {
@@ -154,7 +130,12 @@ class RegisterWalletEvent extends Event {
   }
 }
 
+// Guard to ensure wallet-standard is only registered once
+let walletStandardRegistered = false;
+
 function registerWalletStandard(solanaProvider: AintivirusSolanaProvider): void {
+  if (walletStandardRegistered) return;
+  walletStandardRegistered = true;
   // Build the wallet object with proper Wallet Standard structure
   const wallet = {
     // Required Wallet Standard properties
@@ -351,44 +332,26 @@ function setupEIP6963ReannounceListener(): void {
 initialize();
 setupEIP6963ReannounceListener();
 
-// Some pages load providers after DOMContentLoaded, so try again
+// Some pages load providers after DOMContentLoaded, so try to re-inject EVM provider.
+// Solana uses wallet-standard only (registered once above), so no re-injection needed.
 document.addEventListener('DOMContentLoaded', () => {
-  // Re-inject if our providers were overwritten or not set
   const existingEth = (window as unknown as { ethereum?: { isAintivirus?: boolean } }).ethereum;
-  const existingSol = (window as unknown as { solana?: { isAintivirus?: boolean } }).solana;
   
-  // If ethereum exists but isn't ours and isn't marked as having us in providers
+  // If ethereum exists but isn't ours, try to re-inject
   if (!existingEth?.isAintivirus) {
     const newProvider = injectEVMProvider();
     if (newProvider) {
       evmProviderInstance = newProvider;
     }
   }
-  
-  // If solana doesn't exist or isn't ours
-  if (!existingSol?.isAintivirus) {
-    const newProvider = injectSolanaProvider();
-    if (newProvider) {
-      solanaProviderInstance = newProvider;
-      registerWalletStandard(newProvider);
-    }
-  }
 });
 
-// Also try after a small delay for SPAs that initialize late
+// Also try EVM re-injection after a small delay for SPAs that initialize late
 setTimeout(() => {
   const existingEth = (window as unknown as { ethereum?: { isAintivirus?: boolean } }).ethereum;
-  const existingSol = (window as unknown as { solana?: { isAintivirus?: boolean } }).solana;
   
   if (!existingEth?.isAintivirus) {
     injectEVMProvider();
-  }
-  
-  if (!existingSol?.isAintivirus) {
-    const newProvider = injectSolanaProvider();
-    if (newProvider) {
-      registerWalletStandard(newProvider);
-    }
   }
 }, 500);
 

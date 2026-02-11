@@ -36,6 +36,7 @@ import {
   enqueue,
   getRequest,
   getAllPendingRequests,
+  getPendingRequestsByOrigin,
   approveRequest,
   rejectRequest,
   cancelRequest,
@@ -62,11 +63,13 @@ interface DAppRequestPayload {
   tabId: number;
   favicon?: string;
   title?: string;
+  userInitiated?: boolean;
 }
 
 const CONNECTED_TABS_KEY = 'dappConnectedTabs';
 
 let approvalWindowId: number | null = null;
+let approvalWindowOrigin: string | null = null;
 
 let connectedTabsCache = new Map<number, { origin: string; chainType: DAppChainType }>();
 
@@ -210,7 +213,7 @@ async function handleDAppRequest(
   payload: DAppRequestPayload,
   sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
-  const { chainType, method, params, origin, tabId, favicon, title } = payload;
+  const { chainType, method, params, origin, tabId, favicon, title, userInitiated } = payload;
 
   if (tabId) {
     await addConnectedTab(tabId, origin, chainType);
@@ -220,29 +223,40 @@ async function handleDAppRequest(
     return await handleReadOnlyMethod(chainType, method, params, origin);
   }
 
+  const approvalType = getApprovalType(method, chainType);
+  const isConnectRequest = approvalType === 'connect';
   const hasExistingPermission = await hasPermission(origin, chainType);
-  const autoApprove = await shouldAutoApprove(origin, chainType);
 
-  if (method === 'eth_requestAccounts' || method === 'connect') {
-    if (hasExistingPermission && autoApprove) {
-      await updateLastAccessed(origin, chainType);
-      const permission = await getPermission(origin, chainType);
+  // For connect requests: auto-approve if any existing permission exists for this origin+chain.
+  // Users shouldn't have to re-approve a site they already connected to.
+  if (isConnectRequest && hasExistingPermission) {
+    await updateLastAccessed(origin, chainType);
+    const permission = await getPermission(origin, chainType);
 
-      // Record in security module for auto-approved connections too
-      if (permission?.accounts[0]) {
-        try {
-          await approveConnection(origin, origin, permission.accounts[0], 'low', [], tabId);
-        } catch (err) {
-          console.error('[DApp Handler] Failed to record auto-approved connection:', err);
-        }
-      }
-
-      if (chainType === 'evm') {
-        return { success: true, data: permission?.accounts || [] };
-      } else {
-        return { success: true, data: { publicKey: permission?.accounts[0] } };
+    // Record in security module for auto-approved connections too
+    if (permission?.accounts[0]) {
+      try {
+        await approveConnection(origin, origin, permission.accounts[0], 'low', [], tabId);
+      } catch (err) {
+        console.error('[DApp Handler] Failed to record auto-approved connection:', err);
       }
     }
+
+    if (chainType === 'evm') {
+      return { success: true, data: permission?.accounts || [] };
+    } else {
+      return { success: true, data: { publicKey: permission?.accounts[0] } };
+    }
+  }
+
+  // For connect requests without user gesture and no existing permission:
+  // silently reject. This prevents dApps from auto-popping the approval on page load.
+  // The popup should only appear when the user clicks a "Connect Wallet" button.
+  if (isConnectRequest && !userInitiated && !hasExistingPermission) {
+    return {
+      success: false,
+      error: 'Connect request requires user interaction',
+    };
   }
 
   if (hasExistingPermission) {
@@ -265,7 +279,17 @@ async function handleDAppRequest(
     title,
   });
 
-  await openApprovalWindow(id);
+  // For connect requests, check if there's already an approval window open for the same origin.
+  // If so, don't open a second window - the first will handle both chains.
+  const hasExistingApprovalForOrigin =
+    isConnectRequest && approvalWindowId !== null && approvalWindowOrigin === origin;
+
+  if (!hasExistingApprovalForOrigin) {
+    await openApprovalWindow(id);
+    if (isConnectRequest) {
+      approvalWindowOrigin = origin;
+    }
+  }
 
   try {
     const result = await promise;
@@ -364,6 +388,9 @@ async function handleDAppApprove(
     switch (request.approvalType) {
       case 'connect':
         result = await processConnectApproval(request, selectedAccounts || [], remember || false);
+        // Auto-approve sibling connect requests from the same origin (e.g., if dApp
+        // requested both EVM and Solana connections, approve the other chain too)
+        await autoApproveSiblingConnects(requestId, request.origin, remember || false);
         break;
 
       case 'signMessage':
@@ -409,7 +436,14 @@ async function handleDAppReject(
 ): Promise<MessageResponse> {
   const { requestId, reason } = payload;
 
+  const request = await getRequest(requestId);
   await rejectRequest(requestId, reason);
+
+  // Also reject sibling connect requests from the same origin
+  if (request && request.approvalType === 'connect') {
+    await rejectSiblingConnects(requestId, request.origin, reason || 'User rejected');
+  }
+
   await closeApprovalWindow();
 
   return { success: true };
@@ -457,6 +491,77 @@ async function processConnectApproval(
     return selectedAccounts;
   } else {
     return { publicKey: selectedAccounts[0] };
+  }
+}
+
+/**
+ * After a user approves a connect request for one chain, auto-approve any other
+ * pending connect requests from the same origin (e.g., if a dApp requested both
+ * EVM and Solana connections, approving one should approve the other too).
+ */
+async function autoApproveSiblingConnects(
+  primaryRequestId: string,
+  origin: string,
+  remember: boolean,
+): Promise<void> {
+  try {
+    const pendingRequests = await getPendingRequestsByOrigin(origin);
+    const siblingConnects = pendingRequests.filter(
+      (r) =>
+        r.id !== primaryRequestId && r.approvalType === 'connect' && r.status === 'pending',
+    );
+
+    if (siblingConnects.length === 0) return;
+
+    // Fetch wallet state to get the correct account for each chain type
+    const walletState = await getWalletStateFromStorage();
+    if (!walletState) return;
+
+    for (const sibling of siblingConnects) {
+      try {
+        let accounts: string[] = [];
+
+        if (sibling.chainType === 'evm' && walletState.evmAddress) {
+          accounts = [walletState.evmAddress];
+        } else if (sibling.chainType === 'solana' && walletState.publicAddress) {
+          accounts = [walletState.publicAddress];
+        }
+
+        if (accounts.length > 0) {
+          const siblingResult = await processConnectApproval(sibling, accounts, remember);
+          await approveRequest(sibling.id, siblingResult);
+        }
+      } catch (err) {
+        // Don't fail the primary request if sibling approval fails
+        console.error('[DApp Handler] Failed to auto-approve sibling connect:', err);
+      }
+    }
+  } catch (err) {
+    console.error('[DApp Handler] Error in autoApproveSiblingConnects:', err);
+  }
+}
+
+/**
+ * After a user rejects a connect request, also reject any other pending
+ * connect requests from the same origin.
+ */
+async function rejectSiblingConnects(
+  primaryRequestId: string,
+  origin: string,
+  reason: string,
+): Promise<void> {
+  try {
+    const pendingRequests = await getPendingRequestsByOrigin(origin);
+    const siblingConnects = pendingRequests.filter(
+      (r) =>
+        r.id !== primaryRequestId && r.approvalType === 'connect' && r.status === 'pending',
+    );
+
+    for (const sibling of siblingConnects) {
+      await rejectRequest(sibling.id, reason);
+    }
+  } catch (err) {
+    console.error('[DApp Handler] Error in rejectSiblingConnects:', err);
   }
 }
 
@@ -734,12 +839,19 @@ async function openApprovalWindow(requestId: string): Promise<void> {
 
     chrome.windows.onRemoved.addListener(function listener(windowId) {
       if (windowId === approvalWindowId) {
+        const closedOrigin = approvalWindowOrigin;
         approvalWindowId = null;
+        approvalWindowOrigin = null;
         chrome.windows.onRemoved.removeListener(listener);
 
-        getRequest(requestId).then((request) => {
+        getRequest(requestId).then(async (request) => {
           if (request && request.status === 'pending') {
-            rejectRequest(requestId, 'User closed approval window');
+            await rejectRequest(requestId, 'User closed approval window');
+          }
+
+          // Also reject sibling connect requests from the same origin
+          if (closedOrigin && request?.approvalType === 'connect') {
+            await rejectSiblingConnects(requestId, closedOrigin, 'User closed approval window');
           }
         });
       }
@@ -753,6 +865,7 @@ async function closeApprovalWindow(): Promise<void> {
       await chrome.windows.remove(approvalWindowId);
     } catch {}
     approvalWindowId = null;
+    approvalWindowOrigin = null;
   }
 }
 

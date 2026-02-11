@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { QueuedRequest, AccountInfo } from '../../dapp/types';
+import { QueuedRequest, AccountInfo, DAppChainType } from '../../dapp/types';
 import { formatOrigin } from '../../shared/utils/formatOrigin';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -211,11 +211,12 @@ const styles: Record<string, React.CSSProperties> = {
 interface Props {
   request: QueuedRequest;
   accounts: AccountInfo[];
+  allChainTypes?: DAppChainType[];
   onApprove: (selectedAccounts: string[], remember: boolean) => void;
   onReject: (reason?: string) => void;
 }
 
-export function ConnectApproval({ request, accounts, onApprove, onReject }: Props) {
+export function ConnectApproval({ request, accounts, allChainTypes, onApprove, onReject }: Props) {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(
     accounts.filter((a) => a.isActive).map((a) => a.address),
   );
@@ -234,8 +235,8 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
     onApprove(selectedAccounts, remember);
   };
 
-  const getChainBadgeStyle = (): React.CSSProperties => {
-    if (request.chainType === 'solana') {
+  const getChainBadgeStyle = (chainType: DAppChainType): React.CSSProperties => {
+    if (chainType === 'solana') {
       return {
         ...styles.chainBadge,
         background: 'rgba(153, 69, 255, 0.2)',
@@ -248,6 +249,11 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
       color: '#627EEA',
     };
   };
+
+  // Determine all chains being connected (primary + siblings)
+  const chainTypes = allChainTypes && allChainTypes.length > 0
+    ? allChainTypes
+    : [request.chainType];
 
   const formattedOrigin = useMemo(() => formatOrigin(request.origin), [request.origin]);
 
@@ -283,9 +289,13 @@ export function ConnectApproval({ request, accounts, onApprove, onReject }: Prop
           )}
         </div>
         <span style={styles.requestText}>wants to connect to your wallet</span>
-        <span style={getChainBadgeStyle()}>
-          {request.chainType === 'solana' ? 'Solana' : 'Ethereum'}
-        </span>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, justifyContent: 'center' }}>
+          {chainTypes.map((ct) => (
+            <span key={ct} style={getChainBadgeStyle(ct)}>
+              {ct === 'solana' ? 'Solana' : 'Ethereum'}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div style={styles.section}>

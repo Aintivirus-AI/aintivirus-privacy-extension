@@ -3,7 +3,7 @@ import { ConnectApproval } from './components/ConnectApproval';
 import { SignApproval } from './components/SignApproval';
 import { SignTypedDataApproval } from './components/SignTypedDataApproval';
 import { TransactionApproval } from './components/TransactionApproval';
-import { QueuedRequest, AccountInfo } from '../dapp/types';
+import { QueuedRequest, AccountInfo, DAppChainType } from '../dapp/types';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -67,6 +67,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [request, setRequest] = useState<QueuedRequest | null>(null);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [allChainTypes, setAllChainTypes] = useState<DAppChainType[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -103,6 +104,23 @@ export function App() {
 
       setRequest(targetRequest);
 
+      // Detect sibling connect requests from the same origin (e.g., both EVM and Solana)
+      // so we can show a unified approval that covers all chains
+      const chainTypes = new Set<DAppChainType>([targetRequest.chainType]);
+      if (targetRequest.approvalType === 'connect') {
+        const siblingConnects = requests.filter(
+          (r) =>
+            r.origin === targetRequest.origin &&
+            r.id !== targetRequest.id &&
+            r.approvalType === 'connect' &&
+            r.status === 'pending',
+        );
+        for (const sibling of siblingConnects) {
+          chainTypes.add(sibling.chainType);
+        }
+      }
+      setAllChainTypes(Array.from(chainTypes));
+
       const walletResponse = await chrome.runtime.sendMessage({
         type: 'WALLET_GET_STATE',
         payload: undefined,
@@ -114,7 +132,7 @@ export function App() {
         const accountList: AccountInfo[] = [];
 
         // For Solana, use publicAddress (the actual field name in WalletState)
-        if (targetRequest.chainType === 'solana' && walletState.publicAddress) {
+        if (chainTypes.has('solana') && walletState.publicAddress) {
           accountList.push({
             address: walletState.publicAddress,
             label: walletState.activeWalletLabel || walletState.activeAccountName || 'Main Wallet',
@@ -124,7 +142,7 @@ export function App() {
         }
 
         // For EVM, use evmAddress
-        if (targetRequest.chainType === 'evm' && walletState.evmAddress) {
+        if (chainTypes.has('evm') && walletState.evmAddress) {
           accountList.push({
             address: walletState.evmAddress,
             label: walletState.activeWalletLabel || walletState.activeAccountName || 'Main Wallet',
@@ -222,7 +240,8 @@ export function App() {
     <div style={styles.container}>
       <Header />
       <div style={styles.content}>
-        {request && renderApprovalComponent(request, accounts, handleApprove, handleReject)}
+        {request &&
+          renderApprovalComponent(request, accounts, allChainTypes, handleApprove, handleReject)}
       </div>
     </div>
   );
@@ -268,6 +287,7 @@ function isTypedDataRequest(request: QueuedRequest): boolean {
 function renderApprovalComponent(
   request: QueuedRequest,
   accounts: AccountInfo[],
+  allChainTypes: DAppChainType[],
   onApprove: (accounts: string[], remember: boolean) => void,
   onReject: (reason?: string) => void,
 ) {
@@ -279,6 +299,7 @@ function renderApprovalComponent(
         <ConnectApproval
           request={request}
           accounts={accounts}
+          allChainTypes={allChainTypes}
           onApprove={onApprove}
           onReject={onReject}
         />
