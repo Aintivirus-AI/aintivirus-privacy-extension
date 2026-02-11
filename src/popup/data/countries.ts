@@ -9,7 +9,7 @@ export interface Country {
   code: string;       // ISO 3166-1 alpha-2 code
 }
 
-// Full list of 226 countries - matches website data
+// Full list of 216 countries - matches website data
 export const countries: Country[] = [
   { value: 'Afghanistan', label: 'Afghanistan', code: 'AF' },
   { value: 'Albania', label: 'Albania', code: 'AL' },
@@ -427,17 +427,17 @@ export const REGIONS: Record<string, string[]> = {
   ],
   'Africa': [
     // North Africa
-    'Egypt', 'Morocco', 'Algeria', 'Tunisia', 'Libya', 'Sudan', 'South Sudan',
+    'Egypt', 'Morocco', 'Algeria', 'Tunisia', 'South Sudan',
     // West Africa
     'Nigeria', 'Ghana', 'Senegal', "Côte d'Ivoire", 'Cameroon', 'Mali', 'Burkina Faso',
     'Niger', 'Guinea', 'Benin', 'Togo', 'Sierra Leone', 'Liberia', 'Mauritania',
     'Gambia', 'Guinea-Bissau', 'Cabo Verde',
     // East Africa
-    'Kenya', 'Ethiopia', 'Tanzania', 'Uganda', 'Rwanda', 'Burundi', 'Somalia',
-    'Eritrea', 'Djibouti', 'Seychelles', 'Comoros', 'Mauritius', 'Madagascar',
+    'Kenya', 'Ethiopia', 'Tanzania', 'Uganda', 'Rwanda', 'Burundi',
+    'Djibouti', 'Seychelles', 'Comoros', 'Mauritius', 'Madagascar',
     // Central Africa
-    'Congo, Democratic Republic of the', 'Congo, Republic of the',
-    'Central African Republic', 'Chad', 'Gabon', 'Equatorial Guinea',
+    'Congo, Republic of the',
+    'Chad', 'Gabon', 'Equatorial Guinea',
     'Sao Tome and Principe',
     // Southern Africa
     'South Africa', 'Angola', 'Mozambique', 'Zimbabwe', 'Zambia', 'Botswana',
