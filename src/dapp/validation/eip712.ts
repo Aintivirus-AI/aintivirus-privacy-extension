@@ -159,6 +159,11 @@ export function sanitizeTypedDataForDisplay(data: EIP712TypedData): {
 export function detectDangerousPatterns(data: EIP712TypedData): string[] {
   const warnings: string[] = [];
 
+  // Check for missing chainId - signatures without chainId can be replayed across chains
+  if (data.domain.chainId === undefined) {
+    warnings.push('No chainId specified in domain - signature may be valid on multiple chains');
+  }
+
   // Check for suspiciously high numeric values in message
   for (const [key, value] of Object.entries(data.message)) {
     if (typeof value === 'string' && /^\d+$/.test(value)) {

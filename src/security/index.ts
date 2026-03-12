@@ -370,6 +370,4 @@ export {
   getRemoteProgramInfo,
   getProgramRegistryHealth,
   searchPrograms,
-} from './programRegistryRemote';
-
-export { getIdl, decodeInstruction, hasKnownIdl, getIdlCacheStats } from './anchorIdlLoader';
+} from './programRegistryRemote';export { getIdl, decodeInstruction, hasKnownIdl, getIdlCacheStats } from './anchorIdlLoader';

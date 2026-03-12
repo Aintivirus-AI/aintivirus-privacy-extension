@@ -23,7 +23,6 @@ import {
 } from './rpcHealth';
 import { balanceDedup, balanceKey, BALANCE_CACHE_TTL } from './requestDedup';
 
-// Provides resilient Solana RPC execution with failover, caching, and throttling hooks.
 const DEFAULT_COMMITMENT: Commitment = 'confirmed';
 
 const RPC_TIMEOUT = 30000;

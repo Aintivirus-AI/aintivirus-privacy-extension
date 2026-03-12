@@ -21,7 +21,6 @@ import { getUnlockedKeypair, getPublicAddress } from './storage';
 import { isValidSolanaAddress } from './keychain';
 import bs58 from 'bs58';
 
-// Transaction helpers build, sign, and broadcast SOL/SPL transactions with retries.
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
@@ -117,16 +116,12 @@ export function validateAmount(
 
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const totalRequired = amountLamports + feeLamports;
-  const remainingBalance = balanceLamports - totalRequired;
 
   if (totalRequired > balanceLamports) {
     return {
       valid: false,
       error: `Insufficient balance. Need ${(totalRequired / LAMPORTS_PER_SOL).toFixed(6)} SOL`,
     };
-  }
-
-  if (remainingBalance < MIN_RENT_EXEMPT_BALANCE && remainingBalance > 0) {
   }
 
   return { valid: true };
@@ -235,6 +230,68 @@ export async function createTransferTransaction(
   }
 }
 
+function parseTransactionError(err: unknown): string {
+  if (typeof err === 'string') {
+    return err;
+  }
+
+  if (typeof err === 'object' && err !== null) {
+    const errObj = err as Record<string, unknown>;
+
+    if ('InstructionError' in errObj && Array.isArray(errObj.InstructionError)) {
+      const [, errorDetail] = errObj.InstructionError;
+
+      if (typeof errorDetail === 'object' && errorDetail !== null) {
+        const detail = errorDetail as Record<string, unknown>;
+
+        if ('Custom' in detail && typeof detail.Custom === 'number') {
+          const customCode = detail.Custom;
+          switch (customCode) {
+            case 0:
+              return 'Account not rent exempt. Please ensure you have enough SOL.';
+            case 1:
+              return 'Insufficient token balance. Please check your AINTI balance.';
+            case 2:
+              return 'Invalid token mint address.';
+            case 3:
+              return 'Token mint mismatch.';
+            case 4:
+              return 'Token account owner mismatch.';
+            case 5:
+              return 'Fixed supply token - cannot mint more.';
+            case 6:
+              return 'Account already initialized.';
+            case 7:
+              return 'Account not initialized.';
+            case 8:
+              return 'Invalid number of signers.';
+            case 9:
+              return 'Invalid number of required signers.';
+            case 10:
+              return 'Account not initialized as a token account.';
+            case 11:
+              return 'Account not initialized as a mint.';
+            case 12:
+              return 'Insufficient funds for fee. Please add more SOL for transaction fees.';
+            default:
+              return `Token program error (code ${customCode}). Please try again.`;
+          }
+        }
+
+        if ('InsufficientFunds' in detail) {
+          return 'Insufficient SOL balance for transaction fees.';
+        }
+      }
+    }
+
+    if ('message' in errObj && typeof errObj.message === 'string') {
+      return errObj.message;
+    }
+  }
+
+  return JSON.stringify(err);
+}
+
 export async function simulateTransaction(
   transaction: Transaction,
 ): Promise<{ success: boolean; error?: string }> {
@@ -244,14 +301,11 @@ export async function simulateTransaction(
     const simulation = await connection.simulateTransaction(transaction);
 
     if (simulation.value.err) {
-      const errorMessage =
-        typeof simulation.value.err === 'string'
-          ? simulation.value.err
-          : JSON.stringify(simulation.value.err);
+      const errorMessage = parseTransactionError(simulation.value.err);
 
       return {
         success: false,
-        error: `Simulation failed: ${errorMessage}`,
+        error: errorMessage,
       };
     }
 
@@ -319,7 +373,6 @@ export async function sendSol(params: SendTransactionParams): Promise<SendTransa
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        // Log transaction error details for debugging in development
         if (error instanceof SendTransactionError && process.env.NODE_ENV === 'development') {
           console.debug('[Wallet] Transaction send error logs:', error.logs);
         }
@@ -337,11 +390,9 @@ export async function sendSol(params: SendTransactionParams): Promise<SendTransa
       );
     }
 
-    const confirmResult = await confirmTransaction(signature);
+    await confirmTransaction(signature);
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
-    // Transaction submitted - confirmation status is informational only
-    // The transaction was successfully broadcast regardless of confirmation
     return {
       signature,
       explorerUrl,
@@ -464,12 +515,10 @@ export function formatSolAmount(sol: number, decimals: number = 6): string {
 export function parseSolInput(input: string): number | null {
   const cleaned = input.trim().replace(/,/g, '');
 
-  // Check if the cleaned string is empty
   if (cleaned === '') {
     return null;
   }
 
-  // Validate that it's a valid number format (digits with optional single decimal point)
   const validNumberRegex = /^[0-9]+(\.[0-9]+)?$/;
   if (!validNumberRegex.test(cleaned)) {
     return null;
@@ -583,7 +632,6 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        // Log transaction error details for debugging in development
         if (error instanceof SendTransactionError && process.env.NODE_ENV === 'development') {
           console.debug('[Wallet] Token transfer error logs:', error.logs);
         }
@@ -601,11 +649,9 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
       );
     }
 
-    const confirmResult = await confirmTransaction(signature);
+    await confirmTransaction(signature);
     const explorerUrl = await getTransactionExplorerUrl(signature);
 
-    // Transaction submitted - confirmation status is informational only
-    // The transaction was successfully broadcast regardless of confirmation
     return {
       signature,
       explorerUrl,
@@ -627,6 +673,326 @@ export async function sendSPLToken(params: SendSPLTokenParams): Promise<SendTran
     throw new WalletError(
       WalletErrorCode.TRANSACTION_FAILED,
       `Token transfer failed: ${errorMessage}`,
+    );
+  }
+}
+
+// Configure via .env: SOLANA_PAYMENT_PROGRAM_ID, AINTI_TOKEN_SOL_MINT
+// Lazily initialized to avoid crashing at module load when env vars are not set.
+let _aintiPaymentProgramId: PublicKey | null = null;
+let _aintiTokenMint: PublicKey | null = null;
+const AINTI_TOKEN_DECIMALS = 6;
+
+function getAintiPaymentProgramId(): PublicKey {
+  if (!_aintiPaymentProgramId) {
+    const id = process.env.SOLANA_PAYMENT_PROGRAM_ID;
+    if (!id) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'SOLANA_PAYMENT_PROGRAM_ID is not configured. Store payments are unavailable.',
+      );
+    }
+    _aintiPaymentProgramId = new PublicKey(id);
+  }
+  return _aintiPaymentProgramId;
+}
+
+function getAintiTokenMint(): PublicKey {
+  if (!_aintiTokenMint) {
+    const mint = process.env.AINTI_TOKEN_SOL_MINT;
+    if (!mint) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'AINTI_TOKEN_SOL_MINT is not configured. Store payments are unavailable.',
+      );
+    }
+    _aintiTokenMint = new PublicKey(mint);
+  }
+  return _aintiTokenMint;
+}
+
+let cachedDiscriminator: Uint8Array | null = null;
+
+async function computeAnchorDiscriminator(instructionName: string): Promise<Uint8Array> {
+  const preimage = `global:${instructionName}`;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(preimage);
+
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = new Uint8Array(hashBuffer);
+
+  return hashArray.slice(0, 8);
+}
+
+async function getProcessPaymentDiscriminator(): Promise<Uint8Array> {
+  if (cachedDiscriminator) {
+    return cachedDiscriminator;
+  }
+
+  cachedDiscriminator = await computeAnchorDiscriminator('process_payment');
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Payment] Computed discriminator:', Array.from(cachedDiscriminator));
+  }
+
+  return cachedDiscriminator;
+}
+
+export interface ProcessStorePaymentParams {
+  orderId: string;
+  amount: number;
+}
+
+function orderIdToBytes32(orderId: string): Uint8Array {
+  const hash = new Uint8Array(32);
+  const hashStr = btoa(orderId).slice(0, 32).padEnd(32, '0');
+  
+  for (let i = 0; i < 32; i++) {
+    hash[i] = hashStr.charCodeAt(i) % 256;
+  }
+  
+  return hash;
+}
+
+function derivePaymentVaultPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('payment_vault')],
+    getAintiPaymentProgramId(),
+  );
+}
+
+function derivePaymentRecordPDA(orderId: string): [PublicKey, number] {
+  const orderIdBytes = orderIdToBytes32(orderId);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('payment'), Buffer.from(orderIdBytes)],
+    getAintiPaymentProgramId(),
+  );
+}
+
+function extractTreasuryFromVaultData(data: Buffer): PublicKey {
+  if (data.length < 72) {
+    throw new Error('Payment vault data too short');
+  }
+  return new PublicKey(data.slice(40, 72));
+}
+
+async function buildProcessPaymentInstructionData(orderId: string, amount: bigint): Promise<Buffer> {
+  const orderIdBytes = orderIdToBytes32(orderId);
+  const discriminator = await getProcessPaymentDiscriminator();
+
+  const data = Buffer.alloc(8 + 32 + 8);
+
+  data.set(discriminator, 0);
+
+  data.set(orderIdBytes, 8);
+
+  data.writeBigUInt64LE(amount, 40);
+
+  return data;
+}
+
+export async function processStorePayment(
+  params: ProcessStorePaymentParams
+): Promise<SendTransactionResult> {
+  const { orderId, amount } = params;
+
+  const keypair = getUnlockedKeypair();
+  if (!keypair) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock to process payment.',
+    );
+  }
+
+  if (!orderId) {
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Order ID is required');
+  }
+
+  if (amount <= 0) {
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Amount must be greater than 0');
+  }
+
+  try {
+    const connection = await getCurrentConnection();
+
+    const amountRaw = BigInt(Math.floor(amount * Math.pow(10, AINTI_TOKEN_DECIMALS)));
+
+    const [paymentVaultPDA] = derivePaymentVaultPDA();
+    const [paymentRecordPDA] = derivePaymentRecordPDA(orderId);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Payment] Processing payment:', {
+        orderId,
+        amount,
+        amountRaw: amountRaw.toString(),
+        paymentVaultPDA: paymentVaultPDA.toBase58(),
+        paymentRecordPDA: paymentRecordPDA.toBase58(),
+        programId: getAintiPaymentProgramId().toBase58(),
+      });
+    }
+
+    const vaultAccount = await connection.getAccountInfo(paymentVaultPDA);
+    if (!vaultAccount) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'Payment vault not found. The payment program may not be initialized.',
+      );
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Payment] Vault account data length:', vaultAccount.data.length);
+    }
+
+    const treasuryWallet = extractTreasuryFromVaultData(vaultAccount.data);
+
+    const tokenMint = getAintiTokenMint();
+    const buyerTokenAccount = getAssociatedTokenAddressSync(tokenMint, keypair.publicKey);
+    const treasuryTokenAccount = getAssociatedTokenAddressSync(tokenMint, treasuryWallet);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Payment] Accounts:', {
+        buyer: keypair.publicKey.toBase58(),
+        buyerTokenAccount: buyerTokenAccount.toBase58(),
+        treasuryWallet: treasuryWallet.toBase58(),
+        treasuryTokenAccount: treasuryTokenAccount.toBase58(),
+        tokenMint: tokenMint.toBase58(),
+      });
+    }
+
+    const instructionData = await buildProcessPaymentInstructionData(orderId, amountRaw);
+
+    const instruction = new TransactionInstruction({
+      programId: getAintiPaymentProgramId(),
+      keys: [
+        { pubkey: paymentRecordPDA, isSigner: false, isWritable: true },
+        { pubkey: paymentVaultPDA, isSigner: false, isWritable: true },
+        { pubkey: keypair.publicKey, isSigner: true, isWritable: true },
+        { pubkey: buyerTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: treasuryTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: tokenMint, isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: instructionData,
+    });
+
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    const transaction = new Transaction();
+    transaction.add(instruction);
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = keypair.publicKey;
+    transaction.lastValidBlockHeight = lastValidBlockHeight;
+
+    const simulation = await simulateTransaction(transaction);
+    if (!simulation.success) {
+      throw new WalletError(
+        WalletErrorCode.SIMULATION_FAILED,
+        simulation.error || 'Payment transaction simulation failed',
+      );
+    }
+
+    transaction.sign(keypair);
+
+    let signature: string | null = null;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        signature = await connection.sendRawTransaction(transaction.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        });
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+
+        console.error('[Payment] Transaction error:', lastError.message);
+        if (error instanceof SendTransactionError) {
+          console.error('[Payment] Transaction logs:', error.logs);
+        }
+
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+    }
+
+    if (!signature) {
+      const errorMsg = lastError?.message || 'Unknown error';
+
+      if (errorMsg.includes('custom program error: 0x')) {
+        const hexMatch = errorMsg.match(/0x([0-9a-fA-F]+)/);
+        if (hexMatch) {
+          const errorCode = parseInt(hexMatch[1], 16);
+          if (errorCode >= 6000) {
+            const anchorErrors: Record<number, string> = {
+              6000: 'Payment system is paused',
+              6001: 'Invalid payment amount',
+              6002: 'This order has already been paid',
+              6003: 'Invalid token - only AINTI accepted',
+              6004: 'Unauthorized',
+            };
+            const friendlyMsg = anchorErrors[errorCode] || `Payment program error (code ${errorCode})`;
+            throw new WalletError(WalletErrorCode.TRANSACTION_FAILED, friendlyMsg);
+          }
+          if (errorCode === 1) {
+            throw new WalletError(WalletErrorCode.INSUFFICIENT_FUNDS, 'Insufficient AINTI token balance');
+          }
+        }
+      }
+      
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        `Failed to process payment: ${errorMsg}`,
+      );
+    }
+
+    await confirmTransaction(signature);
+    const explorerUrl = await getTransactionExplorerUrl(signature);
+
+    return {
+      signature,
+      explorerUrl,
+    };
+  } catch (error) {
+    if (error instanceof WalletError) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    if (errorMessage.includes('InsufficientFundsForRent')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        'Insufficient SOL for account rent. You need approximately 0.002 SOL to create the payment record. Please add SOL to your wallet.',
+      );
+    }
+    
+    if (errorMessage.includes('insufficient funds') || errorMessage.includes('Insufficient')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        'Insufficient AINTI balance or SOL for transaction fees',
+      );
+    }
+
+    if (errorMessage.includes('already paid') || errorMessage.includes('AlreadyPaid')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'This order has already been paid',
+      );
+    }
+
+    if (errorMessage.includes('paused') || errorMessage.includes('SystemPaused')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'Payment system is temporarily paused. Please try again later.',
+      );
+    }
+
+    throw new WalletError(
+      WalletErrorCode.TRANSACTION_FAILED,
+      `Payment failed: ${errorMessage}`,
     );
   }
 }

@@ -1,14 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 
-// Shared wallet type definitions, enums, and constants used across Solana/EVM flows.
 export type SolanaNetwork = 'mainnet-beta' | 'devnet';
 
-/**
- * Build-time injected API key for Alchemy (supports both ETH and Solana).
- *
- * - In development, you can provide it via a local `.env` file (not committed).
- * - In CI/production builds, inject it as an environment variable.
- */
 const ALCHEMY_API_KEY = process.env.AINTIVIRUS_ALCHEMY_API_KEY;
 
 function getAlchemySolanaRpcUrl(network: SolanaNetwork): string | null {
@@ -31,7 +24,6 @@ export interface NetworkConfig {
 export const NETWORK_CONFIGS: Record<SolanaNetwork, NetworkConfig> = {
   'mainnet-beta': {
     name: 'mainnet-beta',
-    // Use Alchemy if available, otherwise fallback to public RPCs
     rpcUrl: getAlchemySolanaRpcUrl('mainnet-beta') ?? 'https://rpc.ankr.com/solana',
     fallbackRpcUrls: ['https://rpc.ankr.com/solana', 'https://solana-mainnet.rpc.extrnode.com'],
     explorerUrl: 'https://explorer.solana.com',
@@ -49,7 +41,7 @@ export type WalletLockState = 'locked' | 'unlocked' | 'uninitialized';
 
 export type ChainType = 'solana' | 'evm';
 
-export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base';
+export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';
 
 export type NetworkEnvironment = 'mainnet' | 'testnet';
 
@@ -76,11 +68,21 @@ export interface WalletState {
 
   activeEVMChain: EVMChainId | null;
 
+  activeChainId?: string | null;
+
   evmAddress: string | null;
 
   networkEnvironment: NetworkEnvironment;
 
   isWatchOnly: boolean;
+
+  /** 
+   * Chain families supported by the current wallet.
+   * For mnemonic wallets: all chains are supported.
+   * For private key imports: only the imported chain family is supported.
+   * null means all chains are supported (mnemonic wallet).
+   */
+  supportedChainFamilies: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null;
 }
 
 export const MAX_RECENT_RECIPIENTS = 10;
@@ -99,6 +101,20 @@ export interface RecentRecipient {
 
 export type RecentRecipientsMap = Record<RecentRecipientChainId, RecentRecipient[]>;
 
+export interface SpamFilterSettings {
+  enabled: boolean;
+  autoHide: boolean;
+  confidenceThreshold: number;
+  whitelistedTokens: string[];
+}
+
+export const DEFAULT_SPAM_FILTER_SETTINGS: SpamFilterSettings = {
+  enabled: true,
+  autoHide: false,
+  confidenceThreshold: 70,
+  whitelistedTokens: [],
+};
+
 export interface WalletSettings {
   network: SolanaNetwork;
 
@@ -114,11 +130,22 @@ export interface WalletSettings {
 
   activeEVMChain?: EVMChainId | null;
 
+  /** For non-EVM/Solana chains, this stores the actual chain ID from the registry */
+  activeChainId?: string | null;
+
   networkEnvironment?: NetworkEnvironment;
 
   customEVMTokens?: Partial<Record<EVMChainId, string[]>>;
 
   recentRecipients?: RecentRecipientsMap;
+
+  moneroWatchOnly?: {
+    address: string;
+    viewKey: string;
+    restoreHeight?: number;
+  };
+
+  spamFilter?: SpamFilterSettings;
 }
 
 export const DEFAULT_WALLET_SETTINGS: WalletSettings = {
@@ -393,6 +420,7 @@ export type WalletMessageType =
   | 'WALLET_SET_SETTINGS'
   | 'WALLET_SEND_SOL'
   | 'WALLET_SEND_SPL_TOKEN'
+  | 'WALLET_PROCESS_STORE_PAYMENT'
   | 'WALLET_ESTIMATE_FEE'
   | 'WALLET_GET_HISTORY'
   | 'WALLET_GET_TOKENS'
@@ -409,10 +437,16 @@ export type WalletMessageType =
   | 'WALLET_GET_EVM_BALANCE'
   | 'WALLET_SEND_ETH'
   | 'WALLET_SEND_ERC20'
+  | 'WALLET_SEND_BTC'
+  | 'WALLET_ESTIMATE_BTC_FEE'
+  // TRON
+  | 'WALLET_SEND_TRX'
+  | 'WALLET_ESTIMATE_TRX_FEE'
   | 'WALLET_GET_EVM_TOKENS'
   | 'WALLET_GET_EVM_HISTORY'
   | 'WALLET_ESTIMATE_EVM_FEE'
   | 'WALLET_GET_EVM_ADDRESS'
+  | 'WALLET_GET_CHAIN_ADDRESS'
   | 'EVM_GET_PENDING_TXS'
   | 'EVM_SPEED_UP_TX'
   | 'EVM_CANCEL_TX'
@@ -428,6 +462,10 @@ export type WalletMessageType =
   | 'WALLET_SWAP_EXECUTE'
   | 'WALLET_SWAP_AVAILABLE'
   | 'WALLET_SWAP_REFERRAL_STATUS'
+  // Swap Token Discovery (routes through background for CORS)
+  | 'SWAP_GET_POPULAR_TOKENS'
+  | 'SWAP_SEARCH_TOKENS'
+  | 'SWAP_GET_TOKEN_BY_ADDRESS'
   // EVM Swap (ParaSwap - no API key required)
   | 'EVM_SWAP_QUOTE'
   | 'EVM_SWAP_EXECUTE'
@@ -460,7 +498,13 @@ export interface WalletMessagePayloads {
   WALLET_GET_NETWORK: undefined;
   WALLET_GET_NETWORK_STATUS: undefined;
   WALLET_SIGN_TRANSACTION: { serializedTransaction: string };
-  WALLET_SIGN_MESSAGE: { message: string };
+  WALLET_SIGN_MESSAGE: {
+    message: string;
+    chainType?: 'solana' | 'evm';
+    address?: string;
+    /** JSON string of EIP-712 typed data (for eth_signTypedData_v*) */
+    typedData?: string;
+  };
   WALLET_GET_SETTINGS: undefined;
   WALLET_SET_SETTINGS: Partial<WalletSettings>;
 
@@ -471,6 +515,13 @@ export interface WalletMessagePayloads {
     mint: string;
     decimals: number;
     tokenAccount?: string;
+  };
+  /** Process payment through the AINTI payment program (creates on-chain PaymentRecord) */
+  WALLET_PROCESS_STORE_PAYMENT: {
+    /** The order ID from the backend (will be hashed to bytes32) */
+    orderId: string;
+    /** Amount in AINTI tokens (human-readable, e.g., 100.5) */
+    amount: number;
   };
   WALLET_ESTIMATE_FEE: { recipient: string; amountSol: number };
 
@@ -487,13 +538,49 @@ export interface WalletMessagePayloads {
   WALLET_REMOVE_RPC: { network: SolanaNetwork; url: string };
   WALLET_TEST_RPC: { url: string };
 
-  WALLET_SET_CHAIN: { chain: ChainType; evmChainId?: EVMChainId | null };
+  WALLET_SET_CHAIN: { chain: ChainType; evmChainId?: EVMChainId | null; chainId?: string | null };
   WALLET_SET_EVM_CHAIN: { evmChainId: EVMChainId };
-  WALLET_GET_EVM_BALANCE: { evmChainId?: EVMChainId | null };
+  WALLET_GET_EVM_BALANCE: { evmChainId?: EVMChainId | string | null };
   WALLET_SEND_ETH: EVMSendParams;
   WALLET_SEND_ERC20: EVMTokenSendParams;
-  WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | null; forceRefresh?: boolean };
-  WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | null; limit?: number };
+  
+  /** Send native Bitcoin (or Bitcoin-family coin) */
+  WALLET_SEND_BTC: {
+    /** Bitcoin-family chain ID (bitcoin, bitcoincash, litecoin, zcash) */
+    chainId: string;
+    /** Recipient address */
+    recipient: string;
+    /** Amount in satoshis */
+    amountSatoshis: number;
+  };
+  
+  /** Estimate fee for a Bitcoin transaction */
+  WALLET_ESTIMATE_BTC_FEE: {
+    /** Bitcoin-family chain ID */
+    chainId: string;
+    /** Recipient address */
+    recipient: string;
+    /** Amount in satoshis */
+    amountSatoshis: number;
+  };
+  
+  /** Send native TRX on TRON */
+  WALLET_SEND_TRX: {
+    /** Recipient TRON address (starts with T) */
+    recipient: string;
+    /** Amount in SUN (1 TRX = 1,000,000 SUN) */
+    amountSun: number;
+  };
+  
+  /** Estimate fee for a TRON transaction */
+  WALLET_ESTIMATE_TRX_FEE: {
+    /** Recipient TRON address */
+    recipient: string;
+    /** Amount in SUN */
+    amountSun: number;
+  };
+  WALLET_GET_EVM_TOKENS: { evmChainId?: EVMChainId | string | null; forceRefresh?: boolean };
+  WALLET_GET_EVM_HISTORY: { evmChainId?: EVMChainId | string | null; limit?: number };
   WALLET_ESTIMATE_EVM_FEE: {
     evmChainId?: EVMChainId | null;
     recipient: string;
@@ -501,6 +588,9 @@ export interface WalletMessagePayloads {
     tokenAddress?: string;
   };
   WALLET_GET_EVM_ADDRESS: undefined;
+  
+  /** Get the derived address for any chain by its registry ID */
+  WALLET_GET_CHAIN_ADDRESS: { chainId: string };
 
   EVM_GET_PENDING_TXS: { evmChainId?: EVMChainId; address?: string };
   EVM_SPEED_UP_TX: {
@@ -522,7 +612,7 @@ export interface WalletMessagePayloads {
   WALLET_REVOKE_ALLOWANCE: { evmChainId: EVMChainId; tokenAddress: string; spenderAddress: string };
 
   WALLET_IMPORT_PRIVATE_KEY: { privateKey: string; password?: string; label?: string };
-  WALLET_EXPORT_PRIVATE_KEY: { walletId: string; password: string; chain: 'solana' | 'evm' };
+  WALLET_EXPORT_PRIVATE_KEY: { walletId: string; password: string; chain: 'solana' | 'evm' | 'bitcoin' };
   // Jupiter Swap
   WALLET_SWAP_QUOTE: {
     inputMint: string;
@@ -569,6 +659,11 @@ export interface WalletMessagePayloads {
     testnet: boolean;
   };
   WALLET_SWAP_REFERRAL_STATUS: undefined;
+
+  // Swap Token Discovery (routes through background for CORS)
+  SWAP_GET_POPULAR_TOKENS: { chainType: 'solana' | 'evm'; evmChainId?: EVMChainId; limit?: number };
+  SWAP_SEARCH_TOKENS: { query: string; chainType: 'solana' | 'evm'; evmChainId?: EVMChainId };
+  SWAP_GET_TOKEN_BY_ADDRESS: { address: string; chainType: 'solana' | 'evm' };
 }
 
 export interface WalletMessageResponses {
@@ -606,6 +701,7 @@ export interface WalletMessageResponses {
 
   WALLET_SEND_SOL: SendTransactionResult;
   WALLET_SEND_SPL_TOKEN: SendTransactionResult;
+  WALLET_PROCESS_STORE_PAYMENT: SendTransactionResult;
   WALLET_ESTIMATE_FEE: FeeEstimate;
   WALLET_GET_HISTORY: TransactionHistoryResult;
   WALLET_GET_TOKENS: SPLTokenBalance[];
@@ -622,10 +718,15 @@ export interface WalletMessageResponses {
   WALLET_GET_EVM_BALANCE: EVMBalance;
   WALLET_SEND_ETH: EVMTransactionResult;
   WALLET_SEND_ERC20: EVMTransactionResult;
+  WALLET_SEND_BTC: BTCTransactionResult;
+  WALLET_ESTIMATE_BTC_FEE: BTCFeeEstimate;
+  WALLET_SEND_TRX: TRXTransactionResult;
+  WALLET_ESTIMATE_TRX_FEE: TRXFeeEstimate;
   WALLET_GET_EVM_TOKENS: EVMTokenBalance[];
-  WALLET_GET_EVM_HISTORY: { transactions: any[]; hasMore: boolean };
+  WALLET_GET_EVM_HISTORY: { transactions: EVMHistoryItemResponse[]; hasMore: boolean };
   WALLET_ESTIMATE_EVM_FEE: EVMFeeEstimate;
   WALLET_GET_EVM_ADDRESS: string;
+  WALLET_GET_CHAIN_ADDRESS: { address: string; chainId: string; chainFamily: string; symbol: string };
 
   EVM_GET_PENDING_TXS: EVMPendingTxInfo[];
   EVM_SPEED_UP_TX: EVMTransactionResult;
@@ -637,7 +738,7 @@ export interface WalletMessageResponses {
   WALLET_ESTIMATE_REVOKE_FEE: EVMRevokeFeeEstimate;
   WALLET_REVOKE_ALLOWANCE: EVMTransactionResult;
 
-  WALLET_IMPORT_PRIVATE_KEY: { publicAddress: string; evmAddress: string; walletId: string };
+  WALLET_IMPORT_PRIVATE_KEY: { publicAddress: string; evmAddress: string; bitcoinAddress: string; walletId: string };
   WALLET_EXPORT_PRIVATE_KEY: { privateKey: string };
   // Jupiter Swap
   WALLET_SWAP_QUOTE: SwapQuoteResult;
@@ -652,6 +753,11 @@ export interface WalletMessageResponses {
 
   // EVM RPC forwarding - returns raw RPC result
   EVM_RPC_REQUEST: unknown;
+
+  // Swap Token Discovery responses
+  SWAP_GET_POPULAR_TOKENS: SwapTokenInfo[];
+  SWAP_SEARCH_TOKENS: SwapTokenInfo[];
+  SWAP_GET_TOKEN_BY_ADDRESS: SwapTokenInfo | null;
 }
 
 export interface RpcHealthSummary {
@@ -709,6 +815,31 @@ export interface SwapReferralStatus {
   feeBps: number;
   /** Referral account public key if configured */
   referralAccount: string | null;
+}
+
+/**
+ * Token info for swap token discovery
+ * Used by the token selector components
+ */
+export interface SwapTokenInfo {
+  /** Token address (mint for Solana, contract address for EVM) */
+  address: string;
+  /** Token symbol (e.g., SOL, USDC) */
+  symbol: string;
+  /** Full token name */
+  name: string;
+  /** Token decimals */
+  decimals: number;
+  /** Logo URI for display */
+  logoUri: string;
+  /** Chain identifier */
+  chainId?: string;
+  /** Whether the token is verified */
+  verified?: boolean;
+  /** User's balance (if applicable) */
+  balance?: string;
+  /** USD value (if applicable) */
+  usdValue?: number;
 }
 
 // EVM Swap types (ParaSwap - no API key required)
@@ -844,6 +975,19 @@ export interface TransactionHistoryResult {
   cursor: string | null;
 }
 
+export type SpamWarningLevel = 'none' | 'low' | 'medium' | 'high';
+
+export interface SpamInfo {
+  /** Whether this token is flagged as spam */
+  isSpam: boolean;
+  /** Confidence score 0-100 */
+  confidence: number;
+  /** Warning level for UI display */
+  warningLevel: SpamWarningLevel;
+  /** Human-readable reasons */
+  reasons: string[];
+}
+
 export interface SPLTokenBalance {
   mint: string;
 
@@ -860,6 +1004,9 @@ export interface SPLTokenBalance {
   tokenAccount: string;
 
   logoUri?: string;
+
+  /** Spam detection info (populated by spam filter) */
+  spamInfo?: SpamInfo;
 }
 
 export interface CustomToken {
@@ -889,7 +1036,7 @@ export const DEFAULT_TOKEN_LIST: TokenMetadata[] = [
     name: 'USD Coin',
     decimals: 6,
     logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
   },
   {
     mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
@@ -897,23 +1044,21 @@ export const DEFAULT_TOKEN_LIST: TokenMetadata[] = [
     name: 'Tether USD',
     decimals: 6,
     logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg',
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
   },
   {
     mint: 'So11111111111111111111111111111111111111112',
     symbol: 'wSOL',
     name: 'Wrapped SOL',
     decimals: 9,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
   },
   {
     mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
     symbol: 'mSOL',
     name: 'Marinade staked SOL',
     decimals: 9,
-    logoUri:
-      'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png',
+    logoUri: 'https://marinade.finance/static/media/mSOL.png',
   },
   {
     mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
@@ -996,6 +1141,9 @@ export interface EVMTokenBalance {
 
   /** True if this token was explicitly added by the user */
   isCustom?: boolean;
+
+  /** Spam detection info (populated by spam filter) */
+  spamInfo?: SpamInfo;
 }
 
 export interface EVMFeeEstimate {
@@ -1022,10 +1170,112 @@ export interface EVMTransactionResult {
   error?: string;
 }
 
+/**
+ * EVM history item returned from API
+ */
+export interface EVMHistoryItemResponse {
+  hash: string;
+  timestamp: number | null;
+  direction: 'sent' | 'received' | 'self' | 'unknown';
+  type: string;
+  amount: number;
+  symbol: string;
+  counterparty: string | null;
+  fee: number;
+  status: 'confirmed' | 'pending' | 'failed';
+  explorerUrl: string;
+  logoUri?: string;
+  tokenAddress?: string;
+  swapInfo?: {
+    fromToken: {
+      symbol: string;
+      amount: number;
+      address?: string;
+      logoUri?: string;
+    };
+    toToken: {
+      symbol: string;
+      amount: number;
+      address?: string;
+      logoUri?: string;
+    };
+  };
+}
+
+/** Bitcoin transaction result */
+export interface BTCTransactionResult {
+  /** Transaction ID (hash) */
+  txid: string;
+
+  /** Block explorer URL */
+  explorerUrl: string;
+
+  /** Whether transaction is confirmed (Bitcoin needs ~6 confirmations) */
+  confirmed: boolean;
+
+  /** Error message if transaction failed */
+  error?: string;
+}
+
+/** Bitcoin fee estimate */
+export interface BTCFeeEstimate {
+  /** Fee rate in satoshis per virtual byte */
+  feeRate: number;
+
+  /** Total fee in satoshis */
+  totalFeeSatoshis: number;
+
+  /** Total fee in BTC (formatted) */
+  totalFeeBTC: number;
+
+  /** Estimated confirmation time in blocks */
+  estimatedBlocks: number;
+}
+
+/** TRON transaction result */
+export interface TRXTransactionResult {
+  /** Transaction ID (hash) */
+  txid: string;
+
+  /** Block explorer URL */
+  explorerUrl: string;
+
+  /** Whether transaction is confirmed */
+  confirmed: boolean;
+
+  /** Error message if transaction failed */
+  error?: string;
+}
+
+/** TRON fee estimate */
+export interface TRXFeeEstimate {
+  /** Estimated bandwidth cost */
+  bandwidth: number;
+
+  /** Estimated energy cost (for smart contracts) */
+  energy: number;
+
+  /** Total fee in SUN */
+  feeSun: number;
+
+  /** Total fee in TRX (formatted) */
+  feeTRX: number;
+}
+
+export type ChainFamily = 'solana' | 'evm' | 'bitcoin' | 'tron' | 'monero';
+
 export interface ChainDisplayInfo {
+  /** Legacy chain type - 'solana' or 'evm' for backwards compatibility */
   type: ChainType;
 
+  /** EVM chain ID (only for EVM chains) */
   evmChainId?: EVMChainId;
+
+  /** Registry chain ID - unique identifier for the chain */
+  chainId: string;
+
+  /** Chain family - the actual chain family (solana, evm, bitcoin, tron, monero) */
+  family: ChainFamily;
 
   name: string;
 
@@ -1036,28 +1286,58 @@ export interface ChainDisplayInfo {
   isTestnet: boolean;
 }
 
-/**
- * Dynamically generated list of supported chains from the registry.
- * To add a new chain, simply add it to CHAIN_REGISTRY in src/wallet/chains/registry.ts
- * and it will automatically appear here.
- */
-import { CHAIN_REGISTRY } from './chains/registry';
+import { CHAIN_REGISTRY, type ChainFamily as RegistryChainFamily } from './chains/registry';
 
 function buildSupportedChains(): ChainDisplayInfo[] {
   const chains: ChainDisplayInfo[] = [];
 
-  // Sort chains: Solana first, then EVM chains alphabetically
+  const familyOrder: Record<string, number> = {
+    solana: 0,
+    evm: 1,
+    bitcoin: 2,
+    tron: 3,
+    monero: 4,
+  };
+
+  // Define display order within EVM family (lower = first)
+  // Ethereum should be first, then popular L2s
+  const evmDisplayOrder: Record<string, number> = {
+    ethereum: 0,
+    base: 1,
+    arbitrum: 2,
+    optimism: 3,
+    polygon: 4,
+    bnb: 5,
+  };
+
   const sortedChains = Object.values(CHAIN_REGISTRY).sort((a, b) => {
-    if (a.family === 'solana' && b.family !== 'solana') return -1;
-    if (b.family === 'solana' && a.family !== 'solana') return 1;
+    const orderA = familyOrder[a.family] ?? 99;
+    const orderB = familyOrder[b.family] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+
+    if (a.family === 'evm' && b.family === 'evm') {
+      const evmOrderA = evmDisplayOrder[a.id] ?? 99;
+      const evmOrderB = evmDisplayOrder[b.id] ?? 99;
+      if (evmOrderA !== evmOrderB) return evmOrderA - evmOrderB;
+    }
+
     return a.name.localeCompare(b.name);
   });
 
   for (const chain of sortedChains) {
-    const chainType: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
+    const legacyType: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
+
+    const family = ['solana', 'evm', 'bitcoin', 'tron', 'monero'].includes(chain.family)
+      ? (chain.family as ChainFamily)
+      : 'evm';
+
+    const evmChainIdValue = chain.family === 'evm' ? (chain.id as EVMChainId) : undefined;
+    
     chains.push({
-      type: chainType,
-      evmChainId: chain.family === 'evm' ? (chain.id as EVMChainId) : undefined,
+      type: legacyType,
+      evmChainId: evmChainIdValue,
+      chainId: chain.id,
+      family,
       name: chain.name,
       symbol: chain.symbol,
       icon: chain.iconId,

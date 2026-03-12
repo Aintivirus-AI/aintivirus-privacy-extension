@@ -36,7 +36,6 @@ import { getTransactionHistory as getSolanaHistory } from '../../history';
 import { getTokenBalances as getSPLTokenBalances } from '../../tokens';
 import type { SolanaNetwork, TransactionHistoryItem } from '../../types';
 
-// Solana adapter bridges the shared ChainAdapter interface to Solana helpers.
 export class SolanaAdapter implements ChainAdapter {
   readonly chainType = 'solana' as const;
   readonly chainName = 'Solana';

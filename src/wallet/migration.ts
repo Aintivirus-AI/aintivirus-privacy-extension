@@ -23,9 +23,6 @@ import {
   arrayBufferToBase64,
 } from './crypto';
 
-// Vault migration utilities maintain backwards compatibility for legacy vaults
-// and ensure newer multi-wallet / multi-chain metadata is populated.
-
 export const STORAGE_KEYS = {
   LEGACY_VAULT: 'walletVault',
 

@@ -1,8 +1,5 @@
 import { priceDedup, priceKey, batchPriceKey, PRICE_CACHE_TTL } from './requestDedup';
 
-// Price helpers cache USD quotes from CoinGecko/Jupiter so the wallet UI can
-// display native token valuations without flooding the APIs.
-
 const COINGECKO_SIMPLE_PRICE_API = 'https://api.coingecko.com/api/v3/simple/price';
 const COINGECKO_TOKEN_PRICE_SOLANA_API =
   'https://api.coingecko.com/api/v3/simple/token_price/solana';
@@ -17,9 +14,48 @@ const SOL_COINGECKO_ID = 'solana';
 
 const ETH_COINGECKO_ID = 'ethereum';
 
+const BNB_COINGECKO_ID = 'binancecoin';
+
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 const ETH_CACHE_KEY = 'ethereum-native';
+
+const BNB_CACHE_KEY = 'bnb-native';
+
+const CHAIN_COINGECKO_IDS: Record<string, string> = {
+  ethereum: 'ethereum',
+  bnb: 'binancecoin',
+  polygon: 'polygon-ecosystem-token',
+  arbitrum: 'ethereum',
+  optimism: 'ethereum',
+  base: 'ethereum',
+  avalanche: 'avalanche-2',
+  bitcoin: 'bitcoin',
+  bitcoincash: 'bitcoin-cash',
+  litecoin: 'litecoin',
+  zcash: 'zcash',
+  tron: 'tron',
+  monero: 'monero',
+};
+
+const CHAIN_CACHE_KEYS: Record<string, string> = {
+  ethereum: ETH_CACHE_KEY,
+  bnb: BNB_CACHE_KEY,
+  polygon: 'polygon-native',
+  arbitrum: ETH_CACHE_KEY,
+  optimism: ETH_CACHE_KEY,
+  base: ETH_CACHE_KEY,
+  avalanche: 'avalanche-native',
+  bitcoin: 'bitcoin-native',
+  bitcoincash: 'bitcoincash-native',
+  litecoin: 'litecoin-native',
+  zcash: 'zcash-native',
+  tron: 'tron-native',
+  monero: 'monero-native',
+};
+
+const EVM_CHAIN_COINGECKO_IDS = CHAIN_COINGECKO_IDS;
+const EVM_CHAIN_CACHE_KEYS = CHAIN_CACHE_KEYS;
 
 const CACHE_DURATION = 30 * 1000;
 
@@ -76,10 +112,43 @@ export async function getSolPrice(): Promise<number | null> {
   return result?.price ?? null;
 }
 
+function storePriceInCache(
+  data: CoinGeckoPriceData,
+  coingeckoId: string,
+  cacheKey: string,
+  now: number
+): void {
+  if (data[coingeckoId]?.usd) {
+    priceCache.set(cacheKey, {
+      price: data[coingeckoId].usd,
+      timestamp: now,
+    });
+    if (data[coingeckoId].usd_24h_change !== undefined) {
+      priceCache.set(`${cacheKey}_24h`, {
+        price: data[coingeckoId].usd_24h_change,
+        timestamp: now,
+      });
+    }
+  }
+}
+
 async function fetchBatchedNativePrices(): Promise<void> {
   try {
+    const allIds = [
+      SOL_COINGECKO_ID,
+      ETH_COINGECKO_ID,
+      BNB_COINGECKO_ID,
+      'polygon-ecosystem-token',
+      'avalanche-2',
+      'bitcoin',
+      'bitcoin-cash',
+      'litecoin',
+      'zcash',
+      'tron',
+      'monero',
+    ];
     const response = await fetchWithTimeout(
-      `${COINGECKO_SIMPLE_PRICE_API}?ids=${SOL_COINGECKO_ID},${ETH_COINGECKO_ID}&vs_currencies=usd&include_24hr_change=true`,
+      `${COINGECKO_SIMPLE_PRICE_API}?ids=${allIds.join(',')}&vs_currencies=usd&include_24hr_change=true`,
     );
 
     if (!response.ok) {
@@ -89,33 +158,19 @@ async function fetchBatchedNativePrices(): Promise<void> {
     const data: CoinGeckoPriceData = await response.json();
     const now = Date.now();
 
-    if (data[SOL_COINGECKO_ID]?.usd) {
-      priceCache.set(SOL_MINT, {
-        price: data[SOL_COINGECKO_ID].usd,
-        timestamp: now,
-      });
-      if (data[SOL_COINGECKO_ID].usd_24h_change !== undefined) {
-        priceCache.set(`${SOL_MINT}_24h`, {
-          price: data[SOL_COINGECKO_ID].usd_24h_change,
-          timestamp: now,
-        });
-      }
-    }
-
-    if (data[ETH_COINGECKO_ID]?.usd) {
-      priceCache.set(ETH_CACHE_KEY, {
-        price: data[ETH_COINGECKO_ID].usd,
-        timestamp: now,
-      });
-      if (data[ETH_COINGECKO_ID].usd_24h_change !== undefined) {
-        priceCache.set(`${ETH_CACHE_KEY}_24h`, {
-          price: data[ETH_COINGECKO_ID].usd_24h_change,
-          timestamp: now,
-        });
-      }
-    }
-  } catch (error) {
-    throw error;
+    storePriceInCache(data, SOL_COINGECKO_ID, SOL_MINT, now);
+    
+    storePriceInCache(data, 'ethereum', ETH_CACHE_KEY, now);
+    storePriceInCache(data, 'binancecoin', BNB_CACHE_KEY, now);
+    storePriceInCache(data, 'polygon-ecosystem-token', 'polygon-native', now);
+    storePriceInCache(data, 'avalanche-2', 'avalanche-native', now);
+    storePriceInCache(data, 'bitcoin', 'bitcoin-native', now);
+    storePriceInCache(data, 'bitcoin-cash', 'bitcoincash-native', now);
+    storePriceInCache(data, 'litecoin', 'litecoin-native', now);
+    storePriceInCache(data, 'zcash', 'zcash-native', now);
+    storePriceInCache(data, 'tron', 'tron-native', now);
+    storePriceInCache(data, 'monero', 'monero-native', now);
+  } catch {
   }
 }
 
@@ -212,6 +267,69 @@ export async function getEthPriceWithChange(): Promise<PriceWithChange | null> {
   );
 }
 
+export async function getChainNativePriceWithChange(chainId: string): Promise<PriceWithChange | null> {
+  return getEvmNativePriceWithChange(chainId);
+}
+
+/**
+ * Get native token price for any EVM chain (legacy alias, now works for all chains)
+ * @param evmChainId - The chain ID (e.g., 'bnb', 'polygon', 'ethereum')
+ */
+export async function getEvmNativePriceWithChange(evmChainId: string): Promise<PriceWithChange | null> {
+  const cacheKey = EVM_CHAIN_CACHE_KEYS[evmChainId] || ETH_CACHE_KEY;
+  const cached = priceCache.get(cacheKey);
+  const cached24h = priceCache.get(`${cacheKey}_24h`);
+  
+  if (isCacheValid(cached)) {
+    return {
+      price: cached!.price,
+      change24h: cached24h?.price ?? null,
+    };
+  }
+
+  const dedupKey = priceKey(`evm-native-${evmChainId}`, 'usd');
+
+  return priceDedup.execute(
+    dedupKey,
+    async () => {
+      try {
+        await fetchBatchedNativePrices();
+
+        const newCached = priceCache.get(cacheKey);
+        const newCached24h = priceCache.get(`${cacheKey}_24h`);
+
+        if (newCached) {
+          return {
+            price: newCached.price,
+            change24h: newCached24h?.price ?? null,
+          };
+        }
+
+        const ethCached = priceCache.get(ETH_CACHE_KEY);
+        const ethCached24h = priceCache.get(`${ETH_CACHE_KEY}_24h`);
+        if (ethCached) {
+          return {
+            price: ethCached.price,
+            change24h: ethCached24h?.price ?? null,
+          };
+        }
+
+        throw new Error(`Native price for ${evmChainId} not in response`);
+      } catch (error) {
+        if (cached) {
+          return {
+            price: cached.price,
+            change24h: cached24h?.price ?? null,
+          };
+        }
+
+        throw error;
+      }
+    },
+    PRICE_CACHE_TTL,
+  );
+}
+
 interface JupiterPriceData {
   data: {
     [mint: string]: {
@@ -256,21 +374,38 @@ async function getJupiterTokenPrices(mints: string[]): Promise<Map<string, numbe
         }
       }
     }
-  } catch (error) {}
+  } catch {
+  }
 
   return result;
 }
 
 interface DexScreenerPriceResponse {
   pairs?: Array<{
+    chainId?: string;
     baseToken: {
       address: string;
     };
     priceUsd?: string;
+    liquidity?: {
+      usd?: number;
+    };
   }>;
 }
 
-async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number>> {
+// Map our internal chain IDs to DexScreener chain IDs
+const DEXSCREENER_CHAIN_IDS: Record<string, string> = {
+  ethereum: 'ethereum',
+  bnb: 'bsc',
+  polygon: 'polygon',
+  arbitrum: 'arbitrum',
+  optimism: 'optimism',
+  base: 'base',
+  avalanche: 'avalanche',
+  solana: 'solana',
+};
+
+async function getDexScreenerPrices(mints: string[], chainId?: string): Promise<Map<string, number>> {
   const result = new Map<string, number>();
 
   if (mints.length === 0) {
@@ -278,6 +413,8 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
   }
 
   const addressesParam = mints.join(',');
+  // Resolve the DexScreener chain ID for filtering
+  const dexScreenerChainId = chainId ? DEXSCREENER_CHAIN_IDS[chainId] : undefined;
 
   try {
     const response = await fetchWithTimeout(
@@ -292,7 +429,21 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
     const data: DexScreenerPriceResponse = await response.json();
 
     if (data.pairs) {
-      for (const pair of data.pairs) {
+      // Sort pairs by liquidity (highest first) so we prefer the most liquid pair
+      const sortedPairs = [...data.pairs].sort((a, b) => {
+        const liqA = a.liquidity?.usd ?? 0;
+        const liqB = b.liquidity?.usd ?? 0;
+        return liqB - liqA;
+      });
+
+      for (const pair of sortedPairs) {
+        // Filter by chain if specified - DexScreener returns pairs from ALL chains
+        // (e.g., PulseChain forks share the same contract addresses as Ethereum
+        // but have vastly different prices)
+        if (dexScreenerChainId && pair.chainId && pair.chainId !== dexScreenerChainId) {
+          continue;
+        }
+
         if (pair.priceUsd && pair.baseToken.address) {
           const price = parseFloat(pair.priceUsd);
           const rawAddress = pair.baseToken.address;
@@ -312,7 +463,8 @@ async function getDexScreenerPrices(mints: string[]): Promise<Map<string, number
         }
       }
     }
-  } catch (error) {}
+  } catch {
+  }
 
   return result;
 }
@@ -321,7 +473,7 @@ function isEVMAddress(address: string): boolean {
   return address.startsWith('0x') && address.length === 42;
 }
 
-export async function getTokenPrices(mints: string[]): Promise<Map<string, number>> {
+export async function getTokenPrices(mints: string[], chainId?: string): Promise<Map<string, number>> {
   const result = new Map<string, number>();
   const mintsToFetch: string[] = [];
 
@@ -370,7 +522,7 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
         }
 
         if (stillMissing.length > 0) {
-          const dexScreenerPrices = await getDexScreenerPrices(stillMissing);
+          const dexScreenerPrices = await getDexScreenerPrices(stillMissing, chainId || 'solana');
 
           const afterDexScreener: string[] = [];
           for (const mint of stillMissing) {
@@ -407,12 +559,16 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
                 }
               }
             }
-          } catch (error) {}
+          } catch {
+            // CoinGecko Solana API errors are non-fatal; continue with other sources
+          }
         }
       }
 
       if (evmAddresses.length > 0) {
-        const dexScreenerPrices = await getDexScreenerPrices(evmAddresses);
+        // Pass chain ID to DexScreener so it filters to the correct chain
+        // This prevents cross-chain price pollution (e.g., PulseChain USDT ≠ Ethereum USDT)
+        const dexScreenerPrices = await getDexScreenerPrices(evmAddresses, chainId || 'ethereum');
 
         let stillMissing: string[] = [];
         for (const address of evmAddresses) {
@@ -447,7 +603,8 @@ export async function getTokenPrices(mints: string[]): Promise<Map<string, numbe
                 }
               }
             }
-          } catch (error) {}
+          } catch {
+          }
         }
       }
 

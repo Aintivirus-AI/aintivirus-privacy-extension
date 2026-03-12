@@ -35,6 +35,7 @@ export {
 export { PendingTxList, type PendingTxListProps } from './PendingTxList';
 export { SpeedUpModal, type SpeedUpModalProps } from './SpeedUpModal';
 export { CancelModal, type CancelModalProps } from './CancelModal';
+export { MoneroSetupModal, type MoneroSetupModalProps } from './MoneroSetupModal';
 export { TxDetailsDrawer, type TxDetailsDrawerProps } from './TxDetailsDrawer';
 
 export { ExplorerLinkIcon, type ExplorerLinkIconProps } from './ExplorerLinkIcon';
@@ -77,3 +78,16 @@ export {
 export { TokenIcon, default as TokenIconDefault } from './TokenIcon';
 
 export { SwapTokenSelector, default as SwapTokenSelectorDefault } from './SwapTokenSelector';
+
+// Store components
+export { default as StoreTab } from './StoreTab';
+export { default as StoreProductCard } from './StoreProductCard';
+export { default as StoreCart } from './StoreCart';
+export { default as StoreCheckout } from './StoreCheckout';
+export { default as StoreSubTabs } from './StoreSubTabs';
+export { default as StoreGiftCards } from './StoreGiftCards';
+export { default as StoreESim } from './StoreESim';
+export { default as StorePayment } from './StorePayment';
+export { default as StoreOrderModal } from './StoreOrderModal';
+export type { Product, CartItem, ProductVariant } from './StoreTab';
+export type { StoreSubTab } from './StoreSubTabs';

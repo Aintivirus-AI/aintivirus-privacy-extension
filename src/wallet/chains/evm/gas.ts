@@ -11,7 +11,6 @@ import {
 } from '../config';
 import { getFeeData, estimateGas, call } from './client';
 
-// Gas estimation helpers compute EVM/EIP-1559 fee components and L1 data fees.
 export interface GasEstimate {
   gasLimit: bigint;
   gasPrice: bigint;

@@ -49,7 +49,6 @@ export async function approveConnection(
   tabId?: number,
 ): Promise<ConnectionRecord> {
   const normalizedDomain = extractDomain(url);
-  console.log('[Security] approveConnection called:', { domain, normalizedDomain, publicKey, tabId });
 
   let connectedKey = publicKey;
   if (!connectedKey) {
@@ -80,7 +79,6 @@ export async function approveConnection(
     warnings,
   };
 
-  console.log('[Security] Adding connection record:', record);
   await addConnectionRecord(record);
 
   await setActiveConnection(normalizedDomain, {

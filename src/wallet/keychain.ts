@@ -12,9 +12,6 @@ import {
 } from './types';
 import { DERIVATION_PATHS } from './chains/config';
 
-// Key derivation utilities for Solana and EVM wallets, including mnemonic
-// generation and address validation.
-
 export interface EVMKeypair {
   address: string;
 
@@ -372,18 +369,37 @@ export function getEVMPrivateKeyHex(keypair: EVMKeypair): string {
 
 export function validatePrivateKey(privateKey: string): {
   valid: boolean;
-  chainType: 'solana' | 'evm' | 'unknown';
+  chainType: 'solana' | 'evm' | 'bitcoin' | 'unknown';
   error?: string;
 } {
   const trimmed = privateKey.trim();
-
+  
+  // Check for EVM private key (0x prefix or 64 hex characters)
   if (trimmed.startsWith('0x') || (/^[0-9a-fA-F]+$/.test(trimmed) && trimmed.length === 64)) {
     try {
       evmKeypairFromPrivateKey(trimmed);
       return { valid: true, chainType: 'evm' };
     } catch (e) {}
   }
-
+  
+  // Check for Bitcoin WIF format (starts with 5, K, L for mainnet or 9, c for testnet)
+  // WIF keys are 51-52 characters in Base58
+  if (
+    (trimmed.length === 51 || trimmed.length === 52) &&
+    /^[5KL9c][1-9A-HJ-NP-Za-km-z]+$/.test(trimmed)
+  ) {
+    try {
+      // Dynamically import to avoid circular dependencies
+      const { isValidWIF } = require('./chains/bitcoin/addresses');
+      if (isValidWIF(trimmed)) {
+        return { valid: true, chainType: 'bitcoin' };
+      }
+    } catch (e) {
+      // Not a valid WIF, continue to other checks
+    }
+  }
+  
+  // Check for Solana private key (Base58 encoded, typically 64 or 88 characters)
   try {
     keypairFromPrivateKey(trimmed);
     return { valid: true, chainType: 'solana' };

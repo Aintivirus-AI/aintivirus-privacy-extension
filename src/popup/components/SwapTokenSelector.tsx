@@ -11,14 +11,10 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TokenIcon } from './TokenIcon';
-import {
-  searchSwapTokens,
-  getPopularTokens,
-  fetchSolanaTokenByAddress,
-  type SwapToken,
-} from '../../wallet/swapTokens';
+import type { SwapToken } from '../../wallet/swapTokens';
 import type { SPLTokenBalance, EVMTokenBalance, EVMChainId } from '@shared/types';
 import { SearchIcon, CloseIcon, CheckIcon } from '../Icons';
+import { sendToBackground } from '@shared/messaging';
 
 // ============================================================================
 // Types
@@ -57,6 +53,19 @@ interface TokenListItemProps {
 }
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Truncate an address for display (e.g., "So111...1112" or "0xA0b8...EB48")
+ */
+function truncateAddress(address: string, startChars = 4, endChars = 4): string {
+  if (!address) return '';
+  if (address.length <= startChars + endChars + 3) return address;
+  return `${address.slice(0, startChars)}...${address.slice(-endChars)}`;
+}
+
+// ============================================================================
 // Token List Item Component
 // ============================================================================
 
@@ -67,12 +76,17 @@ const TokenListItem: React.FC<TokenListItemProps> = ({
   showBalance = false,
 }) => {
   const fallbackLogo = token.chainId === 'solana'
-    ? 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'
-    : 'https://assets.coingecko.com/coins/images/279/small/ethereum.png';
+    ? 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'
+    : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
+
+  // Check if this is a native token (shouldn't show address)
+  const isNativeToken = token.symbol === 'SOL' || 
+    token.address.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ||
+    token.address === 'So11111111111111111111111111111111111111112';
 
   return (
     <button
-      className={`swap-token-list-item ${isSelected ? 'selected' : ''}`}
+      className={`swap-token-list-item ${isSelected ? 'selected' : ''} ${!token.verified ? 'unverified' : ''}`}
       onClick={onClick}
       type="button"
     >
@@ -86,13 +100,23 @@ const TokenListItem: React.FC<TokenListItemProps> = ({
       <div className="swap-token-list-item-info">
         <div className="swap-token-list-item-symbol">
           {token.symbol}
-          {token.verified && (
-            <span className="swap-token-verified" title="Verified">
+          {token.verified ? (
+            <span className="swap-token-verified" title="Verified Token">
               <CheckIcon size={12} />
+            </span>
+          ) : (
+            <span className="swap-token-unverified" title="Unverified - Trade with caution">
+              ⚠️
             </span>
           )}
         </div>
         <div className="swap-token-list-item-name">{token.name}</div>
+        {/* Show contract address for non-native tokens */}
+        {!isNativeToken && (
+          <div className="swap-token-list-item-address" title={token.address}>
+            {truncateAddress(token.address, 6, 4)}
+          </div>
+        )}
       </div>
       {showBalance && token.balance && (
         <div className="swap-token-list-item-balance">
@@ -150,7 +174,7 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
           symbol: 'SOL',
           name: 'Solana',
           decimals: 9,
-          logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+          logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
           verified: true,
           balance: nativeBalance.toString(),
           chainId: 'solana',
@@ -216,15 +240,19 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
   }, [chainType, solanaTokens, evmTokens, nativeBalance, evmChainId]);
 
   // Load popular tokens on mount or chain change
+  // Routes through background script to avoid CORS issues
   useEffect(() => {
     let cancelled = false;
     
     const loadPopular = async () => {
       setIsLoadingPopular(true);
       try {
-        const tokens = await getPopularTokens(chainType, evmChainId, 20);
-        if (!cancelled) {
-          setPopularTokens(tokens);
+        const response = await sendToBackground({
+          type: 'SWAP_GET_POPULAR_TOKENS',
+          payload: { chainType, evmChainId, limit: 20 },
+        });
+        if (!cancelled && response.success && response.data) {
+          setPopularTokens(response.data as SwapToken[]);
         }
       } catch (error) {
         console.error('Failed to load popular tokens:', error);
@@ -243,6 +271,7 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
   }, [chainType, evmChainId]);
 
   // Handle search with debouncing
+  // Routes through background script to avoid CORS issues
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -260,8 +289,15 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
     
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const results = await searchSwapTokens(trimmedQuery, chainType, evmChainId);
-        setSearchResults(results);
+        const response = await sendToBackground({
+          type: 'SWAP_SEARCH_TOKENS',
+          payload: { query: trimmedQuery, chainType, evmChainId },
+        });
+        if (response.success && response.data) {
+          setSearchResults(response.data as SwapToken[]);
+        } else {
+          setSearchResults([]);
+        }
       } catch (error) {
         console.error('Token search failed:', error);
         setSearchResults([]);
@@ -326,10 +362,26 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
 
   // Tokens to display based on search state
   const displayTokens = useMemo(() => {
-    const query = searchQuery.trim();
+    const query = searchQuery.trim().toLowerCase();
     
     if (query) {
-      return filterExcluded(searchResults);
+      // When searching, also include matching user tokens (custom/held tokens)
+      // This ensures custom tokens can be found by name/symbol, not just contract address
+      const matchingUserTokens = userTokens.filter((token) => {
+        const symbolMatch = token.symbol.toLowerCase().includes(query);
+        const nameMatch = token.name.toLowerCase().includes(query);
+        const addressMatch = token.address.toLowerCase().includes(query);
+        return symbolMatch || nameMatch || addressMatch;
+      });
+      
+      // Merge user token matches with API search results, avoiding duplicates
+      const apiResultAddresses = new Set(searchResults.map((t) => t.address.toLowerCase()));
+      const uniqueUserMatches = matchingUserTokens.filter(
+        (t) => !apiResultAddresses.has(t.address.toLowerCase())
+      );
+      
+      // User's tokens first (they're verified owned), then API results
+      return filterExcluded([...uniqueUserMatches, ...searchResults]);
     }
     
     // Merge user tokens with popular tokens, removing duplicates
@@ -342,8 +394,8 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
   }, [searchQuery, searchResults, userTokens, popularTokens, filterExcluded]);
 
   const fallbackLogo = chainType === 'solana'
-    ? 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'
-    : 'https://assets.coingecko.com/coins/images/279/small/ethereum.png';
+    ? 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png'
+    : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png';
 
   return (
     <div className="swap-token-selector-container" ref={containerRef}>
@@ -445,7 +497,7 @@ export const SwapTokenSelector: React.FC<SwapTokenSelectorProps> = ({
                   <>
                     <p>No tokens found for "{searchQuery}"</p>
                     <p className="swap-token-selector-hint">
-                      Try searching by name, symbol, or paste a token address
+                      Try pasting the token's contract address to find any tradable token
                     </p>
                   </>
                 ) : (

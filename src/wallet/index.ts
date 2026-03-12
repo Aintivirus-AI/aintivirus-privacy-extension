@@ -1,4 +1,3 @@
-// Wallet module message router handling Solana/EVM actions, storage, and swaps.
 import { Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 import {
   WalletMessageType,
@@ -22,11 +21,16 @@ import {
   EVMTokenBalance,
   EVMFeeEstimate,
   EVMTransactionResult,
+  EVMHistoryItemResponse,
   EVMSendParams,
   EVMTokenSendParams,
   EVMPendingTxInfo,
   EVMGasPresets,
   EVMReplacementFeeEstimate,
+  BTCTransactionResult,
+  BTCFeeEstimate,
+  TRXTransactionResult,
+  TRXFeeEstimate,
 } from './types';
 import {
   walletExists,
@@ -38,6 +42,8 @@ import {
   deleteWallet,
   getUnlockedKeypair,
   getUnlockedEVMKeypair,
+  getUnlockedMnemonic,
+  getUnlockedBitcoinWIF,
   getEVMAddress,
   isWalletUnlocked,
   getPublicAddress,
@@ -63,7 +69,9 @@ import {
   getNumericChainId,
   parseAmount,
   formatAmount,
+  getAdapterForChain,
 } from './chains';
+import { getChain, isEVMChain } from './chains/registry';
 
 import {
   getAllPendingTxs,
@@ -102,10 +110,10 @@ import {
   getRecentBlockhash,
 } from './rpc';
 import { generateAddressQR } from './qr';
-import { validateMnemonic } from './keychain';
+import { validateMnemonic, evmKeypairToWallet } from './keychain';
 import bs58 from 'bs58';
 
-import { sendSol, sendSPLToken, estimateTransactionFee } from './transactions';
+import { sendSol, sendSPLToken, processStorePayment, estimateTransactionFee } from './transactions';
 import { getTransactionHistory, clearHistoryCache } from './history';
 import {
   getTokenBalances,
@@ -117,7 +125,6 @@ import {
   type PopularToken,
 } from './tokens';
 
-// Jupiter Swap imports (Solana)
 import {
   getFormattedSwapQuote,
   performSwap,
@@ -126,7 +133,12 @@ import {
   type SwapQuote,
 } from './jupiterSwap';
 
-// EVM Swap imports (ParaSwap - no API key required)
+import {
+  getPopularTokens,
+  searchSwapTokens,
+  fetchSolanaTokenByAddress,
+} from './swapTokens';
+
 import {
   getFormattedEVMSwapQuote,
   performEVMSwap,
@@ -136,9 +148,6 @@ import {
 
 import { balanceDedup } from './requestDedup';
 
-// Balance deduplication keeps us from hammering the same RPC endpoint during
-// rapid UI refreshes, while the handler below (and the RPC health helpers) keep
-// the wallet responsive across Solana, EVM, and swap flows.
 import {
   getRpcHealthSummary,
   addCustomRpcUrl,
@@ -147,8 +156,6 @@ import {
   initializeRpcHealth,
 } from './rpcHealth';
 
-// Core RPC router that receives `WalletMessageType` commands from the UI,
-// resets the auto-lock timer, and delegates to the specific helper below.
 export async function handleWalletMessage(
   type: WalletMessageType,
   payload: unknown,
@@ -158,8 +165,6 @@ export async function handleWalletMessage(
   }
 
   switch (type) {
-    // Account lifecycle controls: creation, import, unlocking, locking, deletion.
-
     case 'WALLET_CREATE':
       return handleCreateWallet(payload as WalletMessagePayloads['WALLET_CREATE']);
 
@@ -183,7 +188,6 @@ export async function handleWalletMessage(
       await handleDeleteWallet(payload as WalletMessagePayloads['WALLET_DELETE']);
       return undefined;
 
-    // Helpers that enumerate or mutate the stored wallet entries visible in the UI.
     case 'WALLET_LIST':
       return handleListWallets();
 
@@ -216,7 +220,6 @@ export async function handleWalletMessage(
     case 'WALLET_GET_ACTIVE':
       return handleGetActiveWallet();
 
-    // Balance inquiries, send requests, and fee estimation for tokens/transactions.
     case 'WALLET_GET_BALANCE':
       return handleGetBalance(payload as { forceRefresh?: boolean } | undefined);
 
@@ -254,6 +257,9 @@ export async function handleWalletMessage(
 
     case 'WALLET_SEND_SPL_TOKEN':
       return handleSendSPLToken(payload as WalletMessagePayloads['WALLET_SEND_SPL_TOKEN']);
+
+    case 'WALLET_PROCESS_STORE_PAYMENT':
+      return handleProcessStorePayment(payload as WalletMessagePayloads['WALLET_PROCESS_STORE_PAYMENT']);
 
     case 'WALLET_ESTIMATE_FEE':
       return handleEstimateFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_FEE']);
@@ -303,6 +309,18 @@ export async function handleWalletMessage(
     case 'WALLET_SEND_ERC20':
       return handleSendERC20(payload as WalletMessagePayloads['WALLET_SEND_ERC20']);
 
+    case 'WALLET_SEND_BTC':
+      return handleSendBTC(payload as WalletMessagePayloads['WALLET_SEND_BTC']);
+
+    case 'WALLET_ESTIMATE_BTC_FEE':
+      return handleEstimateBTCFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE']);
+
+    case 'WALLET_SEND_TRX':
+      return handleSendTRX(payload as WalletMessagePayloads['WALLET_SEND_TRX']);
+
+    case 'WALLET_ESTIMATE_TRX_FEE':
+      return handleEstimateTRXFee(payload as WalletMessagePayloads['WALLET_ESTIMATE_TRX_FEE']);
+
     case 'WALLET_GET_EVM_TOKENS':
       return handleGetEVMTokens(payload as WalletMessagePayloads['WALLET_GET_EVM_TOKENS']);
 
@@ -314,6 +332,9 @@ export async function handleWalletMessage(
 
     case 'WALLET_GET_EVM_ADDRESS':
       return handleGetEVMAddress();
+
+    case 'WALLET_GET_CHAIN_ADDRESS':
+      return handleGetChainAddress(payload as WalletMessagePayloads['WALLET_GET_CHAIN_ADDRESS']);
 
     case 'EVM_GET_PENDING_TXS':
       return handleGetPendingTxs(payload as WalletMessagePayloads['EVM_GET_PENDING_TXS']);
@@ -345,7 +366,6 @@ export async function handleWalletMessage(
     case 'WALLET_SWAP_REFERRAL_STATUS':
       return handleSwapReferralStatus();
 
-    // EVM Swap (ParaSwap)
     case 'EVM_SWAP_QUOTE':
       return handleEVMSwapQuote(payload as WalletMessagePayloads['EVM_SWAP_QUOTE']);
 
@@ -357,6 +377,18 @@ export async function handleWalletMessage(
 
     case 'EVM_RPC_REQUEST':
       return handleEVMRpcRequest(payload as WalletMessagePayloads['EVM_RPC_REQUEST']);
+
+    // Swap Token Discovery (routes through background for CORS)
+    case 'SWAP_GET_POPULAR_TOKENS':
+      return handleSwapGetPopularTokens(payload as WalletMessagePayloads['SWAP_GET_POPULAR_TOKENS']);
+
+    case 'SWAP_SEARCH_TOKENS':
+      return handleSwapSearchTokens(payload as WalletMessagePayloads['SWAP_SEARCH_TOKENS']);
+
+    case 'SWAP_GET_TOKEN_BY_ADDRESS':
+      return handleSwapGetTokenByAddress(
+        payload as WalletMessagePayloads['SWAP_GET_TOKEN_BY_ADDRESS'],
+      );
 
     default:
       throw new WalletError(WalletErrorCode.NETWORK_ERROR, `Unknown wallet message type: ${type}`);
@@ -552,8 +584,8 @@ async function handleExportPrivateKey(
     );
   }
 
-  if (!chain || (chain !== 'solana' && chain !== 'evm')) {
-    throw new WalletError(WalletErrorCode.INVALID_MNEMONIC, 'Chain type must be "solana" or "evm"');
+  if (!chain || (chain !== 'solana' && chain !== 'evm' && chain !== 'bitcoin')) {
+    throw new WalletError(WalletErrorCode.INVALID_MNEMONIC, 'Chain type must be "solana", "evm", or "bitcoin"');
   }
 
   const result = await exportPrivateKey(walletId, password, chain);
@@ -570,6 +602,14 @@ async function handleGetBalance(payload?: { forceRefresh?: boolean }): Promise<W
 
   if (!address) {
     throw new WalletError(WalletErrorCode.WALLET_NOT_INITIALIZED, 'No wallet found');
+  }
+
+  if (address.startsWith('btc:') || address.startsWith('evm:')) {
+    return {
+      lamports: 0,
+      sol: 0,
+      lastUpdated: Date.now(),
+    };
   }
 
   const forceRefresh = payload?.forceRefresh ?? false;
@@ -674,6 +714,12 @@ async function handleSignTransaction(
 async function handleSignMessage(
   payload: WalletMessagePayloads['WALLET_SIGN_MESSAGE'],
 ): Promise<{ signature: string }> {
+  // Route to EVM signing if chainType is 'evm'
+  if (payload.chainType === 'evm') {
+    return handleSignMessageEVM(payload.message, payload.address, payload.typedData);
+  }
+
+  // Default: Solana Ed25519 signing
   const keypair = getUnlockedKeypair();
 
   if (!keypair) {
@@ -684,16 +730,127 @@ async function handleSignMessage(
   }
 
   try {
-    const messageBytes = new TextEncoder().encode(payload.message);
+    const messageBytes = new Uint8Array(payload.message.length);
+    for (let i = 0; i < payload.message.length; i++) {
+      messageBytes[i] = payload.message.charCodeAt(i);
+    }
 
     const nacl = await import('tweetnacl');
     const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
-
+    const signatureBase64 = btoa(String.fromCharCode(...signature));
     return {
-      signature: bs58.encode(signature),
+      signature: signatureBase64,
     };
   } catch (error) {
     throw new WalletError(WalletErrorCode.SIGNING_FAILED, 'Failed to sign message');
+  }
+}
+
+/**
+ * Sign a message using EVM secp256k1 (EIP-191 personal_sign).
+ *
+ * ethers Wallet.signMessage() automatically:
+ *   1. Prepends the EIP-191 prefix: "\x19Ethereum Signed Message:\n{length}"
+ *   2. Hashes with keccak256
+ *   3. Signs with secp256k1
+ *   4. Returns a hex-encoded 65-byte signature (r + s + v)
+ */
+async function handleSignMessageEVM(
+  message: string,
+  requestedAddress?: string,
+  typedData?: string,
+): Promise<{ signature: string }> {
+  const evmKeypair = getUnlockedEVMKeypair();
+
+  if (!evmKeypair) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'EVM wallet is locked or no EVM keypair available. Please unlock to sign messages.',
+    );
+  }
+
+  // Verify the requested address matches the unlocked wallet to prevent
+  // signing on behalf of an address the wallet doesn't control.
+  if (requestedAddress) {
+    const walletAddress = evmKeypair.address.toLowerCase();
+    const requested = requestedAddress.toLowerCase();
+    if (walletAddress !== requested) {
+      throw new WalletError(
+        WalletErrorCode.SIGNING_FAILED,
+        `Address mismatch: dApp requested signing for ${requestedAddress} but wallet address is ${evmKeypair.address}`,
+      );
+    }
+  }
+
+  // Use the proven evmKeypairToWallet utility (same one used for transaction signing)
+  const wallet = evmKeypairToWallet(evmKeypair);
+
+  // EIP-712 typed data signing (eth_signTypedData_v3 / v4)
+  if (typedData) {
+    try {
+      const parsed = JSON.parse(typedData);
+
+      // Validate required EIP-712 fields
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Typed data must be a JSON object');
+      }
+      if (!parsed.domain || typeof parsed.domain !== 'object') {
+        throw new Error('Typed data missing required field: domain');
+      }
+      if (!parsed.types || typeof parsed.types !== 'object') {
+        throw new Error('Typed data missing required field: types');
+      }
+      if (parsed.message === undefined || parsed.message === null) {
+        throw new Error('Typed data missing required field: message');
+      }
+
+      // primaryType is also present in the spec but ethers infers it from types
+      const { domain, types, message: value } = parsed;
+      // ethers.js requires EIP712Domain to be omitted from the types object
+      const signingTypes = { ...types };
+      delete signingTypes.EIP712Domain;
+      const signature = await wallet.signTypedData(domain, signingTypes, value);
+      return { signature };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new WalletError(
+        WalletErrorCode.SIGNING_FAILED,
+        `Failed to sign EVM typed data: ${detail}`,
+      );
+    }
+  }
+
+  // personal_sign: messages from dApps are typically hex-encoded byte strings.
+  // If the message starts with 0x and looks like valid hex, decode to bytes first
+  // so ethers signs the raw bytes rather than the hex-encoded ASCII text.
+  try {
+    let messageData: string | Uint8Array;
+    if (
+      message.length > 2 &&
+      message.startsWith('0x') &&
+      /^0x[0-9a-fA-F]+$/.test(message) &&
+      message.length % 2 === 0
+    ) {
+      // Decode hex to bytes — no dynamic import needed
+      const hex = message.slice(2);
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+      }
+      messageData = bytes;
+    } else {
+      // Plain text message — sign as UTF-8
+      messageData = message;
+    }
+
+    const signature = await wallet.signMessage(messageData);
+    return { signature };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new WalletError(
+      WalletErrorCode.SIGNING_FAILED,
+      `Failed to sign EVM message: ${detail}`,
+    );
   }
 }
 
@@ -742,6 +899,28 @@ async function handleSendSPLToken(
   clearHistoryCache();
   clearTokenCache();
 
+  balanceDedup.invalidate(/^balance:solana:/);
+
+  return result;
+}
+
+async function handleProcessStorePayment(
+  payload: WalletMessagePayloads['WALLET_PROCESS_STORE_PAYMENT'],
+): Promise<SendTransactionResult> {
+  const { orderId, amount } = payload;
+
+  if (!orderId) {
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Order ID is required');
+  }
+
+  if (!amount || amount <= 0) {
+    throw new WalletError(WalletErrorCode.INVALID_AMOUNT, 'Amount must be greater than 0');
+  }
+
+  const result = await processStorePayment({ orderId, amount });
+
+  clearHistoryCache();
+  clearTokenCache();
   balanceDedup.invalidate(/^balance:solana:/);
 
   return result;
@@ -831,14 +1010,14 @@ async function handleGetTokenMetadata(
 
       if (metadata) {
         const chainSlug = chainId === 'ethereum' ? 'ethereum' : chainId;
-        // TrustWallet requires checksummed addresses
         let checksumAddress: string;
         try {
           checksumAddress = getAddress(mint);
         } catch {
           checksumAddress = mint;
         }
-        const logoUri = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainSlug}/assets/${checksumAddress}/logo.png`;
+        // Use jsDelivr CDN for better reliability
+        const logoUri = `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainSlug}/assets/${checksumAddress}/logo.png`;
 
         return {
           symbol: metadata.symbol,
@@ -846,7 +1025,8 @@ async function handleGetTokenMetadata(
           logoUri: logoUri,
         };
       }
-    } catch (error) {}
+    } catch {
+    }
     return null;
   }
 
@@ -904,11 +1084,12 @@ async function handleTestRpc(
 }
 
 async function handleSetChain(payload: WalletMessagePayloads['WALLET_SET_CHAIN']): Promise<void> {
-  const { chain, evmChainId } = payload;
+  const { chain, evmChainId, chainId } = payload;
 
   await saveWalletSettings({
     activeChain: chain,
     activeEVMChain: evmChainId,
+    activeChainId: chainId,
   });
 }
 
@@ -926,22 +1107,85 @@ async function handleSetEVMChain(
 async function handleGetEVMBalance(
   payload: WalletMessagePayloads['WALLET_GET_EVM_BALANCE'],
 ): Promise<EVMBalance> {
+  const settings = await getWalletSettings();
+  const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
+  const testnet = settings.networkEnvironment === 'testnet';
+  const network = testnet ? 'testnet' : 'mainnet';
+
+  const chainConfig = getChain(chainId);
+
+  if (chainConfig && !isEVMChain(chainId)) {
+    try {
+      const adapter = getAdapterForChain(chainId, network);
+
+      const mnemonic = getUnlockedMnemonic();
+      let address: string;
+
+      if (mnemonic) {
+        address = await adapter.deriveAddress(mnemonic, 0);
+      } else {
+        const publicAddress = await getPublicAddress();
+        if (!publicAddress) {
+          return {
+            wei: '0',
+            formatted: 0,
+            symbol: chainConfig.symbol,
+            lastUpdated: Date.now(),
+          };
+        }
+
+        const chainFamily = chainConfig.family;
+        const addressPrefix = publicAddress.split(':')[0];
+        const rawAddress = publicAddress.includes(':') ? publicAddress.split(':')[1] : publicAddress;
+
+        if (chainFamily === 'bitcoin' && addressPrefix === 'btc') {
+          address = rawAddress;
+        } else if (chainFamily === 'tron' && addressPrefix === 'tron') {
+          address = rawAddress;
+        } else {
+          // Chain doesn't match stored address type
+          return {
+            wei: '0',
+            formatted: 0,
+            symbol: chainConfig.symbol,
+            lastUpdated: Date.now(),
+          };
+        }
+      }
+      
+      const balance = await adapter.getBalance(address);
+      
+      return {
+        wei: balance.raw.toString(),
+        formatted: balance.formatted,
+        symbol: balance.symbol,
+        lastUpdated: balance.lastUpdated,
+      };
+    } catch (error) {
+      console.warn(`[Wallet] Failed to get balance for ${chainId}:`, error instanceof Error ? error.message : String(error));
+      return {
+        wei: '0',
+        formatted: 0,
+        symbol: chainConfig?.symbol || 'UNKNOWN',
+        lastUpdated: Date.now(),
+      };
+    }
+  }
+
+  const evmChainId = chainId as EVMChainId;
   const evmAddress = getEVMAddress();
 
   if (!evmAddress) {
+    const evmChainConfig = getEVMChainConfig(evmChainId);
     return {
       wei: '0',
       formatted: 0,
-      symbol: 'ETH',
+      symbol: evmChainConfig.symbol,
       lastUpdated: Date.now(),
     };
   }
 
-  const settings = await getWalletSettings();
-  const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
-  const testnet = settings.networkEnvironment === 'testnet';
-
-  const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
+  const adapter = getEVMAdapter(evmChainId, network);
   const balance = await adapter.getBalance(evmAddress);
 
   return {
@@ -983,15 +1227,12 @@ async function handleSendETH(
 
   const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
 
-  // For contract calls, use valueHex if available (preserves precision)
-  // Otherwise fall back to parsing the decimal amount
   const amountWei =
     valueHex && data && data !== '0x' ? BigInt(valueHex) : parseAmount(amount, config.decimals);
 
   let unsignedTx;
   let txData = data || '0x';
 
-  // Helper to safely parse hex values to BigInt
   const parseHexToBigInt = (hex: string | undefined): bigint | undefined => {
     if (!hex) return undefined;
     try {
@@ -1001,7 +1242,6 @@ async function handleSendETH(
     }
   };
 
-  // If data is provided, this is a contract call (e.g., Uniswap swap)
   if (data && data !== '0x') {
     unsignedTx = await createContractCall(chainId, testnet, {
       from: evmKeypair.address,
@@ -1014,13 +1254,11 @@ async function handleSendETH(
       maxPriorityFeePerGas: parseHexToBigInt(maxPriorityFeePerGas),
     });
 
-    // Sign and broadcast directly for contract calls
     const signedTx = signEVMTransaction(unsignedTx, evmKeypair, numericChainId);
     const txResponse = await broadcastTransaction(chainId, testnet, signedTx);
 
     const explorerBase = getEVMExplorerUrl(chainId, testnet);
 
-    // Track pending transaction
     try {
       await addPendingTx(
         createPendingTxRecord({
@@ -1037,7 +1275,8 @@ async function handleSendETH(
           testnet: testnet,
         }),
       );
-    } catch (err) {}
+    } catch {
+    }
 
     return {
       hash: txResponse.hash,
@@ -1047,7 +1286,6 @@ async function handleSendETH(
     };
   }
 
-  // Simple ETH transfer (no data)
   const createdTx = await adapter.createTransfer(evmKeypair.address, recipient, amountWei);
   const signedTx = await adapter.signTransaction(createdTx, {
     chainType: 'evm',
@@ -1078,7 +1316,8 @@ async function handleSendETH(
           }),
         );
       }
-    } catch (err) {}
+    } catch {
+    }
   }
 
   return {
@@ -1145,7 +1384,8 @@ async function handleSendERC20(
           }),
         );
       }
-    } catch (err) {}
+    } catch {
+    }
   }
 
   return {
@@ -1159,20 +1399,52 @@ async function handleSendERC20(
 async function handleGetEVMTokens(
   payload: WalletMessagePayloads['WALLET_GET_EVM_TOKENS'],
 ): Promise<EVMTokenBalance[]> {
-  const evmAddress = getEVMAddress();
-
-  if (!evmAddress) {
-    return [];
-  }
-
   const { invalidateSettingsCache } = await import('./storage');
   invalidateSettingsCache();
 
   const settings = await getWalletSettings();
   const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
   const testnet = settings.networkEnvironment === 'testnet';
+  const network = testnet ? 'testnet' : 'mainnet';
 
-  const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
+  const chainConfig = getChain(chainId);
+  if (chainConfig && !isEVMChain(chainId)) {
+    try {
+      const adapter = getAdapterForChain(chainId, network);
+
+      const mnemonic = getUnlockedMnemonic();
+      if (!mnemonic) {
+        return [];
+      }
+      const address = await adapter.deriveAddress(mnemonic, 0);
+      const tokens = await adapter.getTokenBalances(address);
+
+      return tokens.map((t) => ({
+        address: t.address,
+        symbol: t.symbol,
+        name: t.name || t.symbol,
+        decimals: t.decimals,
+        rawBalance: t.rawBalance,
+        uiBalance: t.uiBalance,
+        logoUri: t.logoUri,
+        isCustom: false,
+      }));
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Failed to get tokens for ${chainId}:`, error);
+      }
+      return [];
+    }
+  }
+
+  const evmChainId = chainId as EVMChainId;
+  const evmAddress = getEVMAddress();
+
+  if (!evmAddress) {
+    return [];
+  }
+
+  const adapter = getEVMAdapter(evmChainId, network);
 
   const customTokens = settings.customTokens || [];
   const hiddenTokens = new Set((settings.hiddenTokens || []).map((t) => t.toLowerCase()));
@@ -1183,7 +1455,6 @@ async function handleGetEVMTokens(
 
   for (const token of customTokens) {
     if (token.mint.startsWith('0x')) {
-      // Pass pre-known metadata to skip slow RPC calls (like Solana does)
       adapter.addCustomToken(token.mint, {
         symbol: token.symbol,
         name: token.name,
@@ -1219,7 +1490,7 @@ async function handleGetEVMTokens(
     await saveWalletSettings({ hiddenTokens: newHiddenTokens });
   }
 
-  return tokens
+  const mappedTokens: EVMTokenBalance[] = tokens
     .filter(
       (t) =>
         !hiddenTokens.has(t.address.toLowerCase()) || customTokenMints.has(t.address.toLowerCase()),
@@ -1228,6 +1499,7 @@ async function handleGetEVMTokens(
       const normalizedAddress = t.address.toLowerCase();
       const customMeta = customTokenMap.get(normalizedAddress);
       const isCustom = customTokenMints.has(normalizedAddress);
+
       return {
         address: t.address,
         symbol: customMeta?.symbol || t.symbol,
@@ -1239,28 +1511,92 @@ async function handleGetEVMTokens(
         isCustom,
       };
     });
+
+  mappedTokens.sort((a, b) => {
+    if (a.uiBalance > 0 && b.uiBalance === 0) return -1;
+    if (a.uiBalance === 0 && b.uiBalance > 0) return 1;
+    return b.uiBalance - a.uiBalance;
+  });
+
+  return mappedTokens;
 }
 
 async function handleGetEVMHistory(
   payload: WalletMessagePayloads['WALLET_GET_EVM_HISTORY'],
-): Promise<{ transactions: any[]; hasMore: boolean }> {
+): Promise<{ transactions: EVMHistoryItemResponse[]; hasMore: boolean }> {
+  const settings = await getWalletSettings();
+  const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
+  const testnet = settings.networkEnvironment === 'testnet';
+  const network = testnet ? 'testnet' : 'mainnet';
+
+  const chainConfig = getChain(chainId);
+  if (chainConfig && !isEVMChain(chainId)) {
+    try {
+      const adapter = getAdapterForChain(chainId, network);
+
+      const mnemonic = getUnlockedMnemonic();
+      let address: string;
+
+      if (mnemonic) {
+        address = await adapter.deriveAddress(mnemonic, 0);
+      } else {
+        const publicAddress = await getPublicAddress();
+        if (!publicAddress) {
+          return { transactions: [], hasMore: false };
+        }
+
+        const chainFamily = chainConfig.family;
+        const addressPrefix = publicAddress.split(':')[0];
+        const rawAddress = publicAddress.includes(':') ? publicAddress.split(':')[1] : publicAddress;
+
+        if (chainFamily === 'bitcoin' && addressPrefix === 'btc') {
+          address = rawAddress;
+        } else if (chainFamily === 'tron' && addressPrefix === 'tron') {
+          address = rawAddress;
+        } else {
+          return { transactions: [], hasMore: false };
+        }
+      }
+
+      const result = await adapter.getTransactionHistory(address, payload?.limit || 20);
+
+      const serializableTransactions = result.transactions.map((tx) => ({
+        hash: tx.hash,
+        timestamp: tx.timestamp,
+        direction: tx.direction,
+        type: tx.type,
+        amount: tx.amountFormatted,
+        symbol: tx.symbol,
+        counterparty: tx.counterparty,
+        fee: typeof tx.fee === 'bigint' ? Number(tx.fee) / Math.pow(10, chainConfig.decimals) : tx.fee,
+        status: tx.status,
+        explorerUrl: tx.explorerUrl || adapter.getTxExplorerUrl(tx.hash),
+        tokenAddress: tx.tokenAddress,
+        logoUri: tx.logoUri,
+        swapInfo: tx.swapInfo,
+      }));
+
+      return {
+        transactions: serializableTransactions,
+        hasMore: result.hasMore,
+      };
+    } catch (error) {
+      console.warn(`[Wallet] Failed to get history for ${chainId}:`, error instanceof Error ? error.message : String(error));
+      return { transactions: [], hasMore: false };
+    }
+  }
+
   const evmAddress = getEVMAddress();
 
   if (!evmAddress) {
     return { transactions: [], hasMore: false };
   }
 
-  const settings = await getWalletSettings();
-  const chainId = payload?.evmChainId || settings.activeEVMChain || 'ethereum';
-  const testnet = settings.networkEnvironment === 'testnet';
-
   try {
-    const adapter = getEVMAdapter(chainId, testnet ? 'testnet' : 'mainnet');
+    const adapter = getEVMAdapter(chainId as EVMChainId, network);
     const result = await adapter.getTransactionHistory(evmAddress, payload?.limit || 20);
 
-    // BigInt cannot be serialized through Chrome's message passing
-    // Convert to serializable format for the UI
-    const explorerBase = getEVMExplorerUrl(chainId, testnet);
+    const explorerBase = getEVMExplorerUrl(chainId as EVMChainId, testnet);
     const serializableTransactions = result.transactions.map((tx) => ({
       hash: tx.hash,
       timestamp: tx.timestamp,
@@ -1274,7 +1610,6 @@ async function handleGetEVMHistory(
       explorerUrl: tx.explorerUrl || `${explorerBase}/tx/${tx.hash}`,
       tokenAddress: tx.tokenAddress,
       logoUri: tx.logoUri,
-      // Include swap info for swap transactions
       swapInfo: tx.swapInfo,
     }));
 
@@ -1339,6 +1674,113 @@ async function handleGetEVMAddress(): Promise<string> {
   const evmAddress = getEVMAddress();
 
   return evmAddress || '';
+}
+
+async function handleGetChainAddress(
+  payload: WalletMessagePayloads['WALLET_GET_CHAIN_ADDRESS'],
+): Promise<WalletMessageResponses['WALLET_GET_CHAIN_ADDRESS']> {
+  const { chainId } = payload;
+
+  const chainConfig = getChain(chainId);
+
+  if (!chainConfig) {
+    throw new WalletError(WalletErrorCode.NETWORK_ERROR, `Unknown chain: ${chainId}`);
+  }
+
+  if (chainConfig.family === 'solana') {
+    const publicAddress = await getPublicAddress();
+    return {
+      address: publicAddress || '',
+      chainId,
+      chainFamily: chainConfig.family,
+      symbol: chainConfig.symbol,
+    };
+  }
+
+  if (chainConfig.family === 'evm') {
+    const evmAddress = getEVMAddress();
+    return {
+      address: evmAddress || '',
+      chainId,
+      chainFamily: chainConfig.family,
+      symbol: chainConfig.symbol,
+    };
+  }
+
+  if (chainConfig.family === 'monero') {
+    const settings = await getWalletSettings();
+    const moneroAddress = settings.moneroWatchOnly?.address || '';
+    return {
+      address: moneroAddress,
+      chainId,
+      chainFamily: chainConfig.family,
+      symbol: chainConfig.symbol,
+    };
+  }
+
+  const mnemonic = getUnlockedMnemonic();
+  const bitcoinWIF = getUnlockedBitcoinWIF();
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+  const network = testnet ? 'testnet' : 'mainnet';
+
+  if (mnemonic) {
+    try {
+      const adapter = getAdapterForChain(chainId, network);
+      const address = await adapter.deriveAddress(mnemonic, 0);
+      
+      return {
+        address,
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Failed to derive address for ${chainId}:`, error);
+      }
+      return {
+        address: '',
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    }
+  }
+  
+  // If we have a Bitcoin WIF and this is a Bitcoin-family chain, derive from WIF
+  if (bitcoinWIF && chainConfig.family === 'bitcoin') {
+    try {
+      const { getBitcoinFamilyAddressFromWIF } = await import('./chains/bitcoin/addresses');
+      type BitcoinChainIdType = import('./chains/bitcoin/types').BitcoinChainId;
+      const address = getBitcoinFamilyAddressFromWIF(bitcoinWIF, chainId as BitcoinChainIdType, 'native-segwit', testnet);
+      
+      return {
+        address,
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`Failed to derive ${chainId} address from WIF:`, error);
+      }
+      return {
+        address: '',
+        chainId,
+        chainFamily: chainConfig.family,
+        symbol: chainConfig.symbol,
+      };
+    }
+  }
+
+  return {
+    address: '',
+    chainId,
+    chainFamily: chainConfig.family,
+    symbol: chainConfig.symbol,
+  };
 }
 
 async function handleGetPendingTxs(
@@ -1574,12 +2016,302 @@ async function handleEstimateReplacementFee(
 }
 
 // ============================================================================
-// Jupiter Swap Handlers
+// Bitcoin Handlers
 // ============================================================================
 
 /**
- * Get a swap quote from Jupiter
+ * Send Bitcoin (or other Bitcoin-family coin)
  */
+async function handleSendBTC(
+  payload: WalletMessagePayloads['WALLET_SEND_BTC'],
+): Promise<BTCTransactionResult> {
+  const { chainId, recipient, amountSatoshis } = payload;
+
+  // Validate chain is a Bitcoin-family chain
+  const chainConfig = getChain(chainId);
+  if (!chainConfig || chainConfig.family !== 'bitcoin') {
+    throw new WalletError(
+      WalletErrorCode.NETWORK_ERROR,
+      `Chain ${chainId} is not a Bitcoin-family chain`,
+    );
+  }
+
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock to send transactions.',
+    );
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  const { deriveBitcoinKeypair, isValidBitcoinAddress } = await import('./chains/bitcoin/addresses');
+  const { createUnsignedTransaction, signTransaction } = await import('./chains/bitcoin/transactions');
+  const { broadcastTransaction: broadcastBtcTx, getBitcoinTxExplorerUrl } = await import('./chains/bitcoin');
+  type BitcoinChainId = import('./chains/bitcoin/types').BitcoinChainId;
+
+  const bitcoinChainId = chainId as BitcoinChainId;
+  const keypair = deriveBitcoinKeypair(mnemonic, bitcoinChainId, 0, undefined, testnet);
+
+  if (!isValidBitcoinAddress(recipient, bitcoinChainId, testnet)) {
+    throw new WalletError(
+      WalletErrorCode.INVALID_RECIPIENT,
+      `Invalid ${chainConfig.name} address: ${recipient}`,
+    );
+  }
+
+  const { tx: unsignedTx, fee } = await createUnsignedTransaction(
+    bitcoinChainId,
+    keypair.address,
+    recipient,
+    amountSatoshis,
+    testnet,
+  );
+
+  const signedTx = await signTransaction(unsignedTx, keypair, bitcoinChainId, testnet);
+  const txid = await broadcastBtcTx(bitcoinChainId, signedTx.hex, testnet);
+
+  const { clearBitcoinCache } = await import('./chains/bitcoin');
+  clearBitcoinCache(bitcoinChainId, keypair.address);
+
+  const explorerUrl = getBitcoinTxExplorerUrl(bitcoinChainId, txid, testnet);
+
+  return {
+    txid,
+    explorerUrl,
+    confirmed: false,
+  };
+}
+
+async function handleEstimateBTCFee(
+  payload: WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE'],
+): Promise<BTCFeeEstimate> {
+  const { chainId, recipient, amountSatoshis } = payload;
+
+  const chainConfig = getChain(chainId);
+  if (!chainConfig || chainConfig.family !== 'bitcoin') {
+    throw new WalletError(
+      WalletErrorCode.NETWORK_ERROR,
+      `Chain ${chainId} is not a Bitcoin-family chain`,
+    );
+  }
+
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    return {
+      feeRate: 10,
+      totalFeeSatoshis: 1500,
+      totalFeeBTC: 0.000015,
+      estimatedBlocks: 6,
+    };
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  const { deriveBitcoinKeypair } = await import('./chains/bitcoin/addresses');
+  const { estimateTransactionFee } = await import('./chains/bitcoin/transactions');
+  type BitcoinChainIdType = import('./chains/bitcoin/types').BitcoinChainId;
+
+  const bitcoinChainId = chainId as BitcoinChainIdType;
+  const keypair = deriveBitcoinKeypair(mnemonic, bitcoinChainId, 0, undefined, testnet);
+
+  const feeEstimate = await estimateTransactionFee(
+    bitcoinChainId,
+    keypair.address,
+    recipient,
+    amountSatoshis,
+    testnet,
+  );
+
+  return {
+    feeRate: feeEstimate.feeRate,
+    totalFeeSatoshis: feeEstimate.totalFee,
+    totalFeeBTC: feeEstimate.totalFee / 100000000,
+    estimatedBlocks: feeEstimate.estimatedBlocks,
+  };
+}
+
+async function handleSendTRX(
+  payload: WalletMessagePayloads['WALLET_SEND_TRX'],
+): Promise<TRXTransactionResult> {
+  const { recipient, amountSun } = payload;
+
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    throw new WalletError(
+      WalletErrorCode.WALLET_LOCKED,
+      'Wallet is locked. Please unlock to send transactions.',
+    );
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  const { deriveTronKeypair, isValidTronAddress } = await import('./chains/tron/addresses');
+  const { createTransferTransaction, broadcastTransaction } = await import('./chains/tron/client');
+  const { getTronTxExplorerUrl } = await import('./chains/tron/config');
+
+  const keypair = deriveTronKeypair(mnemonic, 0);
+
+  if (!isValidTronAddress(recipient)) {
+    throw new WalletError(
+      WalletErrorCode.INVALID_RECIPIENT,
+      `Invalid TRON address: ${recipient}`,
+    );
+  }
+
+  // Helper to decode hex error messages from TRON API
+  const decodeHexError = (hex: string): string => {
+    try {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+      return new TextDecoder().decode(bytes);
+    } catch {
+      return hex;
+    }
+  };
+
+  try {
+    const unsignedTx = await createTransferTransaction(
+      keypair.address,
+      recipient,
+      amountSun,
+      testnet,
+    );
+
+    const { signTransaction } = await import('./chains/tron/addresses');
+    const signature = signTransaction(unsignedTx.raw_data_hex, keypair.privateKey);
+
+    const signedTx = {
+      txID: unsignedTx.txID,
+      raw_data: unsignedTx.raw_data,
+      raw_data_hex: unsignedTx.raw_data_hex,
+      signature: [signature],
+      visible: unsignedTx.visible ?? true,
+    };
+
+    const txid = await broadcastTransaction(signedTx, testnet);
+    const explorerUrl = getTronTxExplorerUrl(txid, testnet);
+
+    return {
+      txid,
+      explorerUrl,
+      confirmed: true,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    console.error('[TRON] Send error:', errorMessage);
+    let decodedMessage = errorMessage;
+    if (/^[0-9a-fA-F]+$/.test(errorMessage)) {
+      decodedMessage = decodeHexError(errorMessage);
+    }
+
+    if (decodedMessage.includes('RECEIVER_NOT_ACTIVATED')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'This receiving address has not been activated on TRON. To activate a new address, you need to send at least 1 TRX.',
+      );
+    }
+
+    if (decodedMessage.includes('SENDER_NOT_FOUND')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'Your TRON account was not found on the network. Please ensure you have received TRX before.',
+      );
+    }
+
+    if (decodedMessage.includes('INSUFFICIENT_BALANCE')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        decodedMessage.replace('INSUFFICIENT_BALANCE: ', ''),
+      );
+    }
+    
+    // Check for insufficient balance error from network
+    if (decodedMessage.includes('balance is not sufficient') || decodedMessage.includes('not sufficient')) {
+      throw new WalletError(
+        WalletErrorCode.INSUFFICIENT_FUNDS,
+        'Insufficient balance. TRON requires keeping a reserve in your account. Try sending a smaller amount.',
+      );
+    }
+
+    if (decodedMessage.includes('bandwidth') || decodedMessage.includes('AccountResourceInsufficient')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'Insufficient bandwidth or energy. You may need to wait for bandwidth to regenerate or have more TRX for fees.',
+      );
+    }
+
+    if ((decodedMessage.includes('No contract') || decodedMessage.includes('Account not exist'))
+        && amountSun < 1000000) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        'This receiving address has not been activated on TRON. To activate a new address, you need to send at least 1 TRX.',
+      );
+    }
+    
+    // For other "No contract" errors, provide more context
+    if (decodedMessage.includes('No contract')) {
+      throw new WalletError(
+        WalletErrorCode.TRANSACTION_FAILED,
+        `Transaction failed: ${decodedMessage}. This may be a network issue - please try again.`,
+      );
+    }
+    
+    throw new WalletError(
+      WalletErrorCode.TRANSACTION_FAILED,
+      decodedMessage,
+    );
+  }
+}
+
+async function handleEstimateTRXFee(
+  payload: WalletMessagePayloads['WALLET_ESTIMATE_TRX_FEE'],
+): Promise<TRXFeeEstimate> {
+  const { recipient, amountSun } = payload;
+
+  // Get mnemonic to derive TRON address
+  const mnemonic = getUnlockedMnemonic();
+  if (!mnemonic) {
+    // Return a default estimate if wallet is locked
+    return {
+      bandwidth: 270,
+      energy: 0,
+      feeSun: 0,
+      feeTRX: 0,
+    };
+  }
+
+  const settings = await getWalletSettings();
+  const testnet = settings.networkEnvironment === 'testnet';
+
+  // Import TRON functions dynamically
+  const { deriveTronKeypair } = await import('./chains/tron/addresses');
+  const { estimateFee } = await import('./chains/tron/client');
+
+  const keypair = deriveTronKeypair(mnemonic, 0);
+
+  const feeEstimate = await estimateFee(
+    keypair.address,
+    recipient,
+    amountSun,
+    testnet,
+  );
+
+  return {
+    bandwidth: feeEstimate.bandwidth,
+    energy: feeEstimate.energy,
+    feeSun: feeEstimate.trxFee,
+    feeTRX: feeEstimate.trxFeeFormatted,
+  };
+}
+
 async function handleSwapQuote(
   payload: WalletMessagePayloads['WALLET_SWAP_QUOTE'],
 ): Promise<WalletMessageResponses['WALLET_SWAP_QUOTE']> {
@@ -1621,9 +2353,6 @@ async function handleSwapExecute(
   return performSwap(inputMint, outputMint, inputAmount, inputDecimals, slippageBps);
 }
 
-/**
- * Check if Jupiter swap is available (mainnet only)
- */
 async function handleSwapAvailable(): Promise<boolean> {
   return isSwapAvailable();
 }
@@ -1633,6 +2362,35 @@ async function handleSwapAvailable(): Promise<boolean> {
  */
 function handleSwapReferralStatus(): WalletMessageResponses['WALLET_SWAP_REFERRAL_STATUS'] {
   return getReferralStatus();
+}
+
+async function handleSwapGetPopularTokens(
+  payload: WalletMessagePayloads['SWAP_GET_POPULAR_TOKENS'],
+): Promise<WalletMessageResponses['SWAP_GET_POPULAR_TOKENS']> {
+  const { chainType, evmChainId, limit } = payload;
+  return getPopularTokens(chainType, evmChainId, limit);
+}
+
+/**
+ * Search tokens by symbol, name, or address
+ * Routes through background script to avoid CORS issues in popup
+ */
+async function handleSwapSearchTokens(
+  payload: WalletMessagePayloads['SWAP_SEARCH_TOKENS'],
+): Promise<WalletMessageResponses['SWAP_SEARCH_TOKENS']> {
+  const { query, chainType, evmChainId } = payload;
+  return searchSwapTokens(query, chainType, evmChainId);
+}
+
+async function handleSwapGetTokenByAddress(
+  payload: WalletMessagePayloads['SWAP_GET_TOKEN_BY_ADDRESS'],
+): Promise<WalletMessageResponses['SWAP_GET_TOKEN_BY_ADDRESS']> {
+  const { address, chainType } = payload;
+  if (chainType === 'solana') {
+    return fetchSolanaTokenByAddress(address);
+  }
+  // EVM token lookup not implemented yet - return null
+  return null;
 }
 
 // ============================================================================
@@ -1648,7 +2406,6 @@ async function handleEVMSwapQuote(
   const { evmChainId, srcToken, destToken, srcAmount, srcDecimals, destDecimals, slippageBps } =
     payload;
 
-  // Get the user's EVM address
   const evmAddress = getEVMAddress();
   if (!evmAddress) {
     throw new WalletError(WalletErrorCode.WALLET_LOCKED, 'Wallet is locked or EVM address not available');
@@ -1681,9 +2438,6 @@ async function handleEVMSwapQuote(
   };
 }
 
-/**
- * Execute a swap via ParaSwap on EVM chains
- */
 async function handleEVMSwapExecute(
   payload: WalletMessagePayloads['EVM_SWAP_EXECUTE'],
 ): Promise<WalletMessageResponses['EVM_SWAP_EXECUTE']> {
@@ -1711,25 +2465,13 @@ async function handleEVMSwapExecute(
   );
 }
 
-/**
- * Check if EVM swap is available for a chain (mainnet only)
- */
 function handleEVMSwapAvailable(
   payload: WalletMessagePayloads['EVM_SWAP_AVAILABLE'],
 ): boolean {
   const { evmChainId } = payload;
-  // ParaSwap only works on mainnet
   return isEVMSwapAvailable(evmChainId, false);
 }
 
-// ============================================================================
-// EVM RPC Forwarding Handler
-// ============================================================================
-
-/**
- * Forward arbitrary EVM RPC requests to the blockchain.
- * This enables dApps to make read-only calls like eth_call, eth_estimateGas, etc.
- */
 async function handleEVMRpcRequest(
   payload: WalletMessagePayloads['EVM_RPC_REQUEST'],
 ): Promise<unknown> {
@@ -1889,7 +2631,6 @@ async function handleEVMRpcRequest(
       }
 
       case 'eth_accounts': {
-        // Return connected account if wallet is unlocked
         const evmAddress = getEVMAddress();
         return evmAddress ? [evmAddress] : [];
       }
@@ -1908,7 +2649,6 @@ async function handleEVMRpcRequest(
   });
 }
 
-// Helper to format block response for EIP-1474 compliance
 function formatBlockResponse(block: any, includeTransactions: boolean): object {
   return {
     number: '0x' + block.number.toString(16),
@@ -1963,7 +2703,6 @@ function formatTransactionResponse(tx: any): object {
   };
 }
 
-// Helper to format receipt response
 function formatReceiptResponse(receipt: any): object {
   return {
     transactionHash: receipt.hash,
@@ -2133,3 +2872,19 @@ export {
   STUCK_THRESHOLD_MS,
   SOLANA_COMMITMENT_ORDER,
 } from './txStatus';
+
+export {
+  detectSpamToken,
+  detectSpamEVMToken,
+  detectSpamTokensBatch,
+  detectSpamEVMTokensBatch,
+  filterSpamTokens,
+  getSpamReasonSummary,
+  shouldFlagToken,
+  getSpamWarningLevel,
+  DEFAULT_SPAM_CONFIG,
+  type SpamDetectionConfig,
+  type SpamDetectionResult,
+  type SpamSignal,
+  type SpamSignalType,
+} from './spamDetection';

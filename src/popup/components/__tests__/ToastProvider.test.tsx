@@ -24,12 +24,20 @@ const renderWithProvider = (children: React.ReactNode) => {
   return render(<ToastProvider>{children}</ToastProvider>);
 };
 
+// Helper to advance timers within act()
+const advanceTimers = async (ms: number) => {
+  await act(async () => {
+    jest.advanceTimersByTime(ms);
+  });
+};
+
 describe('ToastProvider', () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
 
   afterEach(() => {
+    jest.runOnlyPendingTimers();
     jest.useRealTimers();
   });
 
@@ -52,7 +60,9 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer message="Hello World" />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
 
       expect(screen.getByText('Hello World')).toBeInTheDocument();
     });
@@ -61,7 +71,9 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
 
       const toast = screen.getByRole('status');
       expect(toast).toHaveClass('toast-success');
@@ -71,7 +83,9 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer variant="error" />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
 
       const toast = screen.getByRole('status');
       expect(toast).toHaveClass('toast-error');
@@ -81,7 +95,9 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer variant="info" />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
 
       const toast = screen.getByRole('status');
       expect(toast).toHaveClass('toast-info');
@@ -93,13 +109,13 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
       expect(screen.getByText('Test message')).toBeInTheDocument();
 
       // Default duration is 2500ms + 200ms animation
-      act(() => {
-        jest.advanceTimersByTime(2700);
-      });
+      await advanceTimers(2700);
 
       await waitFor(() => {
         expect(screen.queryByText('Test message')).not.toBeInTheDocument();
@@ -110,19 +126,17 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer duration={1000} />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
       expect(screen.getByText('Test message')).toBeInTheDocument();
 
       // Should still be visible before duration
-      act(() => {
-        jest.advanceTimersByTime(500);
-      });
+      await advanceTimers(500);
       expect(screen.getByText('Test message')).toBeInTheDocument();
 
       // Should be gone after duration + animation
-      act(() => {
-        jest.advanceTimersByTime(800);
-      });
+      await advanceTimers(800);
 
       await waitFor(() => {
         expect(screen.queryByText('Test message')).not.toBeInTheDocument();
@@ -135,16 +149,18 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
       expect(screen.getByText('Test message')).toBeInTheDocument();
 
       const dismissButton = screen.getByLabelText('Dismiss notification');
-      await user.click(dismissButton);
+      await act(async () => {
+        await user.click(dismissButton);
+      });
 
       // Wait for animation
-      act(() => {
-        jest.advanceTimersByTime(300);
-      });
+      await advanceTimers(300);
 
       await waitFor(() => {
         expect(screen.queryByText('Test message')).not.toBeInTheDocument();
@@ -168,8 +184,12 @@ describe('ToastProvider', () => {
 
       renderWithProvider(<MultiToastConsumer />);
 
-      await user.click(screen.getByText('Show 1'));
-      await user.click(screen.getByText('Show 2'));
+      await act(async () => {
+        await user.click(screen.getByText('Show 1'));
+      });
+      await act(async () => {
+        await user.click(screen.getByText('Show 2'));
+      });
 
       expect(screen.getByText('Toast 1')).toBeInTheDocument();
       expect(screen.getByText('Toast 2')).toBeInTheDocument();
@@ -197,7 +217,9 @@ describe('ToastProvider', () => {
 
       renderWithProvider(<ManyToastsConsumer />);
 
-      await user.click(screen.getByText('Show Many'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Many'));
+      });
 
       // Should only show MAX_TOASTS (3) toasts
       const toasts = screen.getAllByRole('status');
@@ -228,7 +250,9 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
 
       const toast = screen.getByRole('status');
       expect(toast).toHaveAttribute('aria-live', 'polite');
@@ -239,7 +263,9 @@ describe('ToastProvider', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       renderWithProvider(<TestConsumer />);
 
-      await user.click(screen.getByText('Show Toast'));
+      await act(async () => {
+        await user.click(screen.getByText('Show Toast'));
+      });
 
       const dismissButton = screen.getByLabelText('Dismiss notification');
       expect(dismissButton).toBeInTheDocument();

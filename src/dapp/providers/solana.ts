@@ -179,7 +179,24 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
   constructor() {
     super();
     this._setupMessageListener();
-    this._initializeState();
+    this._initializeStateWithRetry();
+  }
+
+  private async _initializeStateWithRetry(attempt = 0): Promise<void> {
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 300;
+
+    try {
+      await this._initializeState();
+    } catch {
+      // If initialization fails and we have retries left, wait and try again
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)));
+        await this._initializeStateWithRetry(attempt + 1);
+      }
+      // Best-effort initialization: if it still fails, the provider
+      // will function once events arrive from the background.
+    }
   }
 
   get publicKey(): PublicKey | null {
@@ -306,6 +323,88 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     return this.signAndSendTransaction(transaction, options);
   }
 
+  // Wallet-standard compatible method: accepts and returns Uint8Array bytes
+  async signTransactionBytes(transactionBytes: Uint8Array): Promise<Uint8Array> {
+    if (!this._isConnected || !this._publicKey) {
+      throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'Wallet not connected');
+    }
+
+    // Convert bytes to base64 for transport
+    const base64 = btoa(String.fromCharCode(...transactionBytes));
+    
+    // Determine if versioned by checking the first byte (version prefix)
+    // VersionedTransaction has version byte at start, legacy Transaction doesn't
+    const isVersioned = transactionBytes[0] === 0x80 || transactionBytes[0] < 0x80;
+    
+    const result = (await this._sendToBackground('signTransaction', {
+      transaction: { data: base64, isVersioned },
+    })) as { signedTransaction: string };
+
+    if (result && result.signedTransaction) {
+      // Convert base64 back to bytes
+      return Uint8Array.from(atob(result.signedTransaction), (c) => c.charCodeAt(0));
+    }
+
+    throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to sign transaction');
+  }
+
+  // Wallet-standard compatible method: accepts Uint8Array bytes
+  async signAndSendTransactionBytes(
+    transactionBytes: Uint8Array,
+    options?: SolanaSendOptions,
+  ): Promise<{ signature: string }> {
+    if (!this._isConnected || !this._publicKey) {
+      throw this._createError(EIP1193_ERROR_CODES.UNAUTHORIZED, 'Wallet not connected');
+    }
+
+    // Convert bytes to base64 for transport
+    const base64 = btoa(String.fromCharCode(...transactionBytes));
+    
+    // Determine if versioned
+    const isVersioned = transactionBytes[0] === 0x80 || transactionBytes[0] < 0x80;
+    
+    const result = (await this._sendToBackground('signAndSendTransaction', {
+      transaction: { data: base64, isVersioned },
+      options,
+    })) as { signature: string };
+
+    if (result && result.signature) {
+      return { signature: result.signature };
+    }
+
+    throw this._createError(EIP1193_ERROR_CODES.INTERNAL_ERROR, 'Failed to send transaction');
+  }
+
+  // Helper to convert base58 to bytes (for signatures)
+  base58ToBytes(base58: string): Uint8Array {
+    const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const BASE = 58;
+
+    let num = BigInt(0);
+    for (const char of base58) {
+      const index = ALPHABET.indexOf(char);
+      if (index === -1) throw new Error('Invalid base58 character');
+      num = num * BigInt(BASE) + BigInt(index);
+    }
+
+    const bytes: number[] = [];
+    while (num > 0) {
+      bytes.unshift(Number(num % BigInt(256)));
+      num = num / BigInt(256);
+    }
+
+    // Handle leading zeros
+    for (const char of base58) {
+      if (char === '1') {
+        bytes.unshift(0);
+      } else {
+        break;
+      }
+    }
+
+    return new Uint8Array(bytes);
+  }
+
   private async _initializeState(): Promise<void> {
     try {
       const state = await this._sendToBackground('_getProviderState', undefined);
@@ -321,7 +420,10 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
           this.emit('connect', { publicKey: this._publicKey });
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      // Initialization failed - will retry
+      throw error;
+    }
   }
 
   private _setupMessageListener(): void {
@@ -443,15 +545,96 @@ class AintivirusSolanaProvider extends SimpleEventEmitter {
     };
   }
 
-  private _deserializeTransaction<T>(base64: string, originalTransaction: T): T {
+  private _deserializeTransaction<T extends { serialize(): Uint8Array }>(
+    base64: string,
+    originalTransaction: T,
+  ): T {
+    // Decode the base64 signed transaction bytes
     const signedBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 
-    const signed = Object.create(Object.getPrototypeOf(originalTransaction));
-    Object.assign(signed, originalTransaction);
+    // Check if this is a VersionedTransaction by looking for the version property
+    const isVersioned = (originalTransaction as unknown as { version?: number }).version !== undefined;
 
-    signed.serialize = () => signedBytes;
+    // Strategy 1: Use the constructor's static deserialize/from method
+    // This creates a proper class instance with all methods working correctly
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const TransactionClass = (originalTransaction as any).constructor;
+      
+      if (isVersioned && typeof TransactionClass.deserialize === 'function') {
+        // VersionedTransaction uses static deserialize() method
+        const deserialized = TransactionClass.deserialize(signedBytes);
+        if (deserialized && typeof deserialized.serialize === 'function') {
+          return deserialized as T;
+        }
+      } else if (!isVersioned && typeof TransactionClass.from === 'function') {
+        // Legacy Transaction uses static from() method
+        const deserialized = TransactionClass.from(signedBytes);
+        if (deserialized && typeof deserialized.serialize === 'function') {
+          return deserialized as T;
+        }
+      }
+    } catch (err) {
+      // Log for debugging - constructor approach failed
+      console.warn('[Aintivirus] Constructor deserialization failed:', err);
+    }
 
-    return signed as T;
+    // Strategy 2: Create a wrapper object that delegates to original but overrides serialize
+    // This is more reliable than Proxy in some environments
+    try {
+      // Create object with same prototype chain
+      const proto = Object.getPrototypeOf(originalTransaction);
+      const signedTx = Object.create(proto);
+      
+      // Copy all properties from original transaction
+      const keys = Object.keys(originalTransaction as object);
+      for (const key of keys) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (signedTx as any)[key] = (originalTransaction as any)[key];
+      }
+      
+      // Also copy symbol properties if any
+      const symbols = Object.getOwnPropertySymbols(originalTransaction as object);
+      for (const sym of symbols) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (signedTx as any)[sym] = (originalTransaction as any)[sym];
+      }
+      
+      // Override serialize to return signed bytes - this is the critical part
+      signedTx.serialize = function serialize(): Uint8Array {
+        return signedBytes;
+      };
+      
+      // Verify our serialize is actually a function before returning
+      if (typeof signedTx.serialize === 'function') {
+        return signedTx as T;
+      }
+    } catch (err) {
+      console.warn('[Aintivirus] Object creation failed:', err);
+    }
+
+    // Strategy 3: Absolute fallback - create minimal object with serialize
+    // This should never fail but may not pass all type checks
+    const fallback = {
+      serialize: (): Uint8Array => signedBytes,
+      // Copy essential properties that wallet adapters might check
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      message: (originalTransaction as any).message,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      signatures: (originalTransaction as any).signatures,
+    };
+    
+    // If versioned, add version getter
+    if (isVersioned) {
+      Object.defineProperty(fallback, 'version', {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get: () => (originalTransaction as any).version,
+        enumerable: true,
+      });
+    }
+    
+    console.warn('[Aintivirus] Using fallback transaction wrapper');
+    return fallback as unknown as T;
   }
 
   private _createError(code: number, message: string): Error & { code: number } {

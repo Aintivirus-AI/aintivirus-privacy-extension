@@ -39,10 +39,15 @@ function injectEVMProvider(): AintivirusEVMProvider | null {
     const existingDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum');
 
     if (existingDescriptor && !existingDescriptor.configurable) {
+      // Another wallet owns window.ethereum, but we can still participate
       const existing = (window as unknown as { ethereum?: AintivirusEVMProvider }).ethereum;
       if (existing && Array.isArray((existing as unknown as { providers?: unknown[] }).providers)) {
         (existing as unknown as { providers: unknown[] }).providers.push(provider);
       }
+
+      // IMPORTANT: Still announce via EIP-6963 so modern dApps can detect us!
+      // This is the modern standard and works independently of window.ethereum
+      announceEIP6963Provider(provider);
 
       return provider;
     }
@@ -67,7 +72,13 @@ function injectEVMProvider(): AintivirusEVMProvider | null {
 
     return provider;
   } catch (error) {
-    return null;
+    // Even if we fail to set window.ethereum, try to announce via EIP-6963
+    try {
+      announceEIP6963Provider(provider);
+    } catch {
+      // Best effort
+    }
+    return provider;
   }
 }
 
@@ -75,19 +86,7 @@ function injectSolanaProvider(): AintivirusSolanaProvider | null {
   const provider = createSolanaProvider();
 
   try {
-    const existingDescriptor = Object.getOwnPropertyDescriptor(window, 'solana');
-
-    if (existingDescriptor && !existingDescriptor.configurable) {
-      return provider;
-    }
-
-    Object.defineProperty(window, 'solana', {
-      value: provider,
-      writable: true,
-      configurable: true,
-      enumerable: true,
-    });
-
+    // Create our own namespace that's always available for direct access
     Object.defineProperty(window, 'aintivirus', {
       value: {
         solana: provider,
@@ -97,72 +96,192 @@ function injectSolanaProvider(): AintivirusSolanaProvider | null {
       enumerable: true,
     });
 
+    // NOTE: We intentionally do NOT set window.solana or window.phantom.solana.
+    // Solana provider discovery should go through Wallet Standard only.
+    // Setting window.solana AND registering via wallet-standard causes duplicate
+    // entries in dApp wallet selection dialogs. Wallet Standard is the modern
+    // standard supported by all major dApp frameworks.
+
     return provider;
   } catch (error) {
-    return null;
+    return provider; // Still return provider even if injection fails
   }
 }
 
+// Custom event class for wallet-standard registration
+class RegisterWalletEvent extends Event {
+  readonly #detail: (api: { register: (wallet: unknown) => void }) => void;
+
+  get detail() {
+    return this.#detail;
+  }
+
+  get type() {
+    return 'wallet-standard:register-wallet' as const;
+  }
+
+  constructor(callback: (api: { register: (wallet: unknown) => void }) => void) {
+    super('wallet-standard:register-wallet', {
+      bubbles: false,
+      cancelable: false,
+      composed: false,
+    });
+    this.#detail = callback;
+  }
+}
+
+// Guard to ensure wallet-standard is only registered once
+let walletStandardRegistered = false;
+
 function registerWalletStandard(solanaProvider: AintivirusSolanaProvider): void {
+  if (walletStandardRegistered) return;
+  walletStandardRegistered = true;
+  // Build the wallet object with proper Wallet Standard structure
   const wallet = {
+    // Required Wallet Standard properties
+    version: '1.0.0' as const,
     name: PROVIDER_INFO.NAME,
-    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMjAgNlYxMkMyMCAxNy41MiAxNi43OSAyMi4xMiAxMiAyM0M3LjIxIDIyLjEyIDQgMTcuNTIgNCAxMlY2TDEyIDJaIiBmaWxsPSIjNWI1ZmM3Ii8+CjxwYXRoIGQ9Ik0xMCA4TDE0IDEyTDEwIDE2IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4=',
-    version: PROVIDER_INFO.VERSION,
-    chains: ['solana:mainnet', 'solana:devnet', 'solana:testnet'],
+    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMjAgNlYxMkMyMCAxNy41MiAxNi43OSAyMi4xMiAxMiAyM0M3LjIxIDIyLjEyIDQgMTcuNTIgNCAxMlY2TDEyIDJaIiBmaWxsPSIjNWI1ZmM3Ii8+CjxwYXRoIGQ9Ik0xMCA4TDE0IDEyTDEwIDE2IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4=' as `data:image/svg+xml;base64,${string}`,
+    chains: ['solana:mainnet', 'solana:devnet', 'solana:testnet'] as const,
+    accounts: [] as Array<{
+      address: string;
+      publicKey: Uint8Array;
+      chains: readonly string[];
+      features: readonly string[];
+    }>,
     features: {
+      // Standard connect feature
       'standard:connect': {
-        version: '1.0.0',
+        version: '1.0.0' as const,
         connect: async () => {
           const { publicKey } = await solanaProvider.connect();
-          return {
-            accounts: [
-              {
-                address: publicKey.toBase58(),
-                publicKey: publicKey.toBytes(),
-                chains: ['solana:mainnet'],
-                features: ['solana:signTransaction', 'solana:signMessage'],
-              },
-            ],
+          const account = {
+            address: publicKey.toBase58(),
+            publicKey: publicKey.toBytes(),
+            chains: ['solana:mainnet', 'solana:devnet', 'solana:testnet'] as const,
+            features: [
+              'solana:signTransaction',
+              'solana:signAndSendTransaction',
+              'solana:signMessage',
+            ] as const,
           };
+          // Update accounts array
+          wallet.accounts = [account];
+          return { accounts: [account] };
         },
       },
+      // Standard disconnect feature
       'standard:disconnect': {
-        version: '1.0.0',
-        disconnect: () => solanaProvider.disconnect(),
-      },
-      'solana:signTransaction': {
-        version: '1.0.0',
-        supportedTransactionVersions: ['legacy', 0],
-        signTransaction: async (transaction: { serialize(): Uint8Array }) => {
-          return solanaProvider.signTransaction(transaction);
+        version: '1.0.0' as const,
+        disconnect: async () => {
+          await solanaProvider.disconnect();
+          wallet.accounts = [];
         },
       },
+      // Standard events feature
+      'standard:events': {
+        version: '1.0.0' as const,
+        on: (event: string, listener: (...args: unknown[]) => void) => {
+          solanaProvider.on(event, listener);
+          return () => solanaProvider.off(event, listener);
+        },
+      },
+      // Solana sign transaction feature
+      // Wallet-standard spec: transaction is Uint8Array (serialized bytes), output is { signedTransaction: Uint8Array }
+      'solana:signTransaction': {
+        version: '1.0.0' as const,
+        supportedTransactionVersions: ['legacy', 0] as const,
+        signTransaction: async (...inputs: readonly { transaction: Uint8Array; account: { address: string }; chain?: string }[]) => {
+          const results: { signedTransaction: Uint8Array }[] = [];
+          for (const input of inputs) {
+            // Wallet-standard passes transaction as Uint8Array bytes
+            // We need to pass these bytes directly to signTransactionBytes
+            const signedBytes = await solanaProvider.signTransactionBytes(input.transaction);
+            results.push({ signedTransaction: signedBytes });
+          }
+          return results;
+        },
+      },
+      // Solana sign and send transaction feature
+      // Wallet-standard spec: transaction is Uint8Array (serialized bytes)
+      'solana:signAndSendTransaction': {
+        version: '1.0.0' as const,
+        supportedTransactionVersions: ['legacy', 0] as const,
+        signAndSendTransaction: async (...inputs: readonly { transaction: Uint8Array; account: { address: string }; chain?: string; options?: { skipPreflight?: boolean } }[]) => {
+          const results: { signature: Uint8Array }[] = [];
+          for (const input of inputs) {
+            // Wallet-standard passes transaction as Uint8Array bytes
+            const { signature } = await solanaProvider.signAndSendTransactionBytes(
+              input.transaction,
+              input.options,
+            );
+            // Convert base58 signature to bytes
+            const signatureBytes = solanaProvider.base58ToBytes(signature);
+            results.push({ signature: signatureBytes });
+          }
+          return results;
+        },
+      },
+      // Solana sign message feature
       'solana:signMessage': {
-        version: '1.0.0',
-        signMessage: async (message: Uint8Array) => {
-          return solanaProvider.signMessage(message);
+        version: '1.0.0' as const,
+        signMessage: async (...inputs: Array<{ message: Uint8Array; account: { address: string } }>) => {
+          const results = [];
+          for (const input of inputs) {
+            const { signature } = await solanaProvider.signMessage(input.message);
+            results.push({ signedMessage: input.message, signature });
+          }
+          return results;
         },
       },
     },
-    accounts: [],
   };
 
+  // Register using the proper wallet-standard event mechanism
+  const registerCallback = ({ register }: { register: (wallet: unknown) => void }) => {
+    register(wallet);
+  };
+
+  // Dispatch the register-wallet event
+  try {
+    window.dispatchEvent(new RegisterWalletEvent(registerCallback));
+  } catch (error) {
+    console.error('[Aintivirus] wallet-standard:register-wallet event failed:', error);
+  }
+
+  // Listen for app-ready event (for apps that load after the wallet)
+  window.addEventListener('wallet-standard:app-ready', ((event: CustomEvent<{ register: (wallet: unknown) => void }>) => {
+    try {
+      registerCallback(event.detail);
+    } catch (error) {
+      console.error('[Aintivirus] wallet-standard:app-ready handler failed:', error);
+    }
+  }) as EventListener);
+
+  // Also support deprecated registration method for older dApps
   try {
     const windowWithWallets = window as unknown as {
       navigator?: {
-        wallets?: {
-          register?: (wallet: unknown) => void;
-        };
+        wallets?: Array<(api: { register: (wallet: unknown) => void }) => void>;
       };
     };
-
-    if (windowWithWallets.navigator?.wallets?.register) {
-      windowWithWallets.navigator.wallets.register(wallet);
+    if (windowWithWallets.navigator) {
+      windowWithWallets.navigator.wallets = windowWithWallets.navigator.wallets || [];
+      windowWithWallets.navigator.wallets.push(registerCallback);
     }
-  } catch (error) {}
+  } catch {
+    // Deprecated method failed, but that's okay
+  }
 }
 
+// Track if we've already initialized to prevent double injection
+let initialized = false;
+let evmProviderInstance: AintivirusEVMProvider | null = null;
+let solanaProviderInstance: AintivirusSolanaProvider | null = null;
+
 function initialize(): void {
+  if (initialized) return;
+  
   if (
     window.location.protocol === 'chrome-extension:' ||
     window.location.protocol === 'moz-extension:'
@@ -170,11 +289,12 @@ function initialize(): void {
     return;
   }
 
-  const evmProvider = injectEVMProvider();
-  const solanaProvider = injectSolanaProvider();
+  initialized = true;
+  evmProviderInstance = injectEVMProvider();
+  solanaProviderInstance = injectSolanaProvider();
 
-  if (solanaProvider) {
-    registerWalletStandard(solanaProvider);
+  if (solanaProviderInstance) {
+    registerWalletStandard(solanaProviderInstance);
   }
 
   window.postMessage(
@@ -182,23 +302,57 @@ function initialize(): void {
       source: 'aintivirus-inpage',
       type: 'DAPP_PROVIDERS_READY',
       payload: {
-        ethereum: !!evmProvider,
-        solana: !!solanaProvider,
+        ethereum: !!evmProviderInstance,
+        solana: !!solanaProviderInstance,
       },
     },
     '*',
   );
 }
 
-initialize();
+// Re-announce EIP-6963 provider when dApps request it
+// Some dApps request providers after our initial announcement
+function setupEIP6963ReannounceListener(): void {
+  window.addEventListener('eip6963:requestProvider', () => {
+    if (evmProviderInstance) {
+      // Already handled by announceEIP6963Provider, but dispatch again just in case
+      const info: EIP6963ProviderInfo = {
+        uuid: 'aintivirus-wallet',
+        name: PROVIDER_INFO.NAME,
+        icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMjAgNlYxMkMyMCAxNy41MiAxNi43OSAyMi4xMiAxMiAyM0M3LjIxIDIyLjEyIDQgMTcuNTIgNCAxMlY2TDEyIDJaIiBmaWxsPSIjNWI1ZmM3Ii8+CjxwYXRoIGQ9Ik0xMCA4TDE0IDEyTDEwIDE2IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4=',
+        rdns: 'app.aintivirus.wallet',
+      };
+      window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { 
+        detail: { info, provider: evmProviderInstance } 
+      }));
+    }
+  });
+}
 
+initialize();
+setupEIP6963ReannounceListener();
+
+// Some pages load providers after DOMContentLoaded, so try to re-inject EVM provider.
+// Solana uses wallet-standard only (registered once above), so no re-injection needed.
 document.addEventListener('DOMContentLoaded', () => {
-  if (!(window as unknown as { ethereum?: unknown }).ethereum) {
-    injectEVMProvider();
-  }
-  if (!(window as unknown as { solana?: unknown }).solana) {
-    injectSolanaProvider();
+  const existingEth = (window as unknown as { ethereum?: { isAintivirus?: boolean } }).ethereum;
+  
+  // If ethereum exists but isn't ours, try to re-inject
+  if (!existingEth?.isAintivirus) {
+    const newProvider = injectEVMProvider();
+    if (newProvider) {
+      evmProviderInstance = newProvider;
+    }
   }
 });
+
+// Also try EVM re-injection after a small delay for SPAs that initialize late
+setTimeout(() => {
+  const existingEth = (window as unknown as { ethereum?: { isAintivirus?: boolean } }).ethereum;
+  
+  if (!existingEth?.isAintivirus) {
+    injectEVMProvider();
+  }
+}, 500);
 
 export { AintivirusEVMProvider, AintivirusSolanaProvider, PublicKey };

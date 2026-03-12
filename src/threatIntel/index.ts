@@ -452,7 +452,20 @@ export async function isKnownScamDomain(domain: string): Promise<boolean> {
   }
 
   const data = await getThreatIntelData();
-  return data.scamDomains.includes(normalizedDomain);
+
+  // Check exact match
+  if (data.scamDomains.includes(normalizedDomain)) {
+    return true;
+  }
+
+  // Check if it's a subdomain of a known scam domain
+  for (const scamDomain of data.scamDomains) {
+    if (normalizedDomain.endsWith('.' + scamDomain)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export async function isSuspiciousTld(domain: string): Promise<boolean> {

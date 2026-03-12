@@ -44,7 +44,7 @@ import {
   handleTxPollAlarm,
   setupTxPollingAlarm,
 } from '../wallet/chains/evm/pendingTxStore';
-import { getSolPriceWithChange, getEthPriceWithChange, getTokenPrices } from '../wallet/prices';
+import { getSolPriceWithChange, getEthPriceWithChange, getEvmNativePriceWithChange, getTokenPrices } from '../wallet/prices';
 
 import {
   initializeSecurityModule,
@@ -289,6 +289,7 @@ async function handleMessage(
     case 'WALLET_SET_SETTINGS':
     case 'WALLET_SEND_SOL':
     case 'WALLET_SEND_SPL_TOKEN':
+    case 'WALLET_PROCESS_STORE_PAYMENT':
     case 'WALLET_ESTIMATE_FEE':
     case 'WALLET_GET_HISTORY':
     case 'WALLET_GET_TOKENS':
@@ -318,10 +319,17 @@ async function handleMessage(
     case 'WALLET_GET_EVM_BALANCE':
     case 'WALLET_SEND_ETH':
     case 'WALLET_SEND_ERC20':
+    // Bitcoin-family chains
+    case 'WALLET_SEND_BTC':
+    case 'WALLET_ESTIMATE_BTC_FEE':
+    // TRON
+    case 'WALLET_SEND_TRX':
+    case 'WALLET_ESTIMATE_TRX_FEE':
     case 'WALLET_GET_EVM_TOKENS':
     case 'WALLET_GET_EVM_HISTORY':
     case 'WALLET_ESTIMATE_EVM_FEE':
     case 'WALLET_GET_EVM_ADDRESS':
+    case 'WALLET_GET_CHAIN_ADDRESS':
     case 'EVM_GET_PENDING_TXS':
     case 'EVM_SPEED_UP_TX':
     case 'EVM_CANCEL_TX':
@@ -332,6 +340,10 @@ async function handleMessage(
     case 'WALLET_SWAP_EXECUTE':
     case 'WALLET_SWAP_AVAILABLE':
     case 'WALLET_SWAP_REFERRAL_STATUS':
+    // Swap Token Discovery (routes through background for CORS)
+    case 'SWAP_GET_POPULAR_TOKENS':
+    case 'SWAP_SEARCH_TOKENS':
+    case 'SWAP_GET_TOKEN_BY_ADDRESS':
     // EVM Swap (ParaSwap)
     case 'EVM_SWAP_QUOTE':
     case 'EVM_SWAP_EXECUTE':
@@ -370,6 +382,9 @@ async function handleMessage(
     case 'GET_ETH_PRICE':
       return handleGetEthPrice();
 
+    case 'GET_EVM_NATIVE_PRICE':
+      return handleGetEvmNativePrice(extMessage.payload);
+
     case 'GET_TOKEN_PRICES':
       return handleGetTokenPrices(extMessage.payload);
 
@@ -384,7 +399,6 @@ async function handleMessage(
     case 'DAPP_GET_PROVIDER_STATE':
     case 'DAPP_PAGE_UNLOAD':
     case 'GET_TAB_ID':
-      console.log('[Background] Handling dApp message:', extMessage.type, extMessage.payload);
       return handleDAppMessageWrapper(extMessage.type, extMessage.payload, sender);
 
     default:
@@ -673,9 +687,21 @@ async function handleGetEthPrice(): Promise<MessageResponse> {
   }
 }
 
-async function handleGetTokenPrices(payload: { mints: string[] }): Promise<MessageResponse> {
+async function handleGetEvmNativePrice(payload: { evmChainId: string }): Promise<MessageResponse> {
   try {
-    const prices = await getTokenPrices(payload.mints);
+    const result = await getEvmNativePriceWithChange(payload.evmChainId);
+    return { success: true, data: result };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+async function handleGetTokenPrices(payload: { mints: string[]; chainId?: string }): Promise<MessageResponse> {
+  try {
+    const prices = await getTokenPrices(payload.mints, payload.chainId);
     const pricesObj: Record<string, number> = {};
     prices.forEach((price, mint) => {
       pricesObj[mint] = price;

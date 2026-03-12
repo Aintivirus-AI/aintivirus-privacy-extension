@@ -1,161 +1,66 @@
-/**
- * Chain Registry - Single source of truth for all blockchain networks
- *
- * To add a new network:
- * 1. Add a new entry to CHAIN_REGISTRY with all required fields
- * 2. The chain will automatically appear in:
- *    - Chain selector UI
- *    - Wallet settings
- *    - Transaction history
- *    - Fee estimation
- *    - Token swaps (if swapTokens defined)
- */
+export type ChainFamily = 'evm' | 'solana' | 'bitcoin' | 'tron' | 'monero' | 'cosmos' | 'sui' | 'aptos';
 
-// ============================================================================
-// Core Types
-// ============================================================================
-
-/**
- * Chain family determines the underlying protocol and adapter to use.
- * Add new families here when supporting fundamentally different chains.
- */
-export type ChainFamily = 'evm' | 'solana' | 'bitcoin' | 'cosmos' | 'sui' | 'aptos';
-
-/**
- * Network environment for mainnet/testnet switching
- */
 export type NetworkEnvironment = 'mainnet' | 'testnet';
 
-/**
- * L2 type for fee estimation purposes
- */
 export type L2Type = 'optimism' | 'arbitrum' | 'zk-rollup';
 
-/**
- * Token definition for swap interfaces and popular token lists
- */
 export interface ChainToken {
-  /** Contract address (or special address for native tokens) */
   address: string;
-  /** Token symbol (e.g., ETH, USDC) */
   symbol: string;
-  /** Human-readable name */
   name: string;
-  /** Token decimals */
   decimals: number;
-  /** Logo URL */
   logoUri: string;
-  /** Whether this is the native gas token */
   isNative?: boolean;
 }
 
-/**
- * Testnet configuration
- */
 export interface TestnetConfig {
-  /** Numeric chain ID for testnet */
   chainId: number;
-  /** RPC endpoints for testnet */
   rpcUrls: string[];
-  /** Block explorer URL for testnet */
   explorerUrl: string;
-  /** Block explorer API URL for testnet (optional) */
   explorerApiUrl?: string;
 }
 
-/**
- * Complete chain configuration - all data needed to support a network
- */
 export interface ChainConfig {
-  // ============ Identity ============
-  /** Unique identifier used as key (e.g., 'ethereum', 'solana', 'polygon') */
   id: string;
-  /** Chain family determines which adapter to use */
   family: ChainFamily;
-  /** Human-readable chain name */
   name: string;
-  /** Native token symbol */
   symbol: string;
-  /** Native token decimals */
   decimals: number;
-  /** Numeric chain ID (for EVM chains, this is the EIP-155 chain ID) */
   chainId: number;
 
-  // ============ Network ============
-  /** Primary RPC endpoints (ordered by preference) */
   rpcUrls: string[];
-  /** Fallback RPC endpoints */
   fallbackRpcUrls?: string[];
-  /** Block explorer URL */
   explorerUrl: string;
-  /** Block explorer API URL (for transaction history) */
   explorerApiUrl?: string;
-  /** Testnet configuration */
   testnet?: TestnetConfig;
 
-  // ============ Features ============
-  /** Whether this is an L2 chain */
   isL2?: boolean;
-  /** L2 type for fee estimation */
   l2Type?: L2Type;
-  /** Whether EIP-1559 is supported */
   supportsEIP1559?: boolean;
-  /** Whether swaps are available */
   swapEnabled?: boolean;
-  /** Swap router/aggregator to use */
   swapProvider?: 'jupiter' | 'paraswap' | '1inch' | 'uniswap';
 
-  // ============ Derivation ============
-  /** BIP-44 coin type (e.g., 60 for ETH, 501 for SOL) */
   coinType: number;
-  /** Default derivation path template (use {index} for account index) */
   derivationPath: string;
-  /** Alternative derivation paths (e.g., Ledger Live) */
   alternativeDerivationPaths?: Record<string, string>;
 
-  // ============ Display ============
-  /** Icon identifier for UI (corresponds to SVG component) */
   iconId: string;
-  /** Chain color for UI theming */
   color: string;
-  /** Short description for UI */
   description?: string;
 
-  // ============ Tokens ============
-  /** Native token address (use special address for native gas tokens) */
   nativeTokenAddress: string;
-  /** Popular tokens for this chain (for swaps, portfolio view) */
   popularTokens?: ChainToken[];
 
-  // ============ Gas ============
-  /** Default gas limit for native transfers */
   defaultGasLimit?: bigint;
-  /** Default gas limit for token transfers */
   tokenGasLimit?: bigint;
-  /** Gas price multiplier for fast transactions */
   gasPriceMultiplier?: number;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-/** Native token address used by many aggregators for EVM chains */
 export const EVM_NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
-/** Wrapped SOL address */
 export const WRAPPED_SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
 
-// ============================================================================
-// Chain Registry
-// ============================================================================
-
-/**
- * The master registry of all supported chains.
- * Add new chains here and they'll be available throughout the app.
- */
 export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
-  // ============ Solana ============
   solana: {
     id: 'solana',
     family: 'solana',
@@ -188,22 +93,34 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         symbol: 'SOL',
         name: 'Solana',
         decimals: 9,
-        logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+        logoUri: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
         isNative: true,
       },
+      // AINTI token is only included when the mint address is configured via env
+      ...(process.env.AINTI_TOKEN_SOL_MINT
+        ? [
+            {
+              address: process.env.AINTI_TOKEN_SOL_MINT,
+              symbol: 'AINTI',
+              name: 'Aintivirus',
+              decimals: 6,
+              logoUri: `https://tokens.jup.ag/token/${process.env.AINTI_TOKEN_SOL_MINT}/logo`,
+            },
+          ]
+        : []),
       {
         address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
         symbol: 'USDC',
         name: 'USD Coin',
         decimals: 6,
-        logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+        logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
       },
       {
         address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
         symbol: 'USDT',
         name: 'Tether USD',
         decimals: 6,
-        logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.png',
+        logoUri: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
       },
       {
         address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
@@ -231,12 +148,11 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
         symbol: 'RAY',
         name: 'Raydium',
         decimals: 6,
-        logoUri: 'https://raw.githubusercontent.com/raydium-io/media-assets/master/logo/logo-only-icon.svg',
+        logoUri: 'https://cdn.jsdelivr.net/gh/raydium-io/media-assets@master/logo/logo-only-icon.svg',
       },
     ],
   },
 
-  // ============ Ethereum ============
   ethereum: {
     id: 'ethereum',
     family: 'evm',
@@ -318,12 +234,11 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Polygon ============
   polygon: {
     id: 'polygon',
     family: 'evm',
     name: 'Polygon',
-    symbol: 'MATIC',
+    symbol: 'POL',
     decimals: 18,
     chainId: 137,
     rpcUrls: [
@@ -356,7 +271,7 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     popularTokens: [
       {
         address: EVM_NATIVE_TOKEN_ADDRESS,
-        symbol: 'MATIC',
+        symbol: 'POL',
         name: 'Polygon',
         decimals: 18,
         logoUri: 'https://assets.coingecko.com/coins/images/4713/small/polygon.png',
@@ -386,7 +301,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Arbitrum ============
   arbitrum: {
     id: 'arbitrum',
     family: 'evm',
@@ -458,7 +372,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Optimism ============
   optimism: {
     id: 'optimism',
     family: 'evm',
@@ -527,7 +440,6 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============ Base ============
   base: {
     id: 'base',
     family: 'evm',
@@ -596,58 +508,263 @@ export const CHAIN_REGISTRY: Record<string, ChainConfig> = {
     ],
   },
 
-  // ============================================================================
-  // TEMPLATE: Add new chains below following this pattern
-  // ============================================================================
-  /*
-  newchain: {
-    id: 'newchain',
-    family: 'evm', // or 'solana', 'cosmos', etc.
-    name: 'New Chain',
-    symbol: 'TOKEN',
+  bnb: {
+    id: 'bnb',
+    family: 'evm',
+    name: 'BNB Smart Chain',
+    symbol: 'BNB',
     decimals: 18,
-    chainId: 12345,
-    rpcUrls: ['https://rpc.newchain.io'],
-    explorerUrl: 'https://explorer.newchain.io',
+    chainId: 56,
+    rpcUrls: [
+      'https://bsc-dataseed.binance.org',
+      'https://bsc.publicnode.com',
+      'https://bsc-dataseed1.defibit.io',
+      'https://bsc-dataseed1.ninicoin.io',
+      'https://bsc.drpc.org',
+    ],
+    explorerUrl: 'https://bscscan.com',
+    explorerApiUrl: 'https://api.bscscan.com/api',
     testnet: {
-      chainId: 12346,
-      rpcUrls: ['https://testnet-rpc.newchain.io'],
-      explorerUrl: 'https://testnet.explorer.newchain.io',
+      chainId: 97,
+      rpcUrls: ['https://bsc-testnet.publicnode.com', 'https://data-seed-prebsc-1-s1.binance.org:8545'],
+      explorerUrl: 'https://testnet.bscscan.com',
+      explorerApiUrl: 'https://api-testnet.bscscan.com/api',
     },
+    isL2: false,
+    supportsEIP1559: false,
     coinType: 60,
     derivationPath: "m/44'/60'/0'/0/{index}",
-    iconId: 'newchain',
-    color: '#123456',
+    iconId: 'bnb',
+    color: '#F0B90B',
+    description: 'Binance Smart Chain',
     nativeTokenAddress: EVM_NATIVE_TOKEN_ADDRESS,
-    swapEnabled: false,
+    defaultGasLimit: BigInt(21000),
+    tokenGasLimit: BigInt(65000),
+    swapEnabled: true,
+    swapProvider: 'paraswap',
     popularTokens: [
       {
         address: EVM_NATIVE_TOKEN_ADDRESS,
-        symbol: 'TOKEN',
-        name: 'New Chain',
+        symbol: 'BNB',
+        name: 'BNB',
         decimals: 18,
-        logoUri: 'https://example.com/logo.png',
+        logoUri: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
         isNative: true,
+      },
+      {
+        address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+        symbol: 'BUSD',
+        name: 'Binance USD',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png',
+      },
+      {
+        address: '0x55d398326f99059fF775485246999027B3197955',
+        symbol: 'USDT',
+        name: 'Tether USD',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+      },
+      {
+        address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+        symbol: 'USDC',
+        name: 'USD Coin',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+      },
+      {
+        address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+        symbol: 'ETH',
+        name: 'Binance-Peg Ethereum',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+      },
+      {
+        address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+        symbol: 'CAKE',
+        name: 'PancakeSwap',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
       },
     ],
   },
-  */
+
+  // ============ Bitcoin ============
+  bitcoin: {
+    id: 'bitcoin',
+    family: 'bitcoin',
+    name: 'Bitcoin',
+    symbol: 'BTC',
+    decimals: 8,
+    chainId: 0, // Bitcoin doesn't use numeric chain IDs like EVM
+    rpcUrls: ['https://blockstream.info/api', 'https://mempool.space/api'],
+    explorerUrl: 'https://blockstream.info',
+    explorerApiUrl: 'https://blockstream.info/api',
+    testnet: {
+      chainId: 0,
+      rpcUrls: ['https://blockstream.info/testnet/api'],
+      explorerUrl: 'https://blockstream.info/testnet',
+    },
+    coinType: 0,
+    derivationPath: "m/84'/0'/0'/0/{index}", // BIP-84 Native SegWit
+    alternativeDerivationPaths: {
+      legacy: "m/44'/0'/0'/0/{index}",
+      segwit: "m/49'/0'/0'/0/{index}",
+    },
+    iconId: 'bitcoin',
+    color: '#F7931A',
+    description: 'The original cryptocurrency',
+    nativeTokenAddress: 'btc',
+    swapEnabled: false,
+  },
+
+  bitcoincash: {
+    id: 'bitcoincash',
+    family: 'bitcoin',
+    name: 'Bitcoin Cash',
+    symbol: 'BCH',
+    decimals: 8,
+    chainId: 0,
+    rpcUrls: ['https://api.blockchair.com/bitcoin-cash'],
+    explorerUrl: 'https://blockchair.com/bitcoin-cash',
+    coinType: 145,
+    derivationPath: "m/44'/145'/0'/0/{index}",
+    iconId: 'bitcoincash',
+    color: '#8DC351',
+    description: 'Fast, low-fee Bitcoin fork',
+    nativeTokenAddress: 'bch',
+    swapEnabled: false,
+  },
+
+  litecoin: {
+    id: 'litecoin',
+    family: 'bitcoin',
+    name: 'Litecoin',
+    symbol: 'LTC',
+    decimals: 8,
+    chainId: 0,
+    rpcUrls: ['https://api.blockchair.com/litecoin'],
+    explorerUrl: 'https://blockchair.com/litecoin',
+    coinType: 2,
+    derivationPath: "m/84'/2'/0'/0/{index}", // BIP-84 Native SegWit
+    alternativeDerivationPaths: {
+      legacy: "m/44'/2'/0'/0/{index}",
+    },
+    iconId: 'litecoin',
+    color: '#345D9D',
+    description: 'Silver to Bitcoin\'s gold',
+    nativeTokenAddress: 'ltc',
+    swapEnabled: false,
+  },
+
+  zcash: {
+    id: 'zcash',
+    family: 'bitcoin',
+    name: 'Zcash',
+    symbol: 'ZEC',
+    decimals: 8,
+    chainId: 0,
+    rpcUrls: ['https://api.blockchair.com/zcash'],
+    explorerUrl: 'https://blockchair.com/zcash',
+    coinType: 133,
+    derivationPath: "m/44'/133'/0'/0/{index}",
+    iconId: 'zcash',
+    color: '#ECB244',
+    description: 'Privacy-focused cryptocurrency',
+    nativeTokenAddress: 'zec',
+    swapEnabled: false,
+  },
+
+  tron: {
+    id: 'tron',
+    family: 'tron',
+    name: 'TRON',
+    symbol: 'TRX',
+    decimals: 6,
+    chainId: 728126428, // TRON's chain ID
+    rpcUrls: ['https://api.trongrid.io'],
+    fallbackRpcUrls: ['https://api.shasta.trongrid.io'],
+    explorerUrl: 'https://tronscan.org',
+    testnet: {
+      chainId: 2494104990,
+      rpcUrls: ['https://nile.trongrid.io'],
+      explorerUrl: 'https://nile.tronscan.org',
+    },
+    coinType: 195,
+    derivationPath: "m/44'/195'/0'/0/{index}",
+    iconId: 'tron',
+    color: '#FF0013',
+    description: 'High-throughput blockchain',
+    nativeTokenAddress: 'trx',
+    swapEnabled: false, // Disabled: SunSwap contract integration not yet implemented
+    // swapProvider: 'sunswap', // TODO: Enable when SunSwap integration is complete
+    popularTokens: [
+      {
+        address: 'trx',
+        symbol: 'TRX',
+        name: 'TRON',
+        decimals: 6,
+        logoUri: 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+        isNative: true,
+      },
+      {
+        address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        symbol: 'USDT',
+        name: 'Tether USD',
+        decimals: 6,
+        logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+      },
+      {
+        address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+        symbol: 'USDC',
+        name: 'USD Coin',
+        decimals: 6,
+        logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+      },
+      {
+        address: 'TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S',
+        symbol: 'SUN',
+        name: 'Sun Token',
+        decimals: 18,
+        logoUri: 'https://assets.coingecko.com/coins/images/12424/small/sun_logo.png',
+      },
+    ],
+  },
+
+  monero: {
+    id: 'monero',
+    family: 'monero',
+    name: 'Monero',
+    symbol: 'XMR',
+    decimals: 12,
+    chainId: 0, // Monero doesn't use chain IDs
+    rpcUrls: [
+      'https://node.moneroworld.com:18089',
+      'https://nodes.hashvault.pro:18081',
+      'https://xmr-node.cakewallet.com:18081',
+    ],
+    explorerUrl: 'https://xmrchain.net',
+    testnet: {
+      chainId: 0,
+      rpcUrls: ['https://stagenet.xmr-tw.org:38081'],
+      explorerUrl: 'https://stagenet.xmrchain.net',
+    },
+    coinType: 128,
+    derivationPath: '', // Not used for watch-only
+    iconId: 'monero',
+    color: '#FF6600',
+    description: 'Privacy-focused cryptocurrency (Watch-Only)',
+    nativeTokenAddress: 'xmr',
+    swapEnabled: false,
+    // Note: This is a watch-only implementation
+    // Users import their address and view key
+  },
 };
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get a chain configuration by ID
- */
 export function getChain(chainId: string): ChainConfig | undefined {
   return CHAIN_REGISTRY[chainId];
 }
 
-/**
- * Get a chain configuration by ID, throwing if not found
- */
 export function getChainOrThrow(chainId: string): ChainConfig {
   const chain = CHAIN_REGISTRY[chainId];
   if (!chain) {
@@ -656,9 +773,6 @@ export function getChainOrThrow(chainId: string): ChainConfig {
   return chain;
 }
 
-/**
- * Get chain by numeric chain ID (useful for EVM chains)
- */
 export function getChainByNumericId(numericChainId: number, testnet = false): ChainConfig | undefined {
   return Object.values(CHAIN_REGISTRY).find((chain) => {
     if (testnet && chain.testnet) {
@@ -668,30 +782,18 @@ export function getChainByNumericId(numericChainId: number, testnet = false): Ch
   });
 }
 
-/**
- * Get all chains of a specific family
- */
 export function getChainsByFamily(family: ChainFamily): ChainConfig[] {
   return Object.values(CHAIN_REGISTRY).filter((chain) => chain.family === family);
 }
 
-/**
- * Get all EVM chains
- */
 export function getEVMChains(): ChainConfig[] {
   return getChainsByFamily('evm');
 }
 
-/**
- * Get all chain IDs
- */
 export function getAllChainIds(): string[] {
   return Object.keys(CHAIN_REGISTRY);
 }
 
-/**
- * Get all supported chains as display items for UI
- */
 export function getSupportedChainsForDisplay(): Array<{
   id: string;
   family: ChainFamily;
@@ -721,9 +823,6 @@ export function getRpcUrls(chainId: string, testnet = false): string[] {
   return chain.rpcUrls;
 }
 
-/**
- * Get explorer URL for a chain
- */
 export function getExplorerUrl(chainId: string, testnet = false): string {
   const chain = getChainOrThrow(chainId);
   if (testnet && chain.testnet) {
@@ -732,9 +831,6 @@ export function getExplorerUrl(chainId: string, testnet = false): string {
   return chain.explorerUrl;
 }
 
-/**
- * Get explorer API URL for a chain
- */
 export function getExplorerApiUrl(chainId: string, testnet = false): string | undefined {
   const chain = getChainOrThrow(chainId);
   if (testnet && chain.testnet) {
@@ -743,9 +839,6 @@ export function getExplorerApiUrl(chainId: string, testnet = false): string | un
   return chain.explorerApiUrl;
 }
 
-/**
- * Get address explorer URL
- */
 export function getAddressExplorerUrl(chainId: string, address: string, testnet = false): string {
   const explorerUrl = getExplorerUrl(chainId, testnet);
   const chain = getChainOrThrow(chainId);
@@ -773,9 +866,6 @@ export function getTxExplorerUrl(chainId: string, txHash: string, testnet = fals
   return `${explorerUrl}/tx/${txHash}`;
 }
 
-/**
- * Get numeric chain ID for a chain
- */
 export function getNumericChainId(chainId: string, testnet = false): number {
   const chain = getChainOrThrow(chainId);
   if (testnet && chain.testnet) {
@@ -784,17 +874,11 @@ export function getNumericChainId(chainId: string, testnet = false): number {
   return chain.chainId;
 }
 
-/**
- * Check if a chain is an L2
- */
 export function isL2Chain(chainId: string): boolean {
   const chain = getChain(chainId);
   return chain?.isL2 ?? false;
 }
 
-/**
- * Get L2 type for fee estimation
- */
 export function getL2Type(chainId: string): L2Type | undefined {
   const chain = getChain(chainId);
   return chain?.l2Type;
@@ -813,17 +897,11 @@ export function getDerivationPath(chainId: string, index = 0, pathType?: string)
   return chain.derivationPath.replace('{index}', index.toString());
 }
 
-/**
- * Get popular tokens for a chain (for swaps, portfolio)
- */
 export function getPopularTokens(chainId: string): ChainToken[] {
   const chain = getChain(chainId);
   return chain?.popularTokens ?? [];
 }
 
-/**
- * Get native token for a chain
- */
 export function getNativeToken(chainId: string): ChainToken | undefined {
   const tokens = getPopularTokens(chainId);
   return tokens.find((t) => t.isNative);
@@ -837,9 +915,6 @@ export function isSwapEnabled(chainId: string): boolean {
   return chain?.swapEnabled ?? false;
 }
 
-/**
- * Get swap provider for a chain
- */
 export function getSwapProvider(chainId: string): string | undefined {
   const chain = getChain(chainId);
   return chain?.swapProvider;
@@ -854,28 +929,15 @@ export function buildChainKey(chainId: string, testnet = false): string {
   return `${chain.family}:${numericId}`;
 }
 
-// ============================================================================
-// Type Guards
-// ============================================================================
-
-/**
- * Check if a chain ID is valid
- */
 export function isValidChainId(chainId: string): boolean {
   return chainId in CHAIN_REGISTRY;
 }
 
-/**
- * Check if a chain is EVM-compatible
- */
 export function isEVMChain(chainId: string): boolean {
   const chain = getChain(chainId);
   return chain?.family === 'evm';
 }
 
-/**
- * Check if a chain is Solana
- */
 export function isSolanaChain(chainId: string): boolean {
   const chain = getChain(chainId);
   return chain?.family === 'solana';
@@ -889,13 +951,9 @@ export function isSolanaChain(chainId: string): boolean {
  * Legacy type aliases for backward compatibility
  * @deprecated Use ChainConfig and registry functions instead
  */
-export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base';
+export type EVMChainId = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'base' | 'bnb';
 export type ChainType = 'solana' | 'evm';
 
-/**
- * Get supported EVM chain IDs (for backward compatibility)
- * @deprecated Use getChainsByFamily('evm') instead
- */
 export function getSupportedEVMChains(): EVMChainId[] {
   return getChainsByFamily('evm').map((chain) => chain.id as EVMChainId);
 }
@@ -910,14 +968,15 @@ export function legacyToChainId(chainType: ChainType, evmChainId?: EVMChainId | 
   return evmChainId ?? 'ethereum';
 }
 
-/**
- * Convert new chain ID to legacy format
- */
 export function chainIdToLegacy(chainId: string): { chainType: ChainType; evmChainId?: EVMChainId } {
   const chain = getChainOrThrow(chainId);
   if (chain.family === 'solana') {
     return { chainType: 'solana' };
   }
+  if (chain.family === 'evm') {
+    return { chainType: 'evm', evmChainId: chainId as EVMChainId };
+  }
   return { chainType: 'evm', evmChainId: chainId as EVMChainId };
 }
+
 

@@ -51,6 +51,18 @@ function matchSPLToken(token: SPLTokenBalance, query: string): TokenSearchMatch 
   if (!query.trim()) return undefined;
 
   const q = query.trim();
+  
+  // For address queries (32-44 chars, base58), only match exact addresses
+  // This prevents showing multiple results when pasting a contract address
+  const isAddressQuery = q.length >= 32 && q.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(q);
+  
+  if (isAddressQuery) {
+    // Only exact address match for address queries
+    if (token.mint.toLowerCase() === q.toLowerCase()) {
+      return { matchField: 'address', matchStart: 0, matchLength: token.mint.length };
+    }
+    return undefined;
+  }
 
   const symbolMatch = findMatch(token.symbol, q);
   if (symbolMatch) {
@@ -74,6 +86,18 @@ function matchEVMToken(token: EVMTokenBalance, query: string): TokenSearchMatch 
   if (!query.trim()) return undefined;
 
   const q = query.trim();
+  
+  // For address queries (starts with 0x and is 42 chars), only match exact addresses
+  // This prevents showing multiple results when pasting a contract address
+  const isAddressQuery = q.startsWith('0x') && q.length === 42;
+  
+  if (isAddressQuery) {
+    // Only exact address match for address queries
+    if (token.address.toLowerCase() === q.toLowerCase()) {
+      return { matchField: 'address', matchStart: 0, matchLength: token.address.length };
+    }
+    return undefined;
+  }
 
   const symbolMatch = findMatch(token.symbol, q);
   if (symbolMatch) {
@@ -282,4 +306,7 @@ export function hasSearchResults(
 ): boolean {
   return solMatches || ethMatches || splTokens.length > 0 || evmTokens.length > 0;
 }
+
+
+
 

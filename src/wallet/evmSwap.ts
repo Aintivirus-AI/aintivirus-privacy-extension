@@ -1,14 +1,3 @@
-/**
- * EVM Swap Service using ParaSwap (No API Key Required)
- *
- * ParaSwap is a DEX aggregator that works across all major EVM chains
- * without requiring API keys. Similar flow to Jupiter on Solana.
- *
- * Supported chains: Ethereum, Polygon, Arbitrum, Optimism, Base
- *
- * Docs: https://developers.paraswap.network/api/
- */
-
 import { Transaction, Interface } from 'ethers';
 import type { EVMChainId } from './chains/types';
 import { ChainError, ChainErrorCode } from './chains/types';
@@ -28,32 +17,25 @@ import { broadcastTransaction, confirmTransaction } from './chains/evm/transacti
 import { getUnlockedEVMKeypair, getEVMAddress } from './storage';
 import { Wallet } from 'ethers';
 
-// ERC20 interface for allowance checks and approvals
 const erc20Interface = new Interface([
   'function allowance(address owner, address spender) view returns (uint256)',
   'function approve(address spender, uint256 amount) returns (bool)',
 ]);
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-// ParaSwap API endpoints (no API key required!)
 const PARASWAP_API_BASE = 'https://api.paraswap.io';
 
-// Chain ID mapping for ParaSwap
 const PARASWAP_CHAIN_IDS: Record<EVMChainId, number> = {
   ethereum: 1,
   polygon: 137,
   arbitrum: 42161,
   optimism: 10,
   base: 8453,
+  bnb: 56,
 };
 
-// Common token addresses per chain
 export const COMMON_EVM_TOKENS: Record<EVMChainId, Record<string, string>> = {
   ethereum: {
-    ETH: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Native ETH
+    ETH: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
     WETH: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
     USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
@@ -61,7 +43,7 @@ export const COMMON_EVM_TOKENS: Record<EVMChainId, Record<string, string>> = {
     WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
   },
   polygon: {
-    MATIC: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Native MATIC
+    MATIC: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
     WMATIC: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
     USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', // Native USDC
     'USDC.e': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // Bridged USDC
@@ -71,8 +53,8 @@ export const COMMON_EVM_TOKENS: Record<EVMChainId, Record<string, string>> = {
   arbitrum: {
     ETH: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
     WETH: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
-    USDC: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // Native USDC
-    'USDC.e': '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8', // Bridged
+    USDC: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+    'USDC.e': '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
     USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
     ARB: '0x912CE59144191C1204E64559FE8253a0e49E6548',
   },
@@ -91,25 +73,29 @@ export const COMMON_EVM_TOKENS: Record<EVMChainId, Record<string, string>> = {
     DAI: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
     cbETH: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22',
   },
+  bnb: {
+    BNB: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+    WBNB: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+    BUSD: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+    USDT: '0x55d398326f99059fF775485246999027B3197955',
+    USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+    ETH: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+    CAKE: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+  },
 };
 
 // Native token address used by ParaSwap
 export const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
-// Request timeout
 const API_TIMEOUT = 30000;
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface EVMSwapQuoteParams {
   chainId: EVMChainId;
   srcToken: string;
   destToken: string;
-  amount: string; // In smallest units (wei)
+  amount: string;
   userAddress: string;
-  slippageBps?: number; // Default 100 (1%)
+  slippageBps?: number;
 }
 
 interface ParaSwapPriceRoute {
@@ -185,13 +171,6 @@ export interface EVMSwapResult {
   error?: string;
 }
 
-// ============================================================================
-// Token Approval Functions
-// ============================================================================
-
-/**
- * Check current allowance for a token
- */
 async function checkAllowance(
   chainId: EVMChainId,
   testnet: boolean,
@@ -234,7 +213,6 @@ async function approveToken(
   const userAddress = keypair.address;
   const numericChainId = getNumericChainId(chainId, testnet);
 
-  // Encode approval data - use max uint256 for unlimited approval
   const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
   const approvalAmount = amount > 0n ? MAX_UINT256 : 0n; // Approve unlimited to avoid repeated approvals
   const data = erc20Interface.encodeFunctionData('approve', [spenderAddress, approvalAmount]);
@@ -247,15 +225,13 @@ async function approveToken(
       to: tokenAddress,
       data,
     });
-    gasLimit = (gasLimit * 130n) / 100n; // 30% buffer for approval
+    gasLimit = (gasLimit * 130n) / 100n;
   } catch {
-    gasLimit = 60000n; // Fallback for approval
+    gasLimit = 60000n;
   }
 
-  // Get fee data
   const feeData = await getFeeData(chainId, testnet);
 
-  // Build transaction
   const tx: Record<string, unknown> = {
     to: tokenAddress,
     value: 0n,
@@ -267,7 +243,6 @@ async function approveToken(
     }),
   };
 
-  // Use EIP-1559 if available
   if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
     tx.type = 2;
     tx.maxFeePerGas = feeData.maxFeePerGas;
@@ -290,7 +265,6 @@ async function approveToken(
 
   const txResponse = await broadcastTransaction(chainId, testnet, transaction.serialized);
   
-  // Wait for approval confirmation
   const receipt = await confirmTransaction(chainId, testnet, txResponse.hash, 1);
   
   if (!receipt || receipt.status !== 1) {
@@ -303,10 +277,6 @@ async function approveToken(
 
   return txResponse.hash;
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
@@ -332,13 +302,6 @@ function getParaSwapChainId(chainId: EVMChainId): number {
   return PARASWAP_CHAIN_IDS[chainId];
 }
 
-// ============================================================================
-// Core API Functions
-// ============================================================================
-
-/**
- * Get a swap quote from ParaSwap
- */
 export async function getEVMSwapQuote(params: EVMSwapQuoteParams): Promise<EVMSwapQuote> {
   const {
     chainId,
@@ -346,17 +309,16 @@ export async function getEVMSwapQuote(params: EVMSwapQuoteParams): Promise<EVMSw
     destToken,
     amount,
     userAddress,
-    slippageBps = 100, // 1% default
+    slippageBps = 100,
   } = params;
 
   const networkId = getParaSwapChainId(chainId);
 
-  // Build query params for price endpoint
   const queryParams = new URLSearchParams({
     srcToken,
     destToken,
     amount,
-    srcDecimals: '18', // Will be overridden by API response
+    srcDecimals: '18',
     destDecimals: '18',
     side: 'SELL',
     network: networkId.toString(),
@@ -376,7 +338,6 @@ export async function getEVMSwapQuote(params: EVMSwapQuoteParams): Promise<EVMSw
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error || errorMessage;
       } catch {
-        // Use default error message
       }
 
       throw new ChainError(ChainErrorCode.NETWORK_ERROR, errorMessage, 'evm');
@@ -384,7 +345,6 @@ export async function getEVMSwapQuote(params: EVMSwapQuoteParams): Promise<EVMSw
 
     const priceRoute: ParaSwapPriceRoute = (await response.json()).priceRoute;
 
-    // Calculate exchange rate
     const srcAmountNum = parseFloat(priceRoute.srcAmount) / Math.pow(10, priceRoute.srcDecimals);
     const destAmountNum = parseFloat(priceRoute.destAmount) / Math.pow(10, priceRoute.destDecimals);
     const exchangeRate = (destAmountNum / srcAmountNum).toFixed(6);
@@ -462,7 +422,6 @@ export async function buildEVMSwapTransaction(
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error || errorMessage;
       } catch {
-        // Use default error message
       }
 
       throw new ChainError(ChainErrorCode.TRANSACTION_FAILED, errorMessage, 'evm');
@@ -482,14 +441,10 @@ export async function buildEVMSwapTransaction(
   }
 }
 
-/**
- * Execute a swap transaction
- */
 export async function executeEVMSwap(
   quote: EVMSwapQuote,
   testnet: boolean = false,
 ): Promise<EVMSwapResult> {
-  // Get the EVM keypair
   const keypair = getUnlockedEVMKeypair();
   if (!keypair) {
     throw new ChainError(
@@ -501,15 +456,12 @@ export async function executeEVMSwap(
 
   const userAddress = keypair.address;
 
-  // Check if source token is ERC20 (not native token) and needs approval
   const isNativeToken = quote.srcToken.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
   
   if (!isNativeToken) {
-    // Get the TokenTransferProxy address from the quote's price route
     const tokenTransferProxy = quote.priceRoute.tokenTransferProxy;
     
     if (tokenTransferProxy) {
-      // Check current allowance
       const currentAllowance = await checkAllowance(
         quote.chainId,
         testnet,
@@ -520,7 +472,6 @@ export async function executeEVMSwap(
 
       const requiredAmount = BigInt(quote.srcAmount);
 
-      // If allowance is insufficient, approve first
       if (currentAllowance < requiredAmount) {
         try {
           await approveToken(
@@ -530,7 +481,6 @@ export async function executeEVMSwap(
             tokenTransferProxy,
             requiredAmount,
           );
-          // Small delay to ensure approval is indexed
           await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (error) {
           throw new ChainError(
@@ -550,10 +500,8 @@ export async function executeEVMSwap(
   const explorerBase = getEVMExplorerUrl(quote.chainId, testnet);
 
   try {
-    // Get current gas prices
     const feeData = await getFeeData(quote.chainId, testnet);
 
-    // Estimate gas if not provided
     let gasLimit = txParams.gas ? BigInt(txParams.gas) : undefined;
     if (!gasLimit) {
       try {
@@ -563,22 +511,18 @@ export async function executeEVMSwap(
           value: BigInt(txParams.value || '0'),
           data: txParams.data,
         });
-        // Add 50% buffer for safety - swaps are complex multi-hop transactions
         gasLimit = (gasLimit * BigInt(150)) / BigInt(100);
       } catch {
-        // Fallback gas limit for swaps - swaps often need high gas
         gasLimit = BigInt(800000);
       }
     }
 
-    // Create the transaction object
     const wallet = new Wallet(
       typeof keypair.privateKey === 'string'
         ? keypair.privateKey
         : Buffer.from(keypair.privateKey).toString('hex')
     );
 
-    // Build transaction with EIP-1559 if available
     const tx: Record<string, unknown> = {
       to: txParams.to,
       value: BigInt(txParams.value || '0'),
@@ -607,12 +551,10 @@ export async function executeEVMSwap(
 
     const serializedTx = transaction.serialized;
 
-    // Broadcast the transaction
     const txResponse = await broadcastTransaction(quote.chainId, testnet, serializedTx);
     const hash = txResponse.hash;
     const explorerUrl = `${explorerBase}/tx/${hash}`;
 
-    // Wait for confirmation
     const receipt = await confirmTransaction(quote.chainId, testnet, hash, 1);
 
     if (receipt) {
@@ -683,7 +625,6 @@ export async function getFormattedEVMSwapQuote(
   gasCostUSD: string;
   route: string;
 }> {
-  // Convert input amount to smallest units
   const srcAmountRaw = BigInt(
     Math.floor(parseFloat(srcAmount) * Math.pow(10, srcDecimals))
   ).toString();
@@ -697,7 +638,6 @@ export async function getFormattedEVMSwapQuote(
     slippageBps,
   });
 
-  // Format amounts for display
   const destAmountFormatted = (
     parseFloat(quote.destAmount) / Math.pow(10, quote.destDecimals)
   ).toFixed(Math.min(quote.destDecimals, 8));
@@ -709,7 +649,6 @@ export async function getFormattedEVMSwapQuote(
     minimumReceived / Math.pow(10, quote.destDecimals)
   ).toFixed(Math.min(quote.destDecimals, 8));
 
-  // Extract route info
   const routeExchanges: string[] = [];
   if (quote.priceRoute.bestRoute) {
     for (const route of quote.priceRoute.bestRoute) {
@@ -752,7 +691,6 @@ export async function performEVMSwap(
     Math.floor(parseFloat(srcAmount) * Math.pow(10, srcDecimals))
   ).toString();
 
-  // Get quote
   const quote = await getEVMSwapQuote({
     chainId,
     srcToken,
@@ -818,9 +756,6 @@ export function formatEVMTokenAmount(
   return formatted.toFixed(displayDecimals).replace(/\.?0+$/, '');
 }
 
-/**
- * Parse user input amount to raw amount
- */
 export function parseEVMInputAmount(amount: string, decimals: number): string {
   const num = parseFloat(amount);
   if (isNaN(num) || num < 0) {

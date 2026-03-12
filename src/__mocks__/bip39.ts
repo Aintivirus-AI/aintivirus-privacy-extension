@@ -92,17 +92,23 @@ export const validateMnemonic = (mnemonic: string): boolean => {
   return true;
 };
 
-export const mnemonicToSeedSync = (mnemonic: string, password?: string): Buffer => {
-  // Return a deterministic seed based on the mnemonic
-  const seed = Buffer.alloc(64);
-  const mnemonicBytes = Buffer.from(mnemonic, 'utf8');
+// Return type is Uint8Array for compatibility with @scure/bip32's HDKey.fromMasterSeed
+// The real bip39 returns Buffer which extends Uint8Array, but tests need plain Uint8Array
+export const mnemonicToSeedSync = (mnemonic: string, _password?: string): Uint8Array => {
+  // Return a deterministic 64-byte seed based on the mnemonic
+  const result = new Uint8Array(64);
+  const encoder = new TextEncoder();
+  const mnemonicBytes = encoder.encode(mnemonic);
+  
+  // Create deterministic bytes - ensure different mnemonics produce different seeds
   for (let i = 0; i < 64; i++) {
-    seed[i] = mnemonicBytes[i % mnemonicBytes.length] ^ (i * 7);
+    const byte = mnemonicBytes[i % mnemonicBytes.length] || 0;
+    result[i] = (byte ^ (i * 7) ^ (mnemonicBytes.length * 3)) & 0xff;
   }
-  return seed;
+  return result;
 };
 
-export const mnemonicToSeed = async (mnemonic: string, password?: string): Promise<Buffer> => {
+export const mnemonicToSeed = async (mnemonic: string, password?: string): Promise<Uint8Array> => {
   return mnemonicToSeedSync(mnemonic, password);
 };
 

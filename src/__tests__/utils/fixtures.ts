@@ -246,7 +246,7 @@ export const MOCK_STORAGE_DATA = {
     notifications: true,
   },
   initialized: true,
-  version: '0.2.0',
+  version: '2.0.0',
 };
 
 // Aliases for backward compatibility with various test files

@@ -86,6 +86,33 @@ npm run build  # Production build
 npm run clean  # Remove dist folder
 ```
 
+### Testing Store Transactions (Merch/Gift Cards/eSIM)
+
+To test store purchases without spending real AINTI, use the **staging environment**:
+
+1. Create or update your `.env` file with:
+   ```
+   STORE_ENVIRONMENT=staging
+   ```
+
+2. Rebuild the extension:
+   ```bash
+   npm run build
+   ```
+
+3. Load the extension and test purchases using the **$1 test product** available on staging.
+
+**Staging URLs:**
+- API: `https://stage.api.aintivirus.ai`
+- Web: `https://stage.aintivirus.ai/esim`
+
+The staging environment uses the same smart contracts but has special test products. The extension will log `[Store API] Environment: staging` to the console when running in staging mode.
+
+**Payment flow:**
+1. Backend API creates an order (generates OrderID)
+2. Smart contract is called with the OrderID
+3. After TX confirmation, backend API verifies the payment
+
 ## Project Structure
 
 ```

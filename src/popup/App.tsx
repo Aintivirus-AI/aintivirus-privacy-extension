@@ -59,7 +59,9 @@ import { RecentRecipientsDropdown } from './components/RecentRecipientsDropdown'
 import { TokenIcon } from './components/TokenIcon';
 import { TokenSearchDropdown } from './components/TokenSearchDropdown';
 import { SwapTokenSelector } from './components/SwapTokenSelector';
-import { type SwapToken, getPopularTokens } from '../wallet/swapTokens';
+import { MoneroSetupModal } from './components/MoneroSetupModal';
+import { ReceiveView, SwapView, ManageWalletsView, AddWalletView } from './views/wallet';
+import { type SwapToken } from '../wallet/swapTokens';
 import { useHideBalances, useSessionSetting, SESSION_KEYS } from './hooks/useSessionSetting';
 import { useRecentRecipients } from './hooks/useRecentRecipients';
 import { useDebounce } from './hooks/useDebounce';
@@ -69,6 +71,7 @@ import {
   formatHiddenTxAmount,
   HIDDEN_BALANCE,
 } from './utils/balancePrivacy';
+import { isSwapAvailableForChain } from './utils/chainDisplay';
 import {
   filterSPLTokens,
   filterEVMTokens,
@@ -98,6 +101,7 @@ import {
   KeyIcon,
   SwapIcon,
   ExternalLinkIcon,
+  PartnersIcon,
   RefreshIcon,
   ChevronIcon,
   PlusIcon,
@@ -106,9 +110,14 @@ import {
   EyeIcon,
   EyeOffIcon,
   SearchIcon,
+  StoreIcon,
+  SpamIcon,
 } from './Icons';
+import StoreTab from './components/StoreTab';
 import { getPasswordStrengthFeedback } from '../wallet/crypto';
 import { isValidSolanaAddress, isValidEVMAddress } from '../wallet/keychain';
+import LockedParticles from './components/LockedParticles';
+import AmbientBackground from './components/AmbientBackground';
 
 interface PrivacyStats {
   totalBlockedRequests: number;
@@ -121,7 +130,7 @@ interface PrivacyStats {
   sessionStart?: number;
 }
 
-type MainTab = 'security' | 'wallet';
+type MainTab = 'security' | 'wallet' | 'store';
 type WalletView = 'dashboard' | 'send' | 'receive' | 'manage' | 'add-wallet' | 'swap';
 
 function truncateAddress(address: string, chars: number = 4): string {
@@ -156,6 +165,57 @@ function formatUsd(amount: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+/**
+ * Format a token price with appropriate precision
+ * Shows more decimals for low-priced tokens to enable price tracking
+ */
+function formatTokenPrice(price: number): string {
+  if (price === 0) return '$0.00';
+  
+  // For prices >= $1, show 2 decimals
+  if (price >= 1) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(price);
+  }
+  
+  // For prices >= $0.01, show 4 decimals
+  if (price >= 0.01) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    }).format(price);
+  }
+  
+  // For prices >= $0.0001, show 6 decimals
+  if (price >= 0.0001) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 6,
+    }).format(price);
+  }
+  
+  // For very small prices, show up to 8 decimals
+  if (price >= 0.00000001) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 6,
+      maximumFractionDigits: 8,
+    }).format(price);
+  }
+  
+  // For extremely small prices, use scientific notation
+  return `$${price.toExponential(2)}`;
 }
 
 function getFeatureIcon(iconName: string): React.ReactNode {
@@ -407,6 +467,9 @@ interface WalletTabProps {
   hideBalances: boolean;
   onToggleHideBalances: () => void;
   privacyEnabled: boolean;
+  onShowMoneroSetup?: () => void;
+  triggerSwap?: boolean; // When true, auto-navigate to swap view
+  onSwapTriggered?: () => void; // Called after swap view is shown
 }
 
 const WalletTab: React.FC<WalletTabProps> = ({
@@ -415,8 +478,66 @@ const WalletTab: React.FC<WalletTabProps> = ({
   hideBalances,
   onToggleHideBalances,
   privacyEnabled,
+  onShowMoneroSetup,
+  triggerSwap,
+  onSwapTriggered,
 }) => {
   const [view, setView] = useState<WalletView>('dashboard');
+  
+  // Handle external trigger to navigate to swap (e.g., from Store "Buy AINTI" button)
+  useEffect(() => {
+    if (triggerSwap && walletState && walletState.lockState === 'unlocked') {
+      // Fetch token data before showing swap view
+      const fetchSwapData = async () => {
+        try {
+          const activeChain = walletState.activeChain || 'solana';
+          const activeEVMChain = walletState.activeEVMChain;
+          
+          if (activeChain === 'solana') {
+            // Fetch Solana balance and tokens
+            const [balanceRes, tokensRes] = await Promise.all([
+              sendToBackground({ type: 'WALLET_GET_BALANCE', payload: {} }),
+              sendToBackground({ type: 'WALLET_GET_TOKENS', payload: {} }),
+            ]);
+            
+            if (balanceRes.success && balanceRes.data) {
+              setSwapBalance(balanceRes.data as WalletBalance);
+            }
+            if (tokensRes.success && tokensRes.data) {
+              setSwapTokens(tokensRes.data as SPLTokenBalance[]);
+            }
+          } else if (activeChain === 'evm' && activeEVMChain) {
+            // Fetch EVM balance and tokens
+            const [balanceRes, tokensRes] = await Promise.all([
+              sendToBackground({
+                type: 'WALLET_GET_EVM_BALANCE',
+                payload: { evmChainId: activeEVMChain },
+              }),
+              sendToBackground({
+                type: 'WALLET_GET_EVM_TOKENS',
+                payload: { evmChainId: activeEVMChain },
+              }),
+            ]);
+            
+            if (balanceRes.success && balanceRes.data) {
+              setSwapEvmBalance(balanceRes.data as EVMBalance);
+            }
+            if (tokensRes.success && tokensRes.data) {
+              setSwapEvmTokens(tokensRes.data as EVMTokenBalance[]);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch swap data:', err);
+        }
+        
+        // Navigate to swap view after data is fetched
+        setView('swap');
+        onSwapTriggered?.();
+      };
+      
+      fetchSwapData();
+    }
+  }, [triggerSwap, walletState, onSwapTriggered]);
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
@@ -463,7 +584,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
 
   if (!walletState || walletState.lockState === 'uninitialized') {
     return (
-      <div className="popup-content">
+      <div className="popup-content locked-screen-content">
         <WalletSetup onComplete={onStateChange} />
       </div>
     );
@@ -473,6 +594,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
     return (
       <div className="popup-content locked-screen-content">
         <div className="locked-screen-bg">
+          <LockedParticles />
           <div className="locked-bg-gradient" />
           <div className="locked-bg-pattern" />
         </div>
@@ -583,13 +705,29 @@ const WalletTab: React.FC<WalletTabProps> = ({
     );
   }
 
+  // Safeguard: if wallet is unlocked but address is not yet populated, show loading
+  // This handles race conditions during initial load or service worker restart
+  if (!walletState.publicAddress) {
+    return (
+      <div className="popup-content">
+        <div className="loading">
+          <div className="spinner" />
+          <p style={{ marginTop: 'var(--space-sm)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+            Loading wallet...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="popup-content">
       <div className="wallet-container">
+        <AmbientBackground chain={walletState.activeChain || 'solana'} intensity={0.4} />
         {view === 'dashboard' && (
           <WalletDashboard
             key={dashboardKey}
-            address={walletState.publicAddress!}
+            address={walletState.publicAddress}
             network={walletState.network}
             activeWalletId={walletState.activeWalletId}
             activeWalletLabel={walletState.activeWalletLabel}
@@ -600,6 +738,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
             }}
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
+            activeChainId={walletState.activeChainId || null}
             evmAddress={walletState.evmAddress || null}
             onSend={() => {
               setSelectedTokenForSend(null);
@@ -620,16 +759,18 @@ const WalletTab: React.FC<WalletTabProps> = ({
             onLock={onStateChange}
             onManageWallets={() => setView('manage')}
             onWalletSwitch={() => setView('manage')}
-            onChainChange={async (chain, evmChainId) => {
+            onChainChange={async (chain, evmChainId, chainId) => {
               const result = await sendToBackground({
                 type: 'WALLET_SET_CHAIN',
-                payload: { chain, evmChainId },
+                payload: { chain, evmChainId, chainId },
               });
               await onStateChange();
             }}
             hideBalances={hideBalances}
             onToggleHideBalances={onToggleHideBalances}
             privacyEnabled={privacyEnabled}
+            onShowMoneroSetup={onShowMoneroSetup}
+            supportedChainFamilies={walletState.supportedChainFamilies}
           />
         )}
         {view === 'send' && (
@@ -637,6 +778,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
             address={walletState.publicAddress!}
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
+            activeChainId={walletState.activeChainId || null}
             evmAddress={walletState.evmAddress || null}
             onClose={() => {
               setSelectedTokenForSend(null);
@@ -667,6 +809,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
             }
             activeChain={walletState.activeChain || 'solana'}
             activeEVMChain={walletState.activeEVMChain || null}
+            activeChainId={walletState.activeChainId || null}
             onClose={() => setView('dashboard')}
           />
         )}
@@ -684,7 +827,26 @@ const WalletTab: React.FC<WalletTabProps> = ({
             evmTokens={swapEvmTokens}
             balance={swapBalance}
             evmBalance={swapEvmBalance}
-            onClose={() => setView('dashboard')}
+            onClose={() => {
+              setView('dashboard');
+              // Force dashboard refresh after closing swap to pick up new balances
+              setDashboardKey((k) => k + 1);
+            }}
+            onSwapComplete={() => {
+              onStateChange();
+              // Force dashboard refresh after swap completes (similar to send)
+              // Multiple refreshes to catch blockchain confirmation
+              setDashboardKey((k) => k + 1);
+              setTimeout(() => {
+                setDashboardKey((k) => k + 1);
+              }, 3000);
+              setTimeout(() => {
+                setDashboardKey((k) => k + 1);
+              }, 8000);
+              setTimeout(() => {
+                setDashboardKey((k) => k + 1);
+              }, 15000);
+            }}
           />
         )}
         {view === 'manage' && (
@@ -832,25 +994,32 @@ const WalletSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
 
   if (mode === 'select') {
     return (
-      <div className="wallet-setup">
-        <div className="wallet-setup-icon">
-          <WalletIcon size={32} />
+      <div className="wallet-setup-screen">
+        <div className="locked-screen-bg">
+          <LockedParticles />
+          <div className="locked-bg-gradient" />
+          <div className="locked-bg-pattern" />
         </div>
-        <h3>Welcome to AINTIVIRUS Wallet</h3>
-        <p>Secure Solana wallet built into your browser</p>
-        <div className="wallet-setup-actions">
-          <button className="btn btn-primary btn-block" onClick={() => setMode('create')}>
-            Create New Wallet
-          </button>
-          <button className="btn btn-secondary btn-block" onClick={() => setMode('import')}>
-            Import with Recovery Phrase
-          </button>
-          <button
-            className="btn btn-secondary btn-block"
-            onClick={() => setMode('importPrivateKey')}
-          >
-            Import with Private Key
-          </button>
+        <div className="wallet-setup wallet-setup-elevated">
+          <div className="wallet-setup-icon">
+            <WalletIcon size={32} />
+          </div>
+          <h3>Welcome to AINTIVIRUS Wallet</h3>
+          <p>Secure Solana wallet built into your browser</p>
+          <div className="wallet-setup-actions">
+            <button className="btn btn-primary btn-block" onClick={() => setMode('create')}>
+              Create New Wallet
+            </button>
+            <button className="btn btn-secondary btn-block" onClick={() => setMode('import')}>
+              Import with Recovery Phrase
+            </button>
+            <button
+              className="btn btn-secondary btn-block"
+              onClick={() => setMode('importPrivateKey')}
+            >
+              Import with Private Key
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -952,13 +1121,13 @@ const WalletSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
           <LockIcon size={32} />
         </div>
         <h3>Import Private Key</h3>
-        <p>Enter your Solana or EVM private key</p>
+        <p>Enter your Solana, EVM, or Bitcoin private key</p>
         <div className="unlock-form">
           <div className="password-input-wrapper">
             <input
               type={showPrivateKey ? 'text' : 'password'}
               className="form-input"
-              placeholder="Enter private key (Base58 or Hex)"
+              placeholder="Enter private key (Base58, Hex, or WIF)"
               value={privateKey}
               onChange={(e) => setPrivateKey(e.target.value)}
               style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
@@ -980,7 +1149,7 @@ const WalletSetup: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
               marginBottom: 'var(--space-sm)',
             }}
           >
-            Accepts Solana (Base58/Hex) or EVM (0x hex) private keys
+            Accepts Solana (Base58), EVM (0x hex), or Bitcoin (WIF) private keys
           </p>
           <div className="password-input-wrapper">
             <input
@@ -1144,6 +1313,7 @@ interface WalletDashboardProps {
   walletCount: number;
   activeChain: ChainType;
   activeEVMChain: EVMChainId | null;
+  activeChainId: string | null;
   evmAddress: string | null;
   onSend: () => void;
   onSendToken: (token: SelectedTokenForSend) => void;
@@ -1152,76 +1322,87 @@ interface WalletDashboardProps {
   onLock: () => void;
   onManageWallets: () => void;
   onWalletSwitch: () => void;
-  onChainChange: (chain: ChainType, evmChainId?: EVMChainId) => void;
+  onChainChange: (chain: ChainType, evmChainId?: EVMChainId, chainId?: string) => void;
   hideBalances: boolean;
   onToggleHideBalances: () => void;
   privacyEnabled: boolean;
   onPriceUpdate?: (solPrice: number | null, ethPrice: number | null) => void;
+  onShowMoneroSetup?: () => void;
+  supportedChainFamilies?: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null;
 }
 
 // Chain icons with actual logos
-const ChainIcon: React.FC<{ chain: ChainType; evmChainId?: EVMChainId; size?: number }> = ({
+// Chain icon component - accepts chainId (string) for all chain types
+const ChainIcon: React.FC<{ chain: ChainType; evmChainId?: EVMChainId | string; size?: number }> = ({
   chain,
   evmChainId,
   size = 16,
 }) => {
-  // Get the chain logo URL
-  const getLogoUrl = (): string => {
-    if (chain === 'solana') {
-      return 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
-    }
+  // Map chain ID to jsDelivr CDN logo URLs
+  const chainLogoMap: Record<string, string> = {
+    solana: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
+    ethereum: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png',
+    polygon: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/info/logo.png',
+    arbitrum: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/info/logo.png',
+    optimism: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/info/logo.png',
+    base: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/base/info/logo.png',
+    bnb: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/smartchain/info/logo.png',
+    bitcoin: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/bitcoin/info/logo.png',
+    bitcoincash: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/bitcoincash/info/logo.png',
+    litecoin: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/litecoin/info/logo.png',
+    zcash: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/zcash/info/logo.png',
+    tron: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/tron/info/logo.png',
+    monero: 'https://assets.coingecko.com/coins/images/69/small/monero_logo.png',
+  };
 
-    // EVM chain logos from trusted sources
-    switch (evmChainId) {
-      case 'ethereum':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
-      case 'polygon':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png';
-      case 'arbitrum':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png';
-      case 'optimism':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png';
-      case 'base':
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png';
-      default:
-        return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
-    }
+  const chainColorMap: Record<string, string> = {
+    solana: '#9945FF',
+    ethereum: '#627EEA',
+    polygon: '#8247E5',
+    arbitrum: '#28A0F0',
+    optimism: '#FF0420',
+    base: '#0052FF',
+    bnb: '#F0B90B',
+    bitcoin: '#F7931A',
+    bitcoincash: '#8DC351',
+    litecoin: '#345D9D',
+    zcash: '#F4B728',
+    tron: '#FF0013',
+    monero: '#FF6600',
+  };
+
+  const chainLetterMap: Record<string, string> = {
+    solana: 'S',
+    ethereum: 'E',
+    polygon: 'P',
+    arbitrum: 'A',
+    optimism: 'O',
+    base: 'B',
+    bnb: 'B',
+    bitcoin: '₿',
+    bitcoincash: 'B',
+    litecoin: 'Ł',
+    zcash: 'Z',
+    tron: 'T',
+    monero: 'M',
+  };
+
+  const getLogoUrl = (): string => {
+    if (chain === 'solana') return chainLogoMap.solana;
+    const chainId = evmChainId as string;
+    return chainLogoMap[chainId] || chainLogoMap.ethereum;
   };
 
   const getFallbackColor = () => {
-    if (chain === 'solana') return '#9945FF';
-    switch (evmChainId) {
-      case 'ethereum':
-        return '#627EEA';
-      case 'polygon':
-        return '#8247E5';
-      case 'arbitrum':
-        return '#28A0F0';
-      case 'optimism':
-        return '#FF0420';
-      case 'base':
-        return '#0052FF';
-      default:
-        return '#627EEA';
-    }
+    if (chain === 'solana') return chainColorMap.solana;
+    const chainId = evmChainId as string;
+    return chainColorMap[chainId] || chainColorMap.ethereum;
   };
 
   const getFallbackLetter = () => {
-    if (chain === 'solana') return 'S';
-    switch (evmChainId) {
-      case 'ethereum':
-        return 'E';
-      case 'polygon':
-        return 'P';
-      case 'arbitrum':
-        return 'A';
-      case 'optimism':
-        return 'O';
-      case 'base':
-        return 'B';
-      default:
-        return 'E';
-    }
+    if (chain === 'solana') return chainLetterMap.solana;
+    const chainId = evmChainId as string;
+    return chainLetterMap[chainId] || chainLetterMap.ethereum;
   };
 
   const [hasError, setHasError] = React.useState(false);
@@ -1267,10 +1448,12 @@ const ChainIcon: React.FC<{ chain: ChainType; evmChainId?: EVMChainId; size?: nu
 const ChainSelector: React.FC<{
   activeChain: ChainType;
   activeEVMChain: EVMChainId | null;
-  onChainChange: (chain: ChainType, evmChainId?: EVMChainId) => void;
+  activeChainId: string | null;
+  onChainChange: (chain: ChainType, evmChainId?: EVMChainId, chainId?: string) => void;
   onOpen?: () => void;
   forceClose?: boolean;
-}> = ({ activeChain, activeEVMChain, onChainChange, onOpen, forceClose }) => {
+  supportedChainFamilies?: ('solana' | 'evm' | 'bitcoin' | 'tron' | 'monero')[] | null;
+}> = ({ activeChain, activeEVMChain, activeChainId, onChainChange, onOpen, forceClose, supportedChainFamilies }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   // Close dropdown when forceClose changes to true
@@ -1282,9 +1465,37 @@ const ChainSelector: React.FC<{
 
   const getCurrentChainName = () => {
     if (activeChain === 'solana') return 'Solana';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
+    // First try to find by activeChainId (for Bitcoin, TRON, Monero, etc.)
+    if (activeChainId) {
+      const chain = SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+      if (chain) return chain.name;
+    }
+    // Fall back to evmChainId for EVM chains
+    const chain = SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
     return chain?.name || 'Ethereum';
   };
+
+  // Filter chains based on supported families for private key imports
+  const availableChains = useMemo(() => {
+    if (!supportedChainFamilies) {
+      // null means all chains are supported (mnemonic wallet)
+      return SUPPORTED_CHAINS;
+    }
+    // Filter to only show chains that match supported families
+    return SUPPORTED_CHAINS.filter((chain) => supportedChainFamilies.includes(chain.family));
+  }, [supportedChainFamilies]);
+
+  // If only one chain is supported, don't show the selector
+  if (availableChains.length <= 1) {
+    return (
+      <div className="chain-selector-container">
+        <div className="chain-selector-btn chain-selector-single" title={`${getCurrentChainName()} only`}>
+          <ChainIcon chain={activeChain} evmChainId={activeChainId || activeEVMChain || undefined} size={20} />
+          <span className="chain-selector-label">{getCurrentChainName()}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="chain-selector-container">
@@ -1298,7 +1509,7 @@ const ChainSelector: React.FC<{
         }}
         title="Switch chain"
       >
-        <ChainIcon chain={activeChain} evmChainId={activeEVMChain || undefined} size={20} />
+        <ChainIcon chain={activeChain} evmChainId={activeChainId || activeEVMChain || undefined} size={20} />
         <span className="chain-selector-label">{getCurrentChainName()}</span>
         <span className={`chain-selector-arrow ${isOpen ? 'open' : ''}`}>
           <ChevronIcon size={14} />
@@ -1310,27 +1521,41 @@ const ChainSelector: React.FC<{
             <span>Select Network</span>
           </div>
           <div className="chain-selector-list">
-            {SUPPORTED_CHAINS.map((chain) => {
-              const isActive =
-                (chain.type === 'solana' && activeChain === 'solana') ||
-                (chain.type === 'evm' &&
-                  activeChain === 'evm' &&
-                  chain.evmChainId === activeEVMChain);
+            {availableChains.map((chain) => {
+              // Check active state - IMPORTANT: Only one chain should be active at a time
+              let isActive = false;
+              if (activeChain === 'solana') {
+                // When on Solana, only Solana should be active
+                isActive = chain.type === 'solana';
+              } else if (activeChain === 'evm') {
+                // When on EVM-type chains (includes Bitcoin/TRON/Monero for legacy reasons)
+                // First check by chainId (works for all chains including non-EVM)
+                if (activeChainId && chain.chainId === activeChainId) {
+                  isActive = true;
+                } else if (!activeChainId && chain.family === 'evm' && chain.evmChainId === activeEVMChain) {
+                  // Fallback to evmChainId for actual EVM chains when no chainId is set
+                  isActive = true;
+                }
+              }
 
               return (
                 <button
-                  key={chain.type === 'solana' ? 'solana' : chain.evmChainId}
+                  key={chain.chainId}
                   className={`chain-selector-item ${isActive ? 'active' : ''}`}
                   onClick={() => {
-                    onChainChange(chain.type, chain.evmChainId);
+                    // Pass evmChainId only for EVM chains, always pass chainId
+                    onChainChange(chain.type, chain.evmChainId, chain.chainId);
                     setIsOpen(false);
                   }}
                 >
-                  <ChainIcon chain={chain.type} evmChainId={chain.evmChainId} size={24} />
+                  <ChainIcon chain={chain.type} evmChainId={chain.evmChainId || chain.chainId} size={24} />
                   <div className="chain-item-info">
                     <span className="chain-item-name">{chain.name}</span>
                     <span className="chain-item-symbol">{chain.symbol}</span>
                   </div>
+                  {chain.family === 'monero' && (
+                    <span className="chain-watch-only-badge">Watch Only</span>
+                  )}
                   {isActive && <CheckIcon size={16} />}
                 </button>
               );
@@ -1358,6 +1583,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   walletCount,
   activeChain,
   activeEVMChain,
+  activeChainId,
   evmAddress,
   onSend,
   onSendToken,
@@ -1371,6 +1597,8 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   onToggleHideBalances,
   privacyEnabled,
   onPriceUpdate,
+  onShowMoneroSetup,
+  supportedChainFamilies,
 }) => {
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
@@ -1410,26 +1638,233 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   // Hide dust tokens (< $1 value)
   const [hideDustTokens, setHideDustTokens] = useState(false);
 
+  // Hide spam tokens (auto-detected potential scam/spam tokens)
+  const [hideSpamTokens, setHideSpamTokens] = useState(true);
+
+  // Chain-specific address (for Bitcoin, TRON, Monero, etc.)
+  const [chainAddress, setChainAddress] = useState<string | null>(null);
+  const [chainAddressLoading, setChainAddressLoading] = useState(false);
+
+  // Determine the actual chain family (evm, solana, bitcoin, tron, monero)
+  // This is important because non-EVM chains have activeChain='evm' for legacy compatibility
+  const currentChainInfo = useMemo(() => {
+    if (activeChain === 'solana') {
+      return SUPPORTED_CHAINS.find((c) => c.chainId === 'solana');
+    }
+    if (activeChainId) {
+      return SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+    }
+    if (activeEVMChain) {
+      return SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
+    }
+    return SUPPORTED_CHAINS.find((c) => c.chainId === 'ethereum');
+  }, [activeChain, activeChainId, activeEVMChain]);
+
+  // Helper flags for checking actual chain family
+  const isActuallyEVM = currentChainInfo?.family === 'evm';
+  const isActuallySolana = activeChain === 'solana' || currentChainInfo?.family === 'solana';
+  const chainFamily = currentChainInfo?.family || 'evm';
+  const supportsTokens = isActuallySolana || isActuallyEVM;
+
+  // Switch away from tokens tab when chain doesn't support tokens
+  useEffect(() => {
+    if (!supportsTokens && activeTab === 'tokens') {
+      setActiveTab('activity');
+    }
+  }, [supportsTokens, activeTab]);
+
+  // Helper to fetch connected sites from dApp permissions
+  const refreshConnectedSites = async () => {
+    try {
+      const permissionsRes = await sendToBackground({
+        type: 'DAPP_GET_PERMISSIONS',
+        payload: undefined,
+      });
+      if (permissionsRes.success && permissionsRes.data) {
+        const permissions = permissionsRes.data as Array<{
+          origin: string;
+          chainType: string;
+          connectedAt: number;
+          accounts: string[];
+        }>;
+        const originMap = new Map<string, ConnectionRecordUI>();
+        for (const perm of permissions) {
+          if (!originMap.has(perm.origin)) {
+            let domain = perm.origin;
+            try {
+              domain = new URL(perm.origin).hostname;
+            } catch {
+              // Use origin as-is
+            }
+            originMap.set(perm.origin, {
+              id: perm.origin,
+              domain,
+              timestamp: perm.connectedAt,
+              approved: true,
+              revoked: false,
+            });
+          }
+        }
+        setConnections(Array.from(originMap.values()));
+      }
+    } catch {
+      // Best effort
+    }
+  };
+
+  // Refresh connected sites when switching to the security tab
+  useEffect(() => {
+    if (activeTab === 'security') {
+      refreshConnectedSites();
+    }
+  }, [activeTab]);
+
+  // Listen for dApp permission changes in real-time (e.g., when a new site is approved
+  // via the approval popup while the extension sidebar is open)
+  useEffect(() => {
+    const listener = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (areaName === 'local' && changes['dappPermissions']) {
+        refreshConnectedSites();
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
+  // Clear stale data when switching chains to prevent showing old chain's data
+  // This applies to ALL chain switches, not just EVM chains
+  useEffect(() => {
+    // Clear EVM data when chain changes to prevent stale data
+    setEvmTokens([]);
+    setEvmTokenPrices({});
+    setEvmBalance(null);
+    setEvmHistory([]);
+    // Also clear Solana data when switching away
+    setHistory([]);
+  }, [activeEVMChain, activeChainId]); // Trigger on any chain change
+
+  // Fetch chain-specific address when chain changes
+  useEffect(() => {
+    const fetchChainAddress = async () => {
+      // For Solana, use the publicAddress
+      if (activeChain === 'solana') {
+        setChainAddress(null);
+        return;
+      }
+      
+      // For EVM chains, use evmAddress
+      if (activeChain === 'evm' && activeEVMChain && !activeChainId) {
+        setChainAddress(null);
+        return;
+      }
+      
+      // Find chain info by chainId
+      const chainInfo = SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+      
+      if (!chainInfo || !activeChainId) {
+        // Fall back to EVM chain if no chainId
+        setChainAddress(null);
+        return;
+      }
+      
+      // For EVM chains, use evmAddress
+      if (chainInfo.family === 'evm') {
+        setChainAddress(null);
+        return;
+      }
+      
+      // For Bitcoin, TRON, Monero, etc., fetch the chain-specific address
+      setChainAddressLoading(true);
+      try {
+        const res = await sendToBackground({
+          type: 'WALLET_GET_CHAIN_ADDRESS',
+          payload: { chainId: activeChainId },
+        });
+        if (res.success && res.data) {
+          const data = res.data as { address: string; chainId: string; chainFamily: string; symbol: string };
+          setChainAddress(data.address || null);
+        } else {
+          setChainAddress(null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch chain address:', error);
+        setChainAddress(null);
+      } finally {
+        setChainAddressLoading(false);
+      }
+    };
+    
+    fetchChainAddress();
+  }, [activeChain, activeEVMChain, activeChainId]);
+
   // Current display address based on active chain
-  const displayAddress = activeChain === 'solana' ? address : evmAddress || address;
+  // Priority: chainAddress (for non-EVM chains) > evmAddress (for EVM chains) > address (Solana)
+  // Important: For non-EVM/non-Solana chains (Monero, Bitcoin, TRON), don't fall back to wrong address types
+  const displayAddress = useMemo(() => {
+    if (activeChain === 'solana') return address;
+    
+    // For non-EVM/non-Solana chains (identified by activeChainId), use chain-specific address
+    // Don't fall back to EVM/Solana address as that would show the wrong address type
+    if (activeChainId) {
+      const chainInfo = SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+      if (chainInfo && chainInfo.family !== 'evm' && chainInfo.family !== 'solana') {
+        // For Monero, Bitcoin, TRON, etc. - return chainAddress even if empty
+        // This prevents showing a Solana/EVM address when Monero is selected
+        return chainAddress || '';
+      }
+    }
+    
+    if (chainAddress) return chainAddress;
+    return evmAddress || address;
+  }, [activeChain, chainAddress, evmAddress, address, activeChainId]);
 
   // Get native symbol for current chain
   const getNativeSymbol = () => {
     if (activeChain === 'solana') return 'SOL';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
+    // First try to find by activeChainId (for Bitcoin, TRON, Monero, etc.)
+    if (activeChainId) {
+      const chain = SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+      if (chain) return chain.symbol;
+    }
+    // Fall back to evmChainId for EVM chains
+    const chain = SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
     return chain?.symbol || 'ETH';
   };
 
   // Get chain display name
   const getChainDisplayName = () => {
     if (activeChain === 'solana') return 'Solana';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
+    // First try to find by activeChainId (for Bitcoin, TRON, Monero, etc.)
+    if (activeChainId) {
+      const chain = SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+      if (chain) return chain.name;
+    }
+    // Fall back to evmChainId for EVM chains
+    const chain = SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
     return chain?.name || 'Ethereum';
   };
+  
+  // Count spam tokens
+  const spamSPLCount = useMemo(() => {
+    return tokens.filter((t) => t.spamInfo?.isSpam).length;
+  }, [tokens]);
+
+  const spamEVMCount = useMemo(() => {
+    return evmTokens.filter((t) => t.spamInfo?.isSpam).length;
+  }, [evmTokens]);
+
+  const totalSpamCount = isActuallySolana ? spamSPLCount : spamEVMCount;
 
   // Filtered tokens based on search query
   const filteredSPLTokens = useMemo((): SPLTokenWithMatch[] => {
     let filtered = filterSPLTokens(tokens, { query: debouncedSearchQuery });
+    // Apply spam filter if enabled
+    if (hideSpamTokens) {
+      filtered = filtered.filter((token) => !token.spamInfo?.isSpam);
+    }
     // Apply dust filter if enabled
     if (hideDustTokens) {
       filtered = filtered.filter((token) => {
@@ -1439,10 +1874,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
       });
     }
     return filtered;
-  }, [tokens, debouncedSearchQuery, hideDustTokens, tokenPrices]);
+  }, [tokens, debouncedSearchQuery, hideDustTokens, hideSpamTokens, tokenPrices]);
 
   const filteredEVMTokens = useMemo((): EVMTokenWithMatch[] => {
     let filtered = filterEVMTokens(evmTokens, { query: debouncedSearchQuery });
+    // Apply spam filter if enabled
+    if (hideSpamTokens) {
+      filtered = filtered.filter((token) => !token.spamInfo?.isSpam);
+    }
     // Apply dust filter if enabled
     if (hideDustTokens) {
       filtered = filtered.filter((token) => {
@@ -1453,7 +1892,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
       });
     }
     return filtered;
-  }, [evmTokens, debouncedSearchQuery, hideDustTokens, evmTokenPrices]);
+  }, [evmTokens, debouncedSearchQuery, hideDustTokens, hideSpamTokens, evmTokenPrices]);
 
   // Check if native tokens match search
   // NOTE: Native tokens (SOL/ETH) are NEVER hidden by dust filter - they're needed for gas fees
@@ -1464,50 +1903,55 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     );
   }, [debouncedSearchQuery]);
 
-  const ethTokenMatch = useMemo((): NativeTokenWithMatch | null => {
-    if (!evmAddress) return null;
+  // Native token match for EVM chains - uses chain-specific symbol and name (ETH, BNB, MATIC, etc.)
+  const evmNativeTokenMatch = useMemo((): NativeTokenWithMatch | null => {
+    if (!evmAddress || !currentChainInfo || currentChainInfo.family !== 'evm') return null;
     return filterNativeToken(
-      { type: 'native', chain: 'evm', symbol: 'ETH', name: 'Ethereum' },
+      { type: 'native', chain: 'evm', symbol: currentChainInfo.symbol, name: currentChainInfo.name },
       debouncedSearchQuery,
     );
-  }, [evmAddress, debouncedSearchQuery]);
+  }, [evmAddress, debouncedSearchQuery, currentChainInfo]);
 
   // Check if we have any search results (for active chain only)
   const hasTokenSearchResults = useMemo(() => {
-    if (!debouncedSearchQuery.trim() && !hideDustTokens) return true; // No filters = show all
+    if (!debouncedSearchQuery.trim() && !hideDustTokens && !hideSpamTokens) return true; // No filters = show all
     if (activeChain === 'solana') {
       return solTokenMatch !== null || filteredSPLTokens.length > 0;
     } else {
-      return ethTokenMatch !== null || filteredEVMTokens.length > 0;
+      return evmNativeTokenMatch !== null || filteredEVMTokens.length > 0;
     }
   }, [
     debouncedSearchQuery,
     hideDustTokens,
+    hideSpamTokens,
     activeChain,
     solTokenMatch,
-    ethTokenMatch,
+    evmNativeTokenMatch,
     filteredSPLTokens,
     filteredEVMTokens,
   ]);
 
   // Count visible tokens for tab badge (for active chain only)
   const visibleTokenCount = useMemo(() => {
-    if (activeChain === 'solana') {
+    if (isActuallySolana) {
       let count = solTokenMatch !== null ? 1 : 0;
       count += filteredSPLTokens.length;
       return count;
-    } else {
-      let count = ethTokenMatch !== null ? 1 : 0;
+    } else if (isActuallyEVM) {
+      let count = evmNativeTokenMatch !== null ? 1 : 0;
       count += filteredEVMTokens.length;
       return count;
+    } else {
+      // For non-EVM/non-Solana chains (Bitcoin, Tron, Monero), just the native token
+      return 1;
     }
-  }, [activeChain, solTokenMatch, ethTokenMatch, filteredSPLTokens, filteredEVMTokens]);
+  }, [isActuallySolana, isActuallyEVM, solTokenMatch, evmNativeTokenMatch, filteredSPLTokens, filteredEVMTokens]);
 
   // Calculate total portfolio value in USD (active chain only: native + tokens)
   const totalPortfolioValue = useMemo(() => {
     let total = 0;
 
-    if (activeChain === 'solana') {
+    if (isActuallySolana) {
       // Add SOL native value
       if (balance && solPrice !== null) {
         total += balance.sol * solPrice;
@@ -1519,7 +1963,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           total += token.uiBalance * price;
         }
       });
-    } else if (activeChain === 'evm') {
+    } else if (isActuallyEVM) {
       // Add ETH/native token value
       if (evmBalance && ethPrice !== null) {
         total += evmBalance.formatted * ethPrice;
@@ -1531,22 +1975,28 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           total += token.uiBalance * price;
         }
       });
+    } else {
+      // Bitcoin, Tron, etc. - use evmBalance with ethPrice (used for native token price fetching)
+      if (evmBalance && ethPrice !== null) {
+        total += evmBalance.formatted * ethPrice;
+      }
     }
 
     return total;
-  }, [activeChain, balance, solPrice, evmBalance, ethPrice, tokens, tokenPrices, evmTokens, evmTokenPrices]);
+  }, [isActuallySolana, isActuallyEVM, balance, solPrice, evmBalance, ethPrice, tokens, tokenPrices, evmTokens, evmTokenPrices]);
 
   const fetchData = useCallback(
     async (forceRefresh: boolean = false) => {
       setLoadingBalance(true);
 
-      // OPTIMIZATION: Only fetch data for the ACTIVE chain to avoid rate limiting
-      // Fetch balance and tokens in parallel for the active chain
-
       // Store fetched tokens locally to use for price fetching
       // (avoids dependency on `tokens` state which causes infinite loops)
       let fetchedTokens: SPLTokenBalance[] = [];
       let fetchedEvmTokens: EVMTokenBalance[] = [];
+
+      try {
+      // OPTIMIZATION: Only fetch data for the ACTIVE chain to avoid rate limiting
+      // Fetch balance and tokens in parallel for the active chain
 
       if (activeChain === 'solana') {
         // Solana: fetch balance, tokens, and history in parallel
@@ -1571,20 +2021,83 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         }
         // Clear EVM data when on Solana
         setEvmHistory([]);
-      } else if (evmAddress) {
-        // EVM: fetch balance, tokens, and history in parallel
-        const [evmBalanceRes, evmTokensRes, evmHistoryRes] = await Promise.all([
+      } else if (chainFamily === 'monero') {
+        // Monero: watch-only mode requires address + view key import
+        // Don't fetch history - UI shows setup prompt instead
+        setHistory([]);
+        setEvmHistory([]);
+        setEvmTokens([]);
+        prevHistorySignatureRef.current = null;
+        
+        // Still fetch Monero price for display
+        const priceRes = await sendToBackground({
+          type: 'GET_EVM_NATIVE_PRICE',
+          payload: { evmChainId: 'monero' },
+        });
+        if (priceRes.success && priceRes.data) {
+          const data = priceRes.data as { price: number; change24h: number | null };
+          setEthPrice(data.price);
+          setEthChange24h(data.change24h);
+        }
+      } else if (chainFamily === 'bitcoin' || chainFamily === 'tron') {
+        // Bitcoin/Tron family chains: fetch balance, history and price using chain-specific adapter
+        const chainId = activeChainId || activeEVMChain || 'bitcoin';
+        
+        // Fetch balance, history, and price for Bitcoin/Tron chains in parallel
+        const [balanceRes, historyRes, priceRes] = await Promise.all([
           sendToBackground({
             type: 'WALLET_GET_EVM_BALANCE',
-            payload: { evmChainId: activeEVMChain || 'ethereum' },
-          }),
-          sendToBackground({
-            type: 'WALLET_GET_EVM_TOKENS',
-            payload: { evmChainId: activeEVMChain || 'ethereum' },
+            payload: { evmChainId: chainId },
           }),
           sendToBackground({
             type: 'WALLET_GET_EVM_HISTORY',
-            payload: { evmChainId: activeEVMChain || 'ethereum', limit: 50 },
+            payload: { evmChainId: chainId, limit: 50 },
+          }),
+          sendToBackground({
+            type: 'GET_EVM_NATIVE_PRICE',
+            payload: { evmChainId: chainId },
+          }),
+        ]);
+        
+        if (balanceRes.success && balanceRes.data) {
+          setEvmBalance(balanceRes.data as EVMBalance);
+        }
+        
+        if (historyRes.success && historyRes.data) {
+          const result = historyRes.data as { transactions: EVMHistoryItem[] };
+          setEvmHistory(result.transactions || []);
+        } else {
+          setEvmHistory([]);
+        }
+        
+        // Set price and 24h change (reusing ethPrice/ethChange24h for display compatibility)
+        if (priceRes.success && priceRes.data) {
+          const data = priceRes.data as { price: number; change24h: number | null };
+          setEthPrice(data.price);
+          setEthChange24h(data.change24h);
+        }
+        
+        // Clear Solana history and tokens (Bitcoin/Tron don't support tokens in same way)
+        setHistory([]);
+        setEvmTokens([]);
+        prevHistorySignatureRef.current = null;
+      } else if (evmAddress) {
+        // EVM: fetch balance, tokens, and history in parallel
+        // Use activeChainId for new chain system, fallback to activeEVMChain for legacy
+        const chainIdForRequest = activeChainId || activeEVMChain || 'ethereum';
+        
+        const [evmBalanceRes, evmTokensRes, evmHistoryRes] = await Promise.all([
+          sendToBackground({
+            type: 'WALLET_GET_EVM_BALANCE',
+            payload: { evmChainId: chainIdForRequest },
+          }),
+          sendToBackground({
+            type: 'WALLET_GET_EVM_TOKENS',
+            payload: { evmChainId: chainIdForRequest },
+          }),
+          sendToBackground({
+            type: 'WALLET_GET_EVM_HISTORY',
+            payload: { evmChainId: chainIdForRequest, limit: 50 },
           }),
         ]);
 
@@ -1610,14 +2123,8 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         prevHistorySignatureRef.current = null; // Reset ref
       }
 
-      // Fetch security connections (light operation)
-      const connectionsRes = await sendToBackground({
-        type: 'SECURITY_GET_CONNECTIONS',
-        payload: { limit: 10 },
-      });
-      if (connectionsRes.success && connectionsRes.data) {
-        setConnections(connectionsRes.data as ConnectionRecordUI[]);
-      }
+      // Fetch connected sites from dApp permissions (the actual source of truth)
+      await refreshConnectedSites();
 
       // OPTIMIZATION: Only fetch prices for active chain to reduce API calls
       if (activeChain === 'solana') {
@@ -1657,9 +2164,14 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           // No tokens to fetch prices for, mark as loaded
           setTokenPrices({ '__loaded__': 1 });
         }
-      } else {
-        // Fetch ETH price with 24h change
-        const ethPriceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
+      } else if (chainFamily === 'evm') {
+        // Only fetch EVM prices for actual EVM chains (not Bitcoin/Tron/Monero)
+        // Bitcoin/Tron/Monero already fetch their prices in their respective branches above
+        const evmChainId = activeEVMChain || 'ethereum';
+        const ethPriceRes = await sendToBackground({ 
+          type: 'GET_EVM_NATIVE_PRICE', 
+          payload: { evmChainId } 
+        });
         if (ethPriceRes.success && ethPriceRes.data) {
           const data = ethPriceRes.data as { price: number; change24h: number | null };
           setEthPrice(data.price);
@@ -1675,7 +2187,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
               const addresses = fetchedEvmTokens.map((t: EVMTokenBalance) => t.address.toLowerCase());
               const evmTokenPricesRes = await sendToBackground({
                 type: 'GET_TOKEN_PRICES',
-                payload: { mints: addresses },
+                payload: { mints: addresses, chainId: activeChainId || activeEVMChain || 'ethereum' },
               });
               // Store prices with lowercase keys for consistent lookup
               const normalizedPrices: Record<string, number> = {};
@@ -1701,12 +2213,17 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           setEvmTokenPrices({ '__loaded__': 1 });
         }
       }
-
-      // Only stop loading after all critical data (balance + tokens) are fetched
-      // Prices are fetched in background/deferred
-      setLoadingBalance(false);
+      // Note: Bitcoin, Tron, and Monero prices are already fetched in their respective branches above
+      } catch (error) {
+        // Log error for debugging but don't crash the UI
+        console.error('[WalletDashboard] Error fetching data:', error);
+      } finally {
+        // CRITICAL: Always stop loading to prevent infinite loading state
+        // This ensures the UI remains responsive even if network requests fail
+        setLoadingBalance(false);
+      }
     },
-    [activeChain, activeEVMChain, evmAddress],
+    [activeChain, activeEVMChain, activeChainId, chainFamily, evmAddress],
   );
 
   useEffect(() => {
@@ -1716,7 +2233,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   // Real-time price updates every 5 seconds with flash animation
   useEffect(() => {
     const updatePrices = async () => {
-      // Fetch SOL price with 24h change
+      // Fetch SOL price with 24h change (always fetch for background caching)
       const solPriceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
       if (solPriceRes.success && solPriceRes.data) {
         const data = solPriceRes.data as { price: number; change24h: number | null };
@@ -1741,15 +2258,20 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         setSolChange24h(data.change24h);
       }
 
-      // Fetch ETH price with 24h change
-      const ethPriceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
+      // Fetch native price for non-Solana chains
+      // Use activeChainId for Bitcoin/Tron/Monero, or activeEVMChain for actual EVM chains
+      const priceChainId = activeChainId || activeEVMChain || 'ethereum';
+      const ethPriceRes = await sendToBackground({ 
+        type: 'GET_EVM_NATIVE_PRICE', 
+        payload: { evmChainId: priceChainId } 
+      });
       if (ethPriceRes.success && ethPriceRes.data) {
         const data = ethPriceRes.data as { price: number; change24h: number | null };
         const newPrice = data.price;
 
-        // Compare with previous price and trigger flash (only for active chain)
+        // Compare with previous price and trigger flash (only for active non-Solana chain)
         if (
-          activeChain === 'evm' &&
+          !isActuallySolana &&
           prevEthPriceRef.current !== null &&
           newPrice !== prevEthPriceRef.current
         ) {
@@ -1768,9 +2290,10 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
 
       // Notify parent component of price updates
       if (onPriceUpdate) {
+        interface PriceData { price: number }
         onPriceUpdate(
-          solPriceRes.success && solPriceRes.data ? (solPriceRes.data as any).price : null,
-          ethPriceRes.success && ethPriceRes.data ? (ethPriceRes.data as any).price : null
+          solPriceRes.success && solPriceRes.data ? (solPriceRes.data as PriceData).price : null,
+          ethPriceRes.success && ethPriceRes.data ? (ethPriceRes.data as PriceData).price : null
         );
       }
     };
@@ -1779,7 +2302,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     const interval = setInterval(updatePrices, 5000);
 
     return () => clearInterval(interval);
-  }, [activeChain]);
+  }, [activeChain, activeEVMChain, activeChainId, isActuallySolana]);
 
   // Track previous history signature to detect new transactions
   const prevHistorySignatureRef = useRef<string | null>(null);
@@ -1832,6 +2355,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
       // Skip if already refreshing manually
       if (refreshing) return;
 
+      try {
       // Silently fetch fresh balance data with forceRefresh to bypass all caches
       if (activeChain === 'solana') {
         // First check for new transactions (quick check)
@@ -1885,7 +2409,29 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         if (tokensRes.success && tokensRes.data) {
           setTokens(tokensRes.data as SPLTokenBalance[]);
         }
-      } else if (evmAddress) {
+      } else if (chainFamily === 'bitcoin' || chainFamily === 'tron') {
+        // Auto-refresh for Bitcoin/Tron chains - fetch both balance AND history
+        const chainId = activeChainId || 'bitcoin';
+        const [evmBalanceRes, historyRes] = await Promise.all([
+          sendToBackground({
+            type: 'WALLET_GET_EVM_BALANCE',
+            payload: { evmChainId: chainId },
+          }),
+          sendToBackground({
+            type: 'WALLET_GET_EVM_HISTORY',
+            payload: { evmChainId: chainId, limit: 50 },
+          }),
+        ]);
+
+        if (evmBalanceRes.success && evmBalanceRes.data) {
+          setEvmBalance(evmBalanceRes.data as EVMBalance);
+        }
+        if (historyRes.success && historyRes.data) {
+          const result = historyRes.data as { transactions: EVMHistoryItem[] };
+          setEvmHistory(result.transactions || []);
+        }
+      } else if (chainFamily === 'evm' && evmAddress) {
+        // Auto-refresh for actual EVM chains
         const evmBalanceRes = await sendToBackground({
           type: 'WALLET_GET_EVM_BALANCE',
           payload: { evmChainId: activeEVMChain || 'ethereum' },
@@ -1895,13 +2441,18 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
           setEvmBalance(evmBalanceRes.data as EVMBalance);
         }
       }
+      // Note: Monero is watch-only and doesn't auto-refresh
+      } catch (error) {
+        // Silently ignore errors during auto-refresh to prevent UI disruption
+        console.warn('[WalletDashboard] Auto-refresh error:', error);
+      }
     };
 
     // Auto-refresh every 15 seconds for faster incoming tx detection
     const interval = setInterval(autoRefresh, 15000);
 
     return () => clearInterval(interval);
-  }, [activeChain, activeEVMChain, evmAddress, refreshing]);
+  }, [activeChain, activeEVMChain, activeChainId, chainFamily, evmAddress, refreshing]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -1910,17 +2461,25 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   };
 
   const handleRevokeConnection = async (domain: string) => {
+    // Find the origin for this domain from current connections
+    const conn = connections.find((c) => c.domain === domain);
+    const origin = conn?.id || domain; // id stores the full origin
+
+    // Revoke the actual dApp permission (this prevents auto-reconnect)
+    await sendToBackground({
+      type: 'DAPP_REVOKE_PERMISSION',
+      payload: { origin },
+    });
+
+    // Also clean up the security connection record
     await sendToBackground({
       type: 'SECURITY_CONNECTION_REVOKE',
       payload: { domain },
     });
-    const connectionsRes = await sendToBackground({
-      type: 'SECURITY_GET_CONNECTIONS',
-      payload: { limit: 10 },
-    });
-    if (connectionsRes.success && connectionsRes.data) {
-      setConnections(connectionsRes.data as ConnectionRecordUI[]);
-    }
+
+    // Refresh is handled automatically by the storage change listener,
+    // but also refresh explicitly for immediate feedback
+    await refreshConnectedSites();
   };
 
   const handleLock = async () => {
@@ -2027,7 +2586,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
       return null;
     } else {
       // Native transfer
-      const chainPrice = activeChain === 'evm' && activeEVMChain ? 
+      const chainPrice = isActuallyEVM && activeEVMChain ? 
         (activeEVMChain === 'ethereum' ? ethPrice : 
          activeEVMChain === 'polygon' ? ethPrice : // Using ETH price as proxy for now
          ethPrice) : 
@@ -2040,24 +2599,128 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
     return null;
   };
 
-  // Filter transactions: hide those under $1 (but only if we can calculate the value)
+  // Filter out spam token transactions from activity
+  // Uses same spam detection patterns as token list filtering
+  const isSpamTokenName = (name: string, symbol: string): boolean => {
+    const combined = `${name} ${symbol}`.toLowerCase();
+    
+    // URL patterns in token names (high confidence spam)
+    const urlPattern = /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{2,6}\b/i;
+    const domainPattern = /\b[a-zA-Z0-9][-a-zA-Z0-9]*\.(com|org|net|io|xyz|app|finance|claim|airdrop)\b/i;
+    
+    if (urlPattern.test(name) || urlPattern.test(symbol)) return true;
+    if (domainPattern.test(name) || domainPattern.test(symbol)) return true;
+    
+    // Phishing keywords (need at least 2 matches to flag as spam)
+    const phishingKeywords = [
+      'claim', 'free', 'airdrop', 'reward', 'bonus', 'gift', 'giveaway', 
+      'promo', 'prize', 'winner', 'visit', 'redeem', 'unlock', 'activate',
+      'verify', 'validate', 'limited time', 'urgent', 'expires', 'hurry',
+      'act now', 'last chance', 'exclusive', 'selected', 'chosen', 'eligible'
+    ];
+    const matchedKeywords = phishingKeywords.filter(kw => combined.includes(kw));
+    if (matchedKeywords.length >= 2) return true;
+    
+    // Promotional patterns
+    const promotionalPatterns = [
+      /\bfree\s+\w+/i,
+      /\bclaim\s+(?:your|now|here|at)/i,
+      /\bairdrop\s+(?:live|now|claim)/i,
+      /\$\d+(?:,\d{3})*(?:\.\d+)?\s*(?:reward|bonus|free)/i,
+      /\bvisit\s+\S+\.\S+/i,
+    ];
+    if (promotionalPatterns.some(pattern => pattern.test(combined))) return true;
+    
+    // Excessive symbol length (most real tokens have short symbols)
+    if (symbol.length > 12) return true;
+    
+    return false;
+  };
+
   const filterLowValueTransactions = <T extends TransactionHistoryItem | EVMHistoryItem>(
     transactions: T[],
-    getUsdValue: (tx: T) => number | null
+    _getUsdValue: (tx: T) => number | null
   ): T[] => {
-    return transactions.filter(tx => {
-      const usdValue = getUsdValue(tx);
-      // If we can't calculate USD value, show the transaction (to be safe)
-      // If we can calculate it, only show if >= $1
-      return usdValue === null || usdValue >= 1;
+    if (!hideSpamTokens) return transactions;
+    
+    return transactions.filter((tx) => {
+      // Check Solana transactions
+      if ('signature' in tx) {
+        const solanaTx = tx as TransactionHistoryItem;
+        const isSent = solanaTx.direction === 'sent';
+        
+        // For native SOL transfers (no tokenInfo)
+        if (!solanaTx.tokenInfo) {
+          // Allow all outgoing transactions (user initiated)
+          if (isSent) return true;
+          
+          // Allow swap transactions (these are legitimate even with 0 SOL change)
+          if (solanaTx.swapInfo) return true;
+          
+          // Filter out non-sent (received/unknown) transactions with 0 or dust SOL
+          // These are spam dust attacks or failed spam transactions
+          // 'unknown' direction with 0 value shows as "Received SOL" in the UI
+          // Threshold: 0.0001 SOL (100 lamports)
+          if (solanaTx.amountLamports < 100) {
+            return false;
+          }
+          
+          return true;
+        }
+        
+        // Check if the token in loaded tokens is marked as spam
+        const tokenFromList = tokens.find(t => t.mint === solanaTx.tokenInfo?.mint);
+        if (tokenFromList?.spamInfo?.isSpam) return false;
+        
+        // Check token name/symbol for spam patterns
+        const tokenName = solanaTx.tokenInfo.name || solanaTx.tokenInfo.symbol || '';
+        const tokenSymbol = solanaTx.tokenInfo.symbol || '';
+        if (isSpamTokenName(tokenName, tokenSymbol)) return false;
+        
+        return true;
+      }
+      
+      // Check EVM transactions
+      if ('hash' in tx) {
+        const evmTx = tx as EVMHistoryItem;
+        const isSent = evmTx.direction === 'sent';
+        
+        // For native transfers (no tokenAddress)
+        if (!evmTx.tokenAddress) {
+          // Allow all outgoing transactions (user initiated)
+          if (isSent) return true;
+          
+          // Filter out non-sent (received/unknown) 0 or dust native transfers
+          if (evmTx.amount < 0.0000001) {
+            return false;
+          }
+          
+          return true;
+        }
+        
+        // Check if the token in loaded tokens is marked as spam
+        const tokenFromList = evmTokens.find(
+          t => t.address.toLowerCase() === evmTx.tokenAddress?.toLowerCase()
+        );
+        if (tokenFromList?.spamInfo?.isSpam) return false;
+        
+        // Check token name/symbol for spam patterns
+        const tokenSymbol = evmTx.symbol || '';
+        if (isSpamTokenName(tokenSymbol, tokenSymbol)) return false;
+        
+        return true;
+      }
+      
+      return true;
     });
   };
 
   // Get current balance value based on chain
   const getCurrentBalance = () => {
-    if (activeChain === 'solana') {
+    if (isActuallySolana) {
       return balance ? formatSol(balance.sol) : '0';
     }
+    // EVM, Bitcoin, Tron all use evmBalance
     return evmBalance ? formatSol(evmBalance.formatted) : '0';
   };
 
@@ -2066,15 +2729,18 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
   // We also verify the active chain's required display data is available
   // For Solana: also wait for token prices if there are tokens (needed for portfolio calculation)
   // For EVM: also wait for token prices if there are tokens (needed for portfolio calculation)
+  // For other chains: just wait for loadingBalance to finish (no additional data needed yet)
   const isAllDataLoading =
     loadingBalance ||
-    (activeChain === 'solana'
+    (isActuallySolana
       ? balance === null ||
         solPrice === null ||
         (tokens.length > 0 && Object.keys(tokenPrices).length === 0)
-      : evmBalance === null ||
-        ethPrice === null ||
-        (evmTokens.length > 0 && Object.keys(evmTokenPrices).length === 0));
+      : isActuallyEVM
+        ? evmBalance === null ||
+          ethPrice === null ||
+          (evmTokens.length > 0 && Object.keys(evmTokenPrices).length === 0)
+        : false);
 
   return (
     <>
@@ -2122,7 +2788,9 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         <ChainSelector
           activeChain={activeChain}
           activeEVMChain={activeEVMChain}
+          activeChainId={activeChainId}
           onChainChange={onChainChange}
+          supportedChainFamilies={supportedChainFamilies}
         />
       </div>
 
@@ -2137,7 +2805,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             <span
               className={`balance-value ${priceFlash === 'up' ? 'price-flash-up' : priceFlash === 'down' ? 'price-flash-down' : ''}`}
             >
-              {(activeChain === 'solana' ? solPrice !== null : ethPrice !== null)
+              {(isActuallySolana ? solPrice !== null : isActuallyEVM ? ethPrice !== null : true)
                 ? formatHiddenUsd(formatUsd(totalPortfolioValue), hideBalances)
                 : '$--'}
             </span>
@@ -2145,7 +2813,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             {!hideBalances && (
               <span
                 className={`balance-change ${
-                  activeChain === 'solana'
+                  isActuallySolana
                     ? solChange24h !== null
                       ? solChange24h >= 0
                         ? 'positive'
@@ -2158,7 +2826,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                       : ''
                 }`}
               >
-                {activeChain === 'solana' &&
+                {isActuallySolana &&
                   solChange24h !== null &&
                   balance &&
                   solPrice !== null &&
@@ -2174,7 +2842,8 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                       </>
                     );
                   })()}
-                {activeChain === 'evm' &&
+                {/* Show 24h change for EVM, Bitcoin, Tron, and Monero chains (all use ethPrice/ethChange24h) */}
+                {!isActuallySolana &&
                   ethChange24h !== null &&
                   evmBalance &&
                   ethPrice !== null &&
@@ -2194,25 +2863,31 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
             )}
           </div>
         )}
-        <div className="address-display" onClick={copyAddress} title="Click to copy">
-          <span className="address-text">{truncateAddress(displayAddress, 6)}</span>
-          {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-        </div>
+        {displayAddress && displayAddress.length > 0 && (
+          <div className="address-display" onClick={copyAddress} title="Click to copy">
+            <span className="address-text">{truncateAddress(displayAddress, 6)}</span>
+            {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+          </div>
+        )}
       </div>
 
       <div className="wallet-actions">
-        <button className="wallet-action-btn" onClick={onSend}>
-          <SendIcon size={20} />
-          <span className="action-label">Send</span>
-        </button>
+        {activeChainId !== 'monero' && (
+          <button className="wallet-action-btn" onClick={onSend}>
+            <SendIcon size={20} />
+            <span className="action-label">Send</span>
+          </button>
+        )}
         <button className="wallet-action-btn" onClick={onReceive}>
           <ReceiveIcon size={20} />
           <span className="action-label">Receive</span>
         </button>
-        <button className="wallet-action-btn" onClick={() => onSwap(tokens, evmTokens, balance, evmBalance)}>
-          <SwapIcon size={20} />
-          <span className="action-label">Swap</span>
-        </button>
+        {currentChainInfo && isSwapAvailableForChain(currentChainInfo.chainId) && (
+          <button className="wallet-action-btn" onClick={() => onSwap(tokens, evmTokens, balance, evmBalance)}>
+            <SwapIcon size={20} />
+            <span className="action-label">Swap</span>
+          </button>
+        )}
       </div>
 
       <div className="wallet-tabs">
@@ -2222,18 +2897,20 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
         >
           Activity
         </button>
-        <button
-          className={`wallet-tab ${activeTab === 'tokens' ? 'active' : ''}`}
-          onClick={() => setActiveTab('tokens')}
-        >
-          Tokens (
-          {debouncedSearchQuery.trim()
-            ? visibleTokenCount
-            : activeChain === 'solana'
-              ? 1 + tokens.length
-              : 1 + evmTokens.length}
-          )
-        </button>
+        {supportsTokens && (
+          <button
+            className={`wallet-tab ${activeTab === 'tokens' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tokens')}
+          >
+            Tokens ({
+              debouncedSearchQuery.trim()
+                ? visibleTokenCount
+                : isActuallySolana
+                  ? 1 + tokens.length
+                  : 1 + evmTokens.length
+            })
+          </button>
+        )}
         <button
           className={`wallet-tab ${activeTab === 'security' ? 'active' : ''}`}
           onClick={() => setActiveTab('security')}
@@ -2244,7 +2921,97 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
 
       {activeTab === 'activity' && (
         <div className={`tx-list ${refreshing ? 'refreshing' : ''}`}>
-          {activeChain === 'solana' ? (
+          {/* Monero requires watch-only setup - show prompt if not configured */}
+          {chainFamily === 'monero' ? (
+            <div className="empty-state" style={{ padding: '24px 16px' }}>
+              <div style={{ 
+                width: '48px', 
+                height: '48px', 
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #ff6600 0%, #ff8533 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                boxShadow: '0 4px 12px rgba(255, 102, 0, 0.25)'
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                Monero Watch-Only
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.5 }}>
+                Track your balance and incoming transactions using your view key
+              </div>
+              {displayAddress ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    fontSize: '11px', 
+                    color: 'var(--text-muted)', 
+                    marginBottom: '12px',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary, #f5f5f5)',
+                    borderRadius: '8px'
+                  }}>
+                    Wallet configured. Transactions will appear here.
+                  </div>
+                  <button
+                    style={{
+                      background: 'transparent',
+                      border: '1.5px solid var(--border-color, #e0e0e0)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      color: 'var(--text-secondary, #666)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                    onClick={() => onShowMoneroSetup?.()}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.borderColor = '#ff6600';
+                      e.currentTarget.style.color = '#ff6600';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--border-color, #e0e0e0)';
+                      e.currentTarget.style.color = 'var(--text-secondary, #666)';
+                    }}
+                  >
+                    Edit Configuration
+                  </button>
+                </div>
+              ) : (
+                <button
+                  style={{ 
+                    padding: '12px 24px', 
+                    fontSize: '13px',
+                    background: 'linear-gradient(135deg, #ff6600 0%, #ff7a1a 100%)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    color: 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(255, 102, 0, 0.3)',
+                    transition: 'all 0.15s'
+                  }}
+                  onClick={() => onShowMoneroSetup?.()}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 6px 16px rgba(255, 102, 0, 0.4)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 102, 0, 0.3)';
+                  }}
+                >
+                  Import Wallet
+                </button>
+              )}
+            </div>
+          ) : isActuallySolana ? (
             history.length === 0 ? (
               <div className="empty-state">No transactions yet</div>
             ) : (
@@ -2268,7 +3035,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                 // Determine logo: use token logo for token transfers, SOL logo for native
                 const logoUri = tx.tokenInfo
                   ? tokenLogoUri
-                  : 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
+                  : 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png';
 
                 return (
                   <div
@@ -2282,41 +3049,55 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                   >
                     <div className="tx-icon-wrapper">
                       {tx.swapInfo ? (
-                        // Swap transaction - show dual token logos
+                        // Swap transaction - show dual token logos with TokenIcon for fallbacks
                         <div className="tx-swap-logos">
-                          <img
-                            src={tx.swapInfo.fromToken.logoUri || 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'}
-                            alt={tx.swapInfo.fromToken.symbol}
-                            style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
+                          <TokenIcon
+                            symbol={tx.swapInfo.fromToken.symbol || 'SOL'}
+                            logoUri={tx.swapInfo.fromToken.logoUri}
+                            address={tx.swapInfo.fromToken.mint}
+                            chain="solana"
+                            size={22}
                           />
                           <div className="tx-swap-arrow">
                             <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M5 12h14M13 6l6 6-6 6"/>
                             </svg>
                           </div>
-                          <img
-                            src={tx.swapInfo.toToken.logoUri || 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png'}
-                            alt={tx.swapInfo.toToken.symbol}
-                            style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
+                          <TokenIcon
+                            symbol={tx.swapInfo.toToken.symbol || 'SOL'}
+                            logoUri={tx.swapInfo.toToken.logoUri}
+                            address={tx.swapInfo.toToken.mint}
+                            chain="solana"
+                            size={22}
                           />
+                        </div>
+                      ) : tx.tokenInfo ? (
+                        <div className="tx-token-logo">
+                          <TokenIcon
+                            symbol={tokenSymbol}
+                            logoUri={tokenLogoUri}
+                            address={tx.tokenInfo.mint}
+                            chain="solana"
+                            size={28}
+                          />
+                          <div className={`tx-icon-fallback ${tx.direction}`}>
+                            {tx.direction === 'sent' ? (
+                              <SendIcon size={14} />
+                            ) : tx.direction === 'received' ? (
+                              <ReceiveIcon size={14} />
+                            ) : (
+                              <SwapIcon size={14} />
+                            )}
+                          </div>
                         </div>
                       ) : logoUri ? (
                         <div className="tx-token-logo">
-                          <img
-                            src={logoUri}
-                            alt=""
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).nextElementSibling?.classList.add(
-                                'visible',
-                              );
-                            }}
+                          <TokenIcon
+                            symbol="SOL"
+                            logoUri={logoUri}
+                            address="So11111111111111111111111111111111111111112"
+                            chain="solana"
+                            size={28}
                           />
                           <div className={`tx-icon-fallback ${tx.direction}`}>
                             {tx.direction === 'sent' ? (
@@ -2404,7 +3185,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
               // Get the token symbol - use tx.symbol, tokenMeta, or fallback to native
               const displaySymbol = tx.symbol || tokenMeta?.symbol || nativeSymbol;
               
-              // Native token logos by chain
+              // Native token logos by chain (including Bitcoin family and Tron)
               const getNativeLogoUri = () => {
                 const chainLogos: Record<string, string> = {
                   ethereum: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
@@ -2412,8 +3193,17 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                   arbitrum: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
                   optimism: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
                   base: 'https://avatars.githubusercontent.com/u/108554348?s=280&v=4',
+                  bnb: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+                  // Bitcoin family
+                  bitcoin: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+                  bitcoincash: 'https://assets.coingecko.com/coins/images/780/small/bitcoin-cash-circle.png',
+                  litecoin: 'https://assets.coingecko.com/coins/images/2/small/litecoin.png',
+                  zcash: 'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
+                  // Tron
+                  tron: 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
                 };
-                return chainLogos[activeEVMChain || 'ethereum'] || chainLogos.ethereum;
+                const chainId = activeChainId || activeEVMChain || 'ethereum';
+                return chainLogos[chainId] || chainLogos.ethereum;
               };
               
               // TrustWallet asset URL fallback for token logos (works for many popular tokens)
@@ -2426,8 +3216,8 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                   base: 'base',
                 };
                 const chain = chainNames[activeEVMChain || 'ethereum'] || 'ethereum';
-                // Use checksummed address for TrustWallet (they store with checksum)
-                return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chain}/assets/${tokenAddr}/logo.png`;
+                // Use jsDelivr CDN for reliability (more reliable than raw GitHub)
+                return `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chain}/assets/${tokenAddr}/logo.png`;
               };
               
               // For native transfers, use the chain logo; for token transfers, use multiple fallbacks
@@ -2444,11 +3234,16 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                 <div
                   key={tx.hash}
                   className={`tx-item tx-item-with-logo${isFailed ? ' tx-failed' : ''}${isPending ? ' tx-pending' : ''}`}
-                  onClick={() =>
-                    openExplorerUrl('tx', tx.hash, 'evm', activeEVMChain || 'ethereum', {
-                      testnet: false,
-                    })
-                  }
+                  onClick={() => {
+                    // Use pre-built explorerUrl if available (Bitcoin/Tron chains), otherwise build it
+                    if (tx.explorerUrl) {
+                      window.open(tx.explorerUrl, '_blank');
+                    } else {
+                      openExplorerUrl('tx', tx.hash, 'evm', activeEVMChain || 'ethereum', {
+                        testnet: false,
+                      });
+                    }
+                  }}
                 >
                   <div className="tx-icon-wrapper">
                     {isFailed ? (
@@ -2659,7 +3454,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                 )}
               </div>
 
-              {/* Hide Dust Tokens Toggle */}
+              {/* Token Filter Row */}
               <div className="token-filter-row">
                 <button
                   className={`token-filter-btn ${hideDustTokens ? 'active' : ''}`}
@@ -2669,13 +3464,28 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                   <EyeOffIcon size={14} />
                   <span>Hide &lt;$1</span>
                 </button>
+                <button
+                  className={`spam-filter-toggle ${hideSpamTokens ? 'active' : ''}`}
+                  onClick={() => setHideSpamTokens(!hideSpamTokens)}
+                  title={
+                    hideSpamTokens
+                      ? `Show ${totalSpamCount} hidden spam tokens`
+                      : 'Hide detected spam tokens'
+                  }
+                >
+                  <SpamIcon size={12} />
+                  <span>{hideSpamTokens ? 'Spam Hidden' : 'Show Spam'}</span>
+                  {totalSpamCount > 0 && (
+                    <span className="spam-count-badge">{totalSpamCount}</span>
+                  )}
+                </button>
               </div>
 
               {/* Token List */}
               {hasTokenSearchResults ? (
                 <div className="token-list">
                   {/* SOL - Shown when Solana chain is active and matches search */}
-                  {activeChain === 'solana' &&
+                  {isActuallySolana &&
                     solTokenMatch &&
                     (() => {
                       const canSend = balance && balance.sol > 0;
@@ -2688,7 +3498,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                         >
                           <TokenIcon
                             symbol="SOL"
-                            logoUri="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+                            logoUri="https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png"
                             address="So11111111111111111111111111111111111111112"
                             chain="solana"
                             size={32}
@@ -2710,22 +3520,23 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               )}
                             </div>
                             <div className="token-name">
-                              {solTokenMatch.searchMatch?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text="Solana"
-                                  segments={highlightMatch(
-                                    'Solana',
-                                    solTokenMatch.searchMatch.matchStart,
-                                    solTokenMatch.searchMatch.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                'Solana'
-                              )}
+                              <span className="token-name-text" title="Solana">
+                                {solTokenMatch.searchMatch?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text="Solana"
+                                    segments={highlightMatch(
+                                      'Solana',
+                                      solTokenMatch.searchMatch.matchStart,
+                                      solTokenMatch.searchMatch.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  'Solana'
+                                )}
+                              </span>
                               {solPrice !== null && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatUsd(solPrice)}
+                                  {formatTokenPrice(solPrice)}
                                 </span>
                               )}
                             </div>
@@ -2751,58 +3562,74 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                       );
                     })()}
 
-                  {/* ETH - Shown when EVM chain is active and matches search */}
-                  {activeChain === 'evm' &&
-                    ethTokenMatch &&
+                  {/* Native EVM token - Shown when EVM chain is active and matches search */}
+                  {isActuallyEVM &&
+                    evmNativeTokenMatch &&
+                    currentChainInfo &&
                     (() => {
                       const canSend = evmBalance && evmBalance.formatted > 0;
+                      const nativeSymbol = currentChainInfo.symbol;
+                      const nativeName = currentChainInfo.name;
+                      // Map chain IDs to TrustWallet blockchain folder names for NATIVE TOKEN logos
+                      // L2s like Arbitrum, Optimism, Base use ETH as native token, so show ETH logo
+                      const chainToNativeTokenLogo: Record<string, string> = {
+                        ethereum: 'ethereum',
+                        bnb: 'binance',
+                        polygon: 'polygon',
+                        arbitrum: 'ethereum',  // Native token is ETH, not ARB
+                        optimism: 'ethereum',  // Native token is ETH, not OP
+                        base: 'ethereum',      // Native token is ETH
+                      };
+                      const nativeTokenChain = chainToNativeTokenLogo[activeEVMChain || 'ethereum'] || 'ethereum';
+                      const logoUri = `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${nativeTokenChain}/info/logo.png`;
                       return (
                         <div
                           className={`token-item ${canSend ? 'token-item-clickable' : ''}`}
                           onClick={() => canSend && onSend()}
-                          title={canSend ? 'Send ETH' : undefined}
+                          title={canSend ? `Send ${nativeSymbol}` : undefined}
                           style={{ cursor: canSend ? 'pointer' : 'default' }}
                         >
                           <TokenIcon
-                            symbol="ETH"
-                            logoUri="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
-                            address="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                            chain="ethereum"
+                            symbol={nativeSymbol}
+                            logoUri={logoUri}
+                            address=""
+                            chain={activeEVMChain || 'ethereum'}
                             size={32}
                             className="token-logo"
                           />
                           <div className="token-info">
                             <div className="token-symbol">
-                              {ethTokenMatch.searchMatch?.matchField === 'symbol' ? (
+                              {evmNativeTokenMatch.searchMatch?.matchField === 'symbol' ? (
                                 <HighlightedText
-                                  text="ETH"
+                                  text={nativeSymbol}
                                   segments={highlightMatch(
-                                    'ETH',
-                                    ethTokenMatch.searchMatch.matchStart,
-                                    ethTokenMatch.searchMatch.matchLength,
+                                    nativeSymbol,
+                                    evmNativeTokenMatch.searchMatch.matchStart,
+                                    evmNativeTokenMatch.searchMatch.matchLength,
                                   )}
                                 />
                               ) : (
-                                'ETH'
+                                nativeSymbol
                               )}
                             </div>
                             <div className="token-name">
-                              {ethTokenMatch.searchMatch?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text="Ethereum"
-                                  segments={highlightMatch(
-                                    'Ethereum',
-                                    ethTokenMatch.searchMatch.matchStart,
-                                    ethTokenMatch.searchMatch.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                'Ethereum'
-                              )}
+                              <span className="token-name-text" title={nativeName}>
+                                {evmNativeTokenMatch.searchMatch?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text={nativeName}
+                                    segments={highlightMatch(
+                                      nativeName,
+                                      evmNativeTokenMatch.searchMatch.matchStart,
+                                      evmNativeTokenMatch.searchMatch.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  nativeName
+                                )}
+                              </span>
                               {ethPrice !== null && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatUsd(ethPrice)}
+                                  {formatTokenPrice(ethPrice)}
                                 </span>
                               )}
                             </div>
@@ -2824,7 +3651,7 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                                 : evmBalance
                                   ? formatSol(evmBalance.formatted)
                                   : '0'}{' '}
-                              ETH
+                              {nativeSymbol}
                             </div>
                           </div>
                         </div>
@@ -2832,17 +3659,19 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                     })()}
 
                   {/* SPL Tokens - Only shown when Solana chain is active */}
-                  {activeChain === 'solana' &&
+                  {isActuallySolana &&
                     filteredSPLTokens.map((token) => {
                       const tokenPrice = tokenPrices[token.mint];
                       const tokenValue = tokenPrice ? token.uiBalance * tokenPrice : null;
                       const canDelete = token.uiBalance === 0;
                       const match = token.searchMatch;
                       const canSend = token.uiBalance > 0;
+                      const spamInfo = token.spamInfo;
+                      const hasSpamWarning = spamInfo && spamInfo.warningLevel !== 'none';
                       return (
                         <div
                           key={token.mint}
-                          className={`token-item ${canSend ? 'token-item-clickable' : ''}`}
+                          className={`token-item ${canSend ? 'token-item-clickable' : ''} ${spamInfo?.isSpam ? 'token-spam' : ''}`}
                           onClick={() => {
                             if (canSend) {
                               onSendToken({
@@ -2857,7 +3686,13 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               });
                             }
                           }}
-                          title={canSend ? `Send ${token.symbol.toUpperCase()}` : undefined}
+                          title={
+                            spamInfo?.isSpam
+                              ? `⚠️ Potential spam: ${spamInfo.reasons[0] || 'Suspicious token'}`
+                              : canSend
+                                ? `Send ${token.symbol.toUpperCase()}`
+                                : undefined
+                          }
                           style={{ cursor: canSend ? 'pointer' : 'default' }}
                         >
                           <TokenIcon
@@ -2882,24 +3717,38 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               ) : (
                                 token.symbol
                               )}
+                              {hasSpamWarning && (
+                                <span
+                                  className={`token-spam-badge warning-${spamInfo.warningLevel}`}
+                                  title={spamInfo.reasons.join('; ')}
+                                >
+                                  <SpamIcon size={10} />
+                                  {spamInfo.warningLevel === 'high'
+                                    ? 'Spam'
+                                    : spamInfo.warningLevel === 'medium'
+                                      ? 'Suspicious'
+                                      : 'Check'}
+                                </span>
+                              )}
                             </div>
                             <div className="token-name">
-                              {match?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text={token.name}
-                                  segments={highlightMatch(
-                                    token.name,
-                                    match.matchStart,
-                                    match.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                token.name
-                              )}
+                              <span className="token-name-text" title={token.name}>
+                                {match?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text={token.name}
+                                    segments={highlightMatch(
+                                      token.name,
+                                      match.matchStart,
+                                      match.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  token.name
+                                )}
+                              </span>
                               {tokenPrice && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatUsd(tokenPrice)}
+                                  {formatTokenPrice(tokenPrice)}
                                 </span>
                               )}
                             </div>
@@ -2958,17 +3807,19 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                     })}
 
                   {/* ERC20 Tokens - Only shown when EVM chain is active */}
-                  {activeChain === 'evm' &&
+                  {isActuallyEVM &&
                     filteredEVMTokens.map((token) => {
                       const tokenPrice = evmTokenPrices[token.address.toLowerCase()];
                       const tokenValue = tokenPrice ? token.uiBalance * tokenPrice : null;
                       const canDelete = token.uiBalance === 0;
                       const match = token.searchMatch;
                       const canSend = token.uiBalance > 0;
+                      const spamInfo = token.spamInfo;
+                      const hasSpamWarning = spamInfo && spamInfo.warningLevel !== 'none';
                       return (
                         <div
                           key={token.address}
-                          className={`token-item ${canSend ? 'token-item-clickable' : ''}`}
+                          className={`token-item ${canSend ? 'token-item-clickable' : ''} ${spamInfo?.isSpam ? 'token-spam' : ''}`}
                           onClick={() => {
                             if (canSend) {
                               onSendToken({
@@ -2982,7 +3833,13 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               });
                             }
                           }}
-                          title={canSend ? `Send ${token.symbol.toUpperCase()}` : undefined}
+                          title={
+                            spamInfo?.isSpam
+                              ? `⚠️ Potential spam: ${spamInfo.reasons[0] || 'Suspicious token'}`
+                              : canSend
+                                ? `Send ${token.symbol.toUpperCase()}`
+                                : undefined
+                          }
                           style={{ cursor: canSend ? 'pointer' : 'default' }}
                         >
                           <TokenIcon
@@ -3007,24 +3864,38 @@ const WalletDashboard: React.FC<WalletDashboardProps> = ({
                               ) : (
                                 token.symbol
                               )}
+                              {hasSpamWarning && (
+                                <span
+                                  className={`token-spam-badge warning-${spamInfo.warningLevel}`}
+                                  title={spamInfo.reasons.join('; ')}
+                                >
+                                  <SpamIcon size={10} />
+                                  {spamInfo.warningLevel === 'high'
+                                    ? 'Spam'
+                                    : spamInfo.warningLevel === 'medium'
+                                      ? 'Suspicious'
+                                      : 'Check'}
+                                </span>
+                              )}
                             </div>
                             <div className="token-name">
-                              {match?.matchField === 'name' ? (
-                                <HighlightedText
-                                  text={token.name}
-                                  segments={highlightMatch(
-                                    token.name,
-                                    match.matchStart,
-                                    match.matchLength,
-                                  )}
-                                />
-                              ) : (
-                                token.name
-                              )}
+                              <span className="token-name-text" title={token.name}>
+                                {match?.matchField === 'name' ? (
+                                  <HighlightedText
+                                    text={token.name}
+                                    segments={highlightMatch(
+                                      token.name,
+                                      match.matchStart,
+                                      match.matchLength,
+                                    )}
+                                  />
+                                ) : (
+                                  token.name
+                                )}
+                              </span>
                               {tokenPrice && (
                                 <span className="token-price-per-unit">
-                                  {' '}
-                                  · {formatUsd(tokenPrice)}
+                                  {formatTokenPrice(tokenPrice)}
                                 </span>
                               )}
                             </div>
@@ -3174,6 +4045,7 @@ interface SendFormProps {
   address: string;
   activeChain: ChainType;
   activeEVMChain: EVMChainId | null;
+  activeChainId?: string | null;
   evmAddress: string | null;
   onClose: () => void;
   onSuccess: () => void;
@@ -3187,6 +4059,7 @@ const SendForm: React.FC<SendFormProps> = ({
   address,
   activeChain,
   activeEVMChain,
+  activeChainId,
   evmAddress,
   onClose,
   onSuccess,
@@ -3194,11 +4067,33 @@ const SendForm: React.FC<SendFormProps> = ({
   hideBalances,
   selectedToken,
 }) => {
+  // Check if the current chain supports sending
+  const currentChainInfo = useMemo(() => {
+    if (activeChain === 'solana') {
+      return SUPPORTED_CHAINS.find((c) => c.type === 'solana');
+    }
+    // First try to find by activeChainId (for Bitcoin, TRON, Monero, etc.)
+    if (activeChainId) {
+      const chain = SUPPORTED_CHAINS.find((c) => c.chainId === activeChainId);
+      if (chain) return chain;
+    }
+    // Fall back to evmChainId for EVM chains
+    return SUPPORTED_CHAINS.find((c) => c.evmChainId === activeEVMChain);
+  }, [activeChain, activeEVMChain, activeChainId]);
+  
+  // Solana, EVM, Bitcoin-family, and TRON chains support sending
+  const isSendingSupported = activeChain === 'solana' || currentChainInfo?.family === 'evm' || currentChainInfo?.family === 'bitcoin' || currentChainInfo?.family === 'tron';
+  const isWatchOnlyChain = currentChainInfo?.family === 'monero';
+  const isBitcoinFamily = currentChainInfo?.family === 'bitcoin';
+  const isTronFamily = currentChainInfo?.family === 'tron';
+
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [feeEstimate, setFeeEstimate] = useState<FeeEstimate | null>(null);
   const [evmFeeEstimate, setEvmFeeEstimate] = useState<EVMFeeEstimate | null>(null);
+  const [btcFeeEstimate, setBtcFeeEstimate] = useState<{ feeRate: number; totalFeeSatoshis: number; totalFeeBTC: number; estimatedBlocks: number } | null>(null);
+  const [trxFeeEstimate, setTrxFeeEstimate] = useState<{ bandwidth: number; energy: number; feeSun: number; feeTRX: number } | null>(null);
   const [balance, setBalance] = useState<WalletBalance | null>(null);
   const [evmBalance, setEvmBalance] = useState<EVMBalance | null>(null);
   const [sending, setSending] = useState(false);
@@ -3243,7 +4138,12 @@ const SendForm: React.FC<SendFormProps> = ({
             setNativeTokenPrice(data.price);
           }
         } else {
-          const nativePriceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
+          // Use activeChainId for Bitcoin-family chains, otherwise use activeEVMChain
+          const chainId = activeChainId || activeEVMChain || 'ethereum';
+          const nativePriceRes = await sendToBackground({ 
+            type: 'GET_EVM_NATIVE_PRICE', 
+            payload: { evmChainId: chainId } 
+          });
           if (nativePriceRes.success && nativePriceRes.data) {
             const data = nativePriceRes.data as { price: number; change24h: number | null };
             setNativeTokenPrice(data.price);
@@ -3263,9 +4163,20 @@ const SendForm: React.FC<SendFormProps> = ({
               setTokenPrice(prices[selectedToken.mint]);
             }
           }
-        } else if (selectedToken?.chain === 'evm' && activeChain === 'evm') {
-          // For ERC20 tokens, we don't have a price endpoint yet, so set to null
-          setTokenPrice(null);
+        } else if (selectedToken?.chain === 'evm' && selectedToken.address && activeChain === 'evm') {
+          // For ERC20 tokens, fetch price using the chain-aware token price API
+          const chainId = activeChainId || activeEVMChain || 'ethereum';
+          const priceRes = await sendToBackground({
+            type: 'GET_TOKEN_PRICES',
+            payload: { mints: [selectedToken.address.toLowerCase()], chainId },
+          });
+          if (priceRes.success && priceRes.data) {
+            const prices = priceRes.data as Record<string, number>;
+            const price = prices[selectedToken.address.toLowerCase()];
+            if (price) {
+              setTokenPrice(price);
+            }
+          }
         } else if (activeChain === 'solana') {
           const priceRes = await sendToBackground({ type: 'GET_SOL_PRICE', payload: undefined });
           if (priceRes.success && priceRes.data) {
@@ -3273,7 +4184,13 @@ const SendForm: React.FC<SendFormProps> = ({
             setTokenPrice(data.price);
           }
         } else {
-          const priceRes = await sendToBackground({ type: 'GET_ETH_PRICE', payload: undefined });
+          // Use activeChainId for Bitcoin-family chains (litecoin, bitcoin, etc.)
+          // Fall back to activeEVMChain for actual EVM chains
+          const chainId = activeChainId || activeEVMChain || 'ethereum';
+          const priceRes = await sendToBackground({ 
+            type: 'GET_EVM_NATIVE_PRICE', 
+            payload: { evmChainId: chainId } 
+          });
           if (priceRes.success && priceRes.data) {
             const data = priceRes.data as { price: number; change24h: number | null };
             setTokenPrice(data.price);
@@ -3282,7 +4199,7 @@ const SendForm: React.FC<SendFormProps> = ({
       } catch (e) {}
     };
     loadData();
-  }, [activeChain, selectedToken]);
+  }, [activeChain, activeEVMChain, activeChainId, selectedToken]);
 
   // Calculate USD value of the transfer
   const getTransferUsdValue = (tokenAmount: number): number => {
@@ -3343,6 +4260,8 @@ const SendForm: React.FC<SendFormProps> = ({
   // Get native symbol for current chain
   const getNativeSymbol = () => {
     if (activeChain === 'solana') return 'SOL';
+    // For Bitcoin and other chains, use currentChainInfo which is already computed
+    if (currentChainInfo) return currentChainInfo.symbol;
     const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
     return chain?.symbol || 'ETH';
   };
@@ -3360,6 +4279,8 @@ const SendForm: React.FC<SendFormProps> = ({
   // Get chain name for display
   const getChainName = () => {
     if (activeChain === 'solana') return 'Solana';
+    // For Bitcoin and other chains, use currentChainInfo which is already computed
+    if (currentChainInfo) return currentChainInfo.name;
     const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
     return chain?.name || 'Ethereum';
   };
@@ -3374,7 +4295,7 @@ const SendForm: React.FC<SendFormProps> = ({
 
   useEffect(() => {
     fetchBalance();
-  }, [activeChain, activeEVMChain]);
+  }, [activeChain, activeEVMChain, activeChainId]);
 
   useEffect(() => {
     // Skip estimation if MAX was just clicked (it already did accurate estimation)
@@ -3395,9 +4316,11 @@ const SendForm: React.FC<SendFormProps> = ({
         setBalance(res.data as WalletBalance);
       }
     } else {
+      // Use activeChainId for Bitcoin-family and TRON chains, otherwise use activeEVMChain
+      const chainId = (isBitcoinFamily || isTronFamily) && activeChainId ? activeChainId : activeEVMChain;
       const res = await sendToBackground({
         type: 'WALLET_GET_EVM_BALANCE',
-        payload: { evmChainId: activeEVMChain },
+        payload: { evmChainId: chainId },
       });
       if (res.success && res.data) {
         setEvmBalance(res.data as EVMBalance);
@@ -3415,6 +4338,33 @@ const SendForm: React.FC<SendFormProps> = ({
         });
         if (res.success && res.data) {
           setFeeEstimate(res.data as FeeEstimate);
+        }
+      } else if (isBitcoinFamily && activeChainId) {
+        // Bitcoin fee estimation
+        const amountSatoshis = Math.floor(tokenAmount * 100000000); // Convert BTC to satoshis
+        const res = await sendToBackground({
+          type: 'WALLET_ESTIMATE_BTC_FEE',
+          payload: {
+            chainId: activeChainId,
+            recipient,
+            amountSatoshis,
+          },
+        });
+        if (res.success && res.data) {
+          setBtcFeeEstimate(res.data as { feeRate: number; totalFeeSatoshis: number; totalFeeBTC: number; estimatedBlocks: number });
+        }
+      } else if (isTronFamily) {
+        // TRON fee estimation
+        const amountSun = Math.floor(tokenAmount * 1000000); // Convert TRX to SUN
+        const res = await sendToBackground({
+          type: 'WALLET_ESTIMATE_TRX_FEE',
+          payload: {
+            recipient,
+            amountSun,
+          },
+        });
+        if (res.success && res.data) {
+          setTrxFeeEstimate(res.data as { bandwidth: number; energy: number; feeSun: number; feeTRX: number });
         }
       } else {
         const res = await sendToBackground({
@@ -3456,8 +4406,77 @@ const SendForm: React.FC<SendFormProps> = ({
             balance.sol - estimatedFee - SOLANA_RENT_EXEMPT_MIN - 0.000005,
           );
         }
+      } else if (isBitcoinFamily && evmBalance) {
+        // Bitcoin-family chains - estimate fee and deduct from balance
+        let estimatedFee = btcFeeEstimate?.totalFeeBTC || 0.00002; // Default ~2000 satoshis
+
+        if (recipient && activeChainId) {
+          try {
+            // Estimate fee for Bitcoin transfer
+            const amountSatoshis = Math.floor(evmBalance.formatted * 100000000 * 0.9); // 90% of balance for estimation
+            const res = await sendToBackground({
+              type: 'WALLET_ESTIMATE_BTC_FEE',
+              payload: {
+                chainId: activeChainId,
+                recipient,
+                amountSatoshis,
+              },
+            });
+            
+            if (res.success && res.data) {
+              const feeData = res.data as { feeRate: number; totalFeeSatoshis: number; totalFeeBTC: number; estimatedBlocks: number };
+              estimatedFee = feeData.totalFeeBTC;
+              setBtcFeeEstimate(feeData);
+            }
+          } catch {
+            // Keep existing estimate or default
+          }
+        }
+
+        // Add safety buffer for fee rate fluctuations (20% buffer)
+        const safetyBuffer = Math.max(estimatedFee * 0.2, 0.00001);
+        maxTokenAmount = Math.max(0, evmBalance.formatted - estimatedFee - safetyBuffer);
+        
+        // Store the fee used for validation consistency
+        maxFeeUsedRef.current = estimatedFee;
+      } else if (isTronFamily && evmBalance) {
+        // TRON chain - estimate fee and deduct from balance
+        let estimatedFee = trxFeeEstimate?.feeTRX || 0; // TRON often has free transfers
+
+        if (recipient) {
+          try {
+            // Estimate fee for TRX transfer
+            const amountSun = Math.floor(evmBalance.formatted * 1000000 * 0.9); // 90% of balance for estimation
+            const res = await sendToBackground({
+              type: 'WALLET_ESTIMATE_TRX_FEE',
+              payload: {
+                recipient,
+                amountSun,
+              },
+            });
+            
+            if (res.success && res.data) {
+              const feeData = res.data as { bandwidth: number; energy: number; feeSun: number; feeTRX: number };
+              estimatedFee = feeData.feeTRX;
+              setTrxFeeEstimate(feeData);
+            }
+          } catch {
+            // Keep existing estimate or default
+          }
+        }
+
+        // TRON requires keeping a reserve for account operations
+        // New address activation requires ~1.1 TRX, plus bandwidth may be consumed
+        // Keep 1.1 TRX reserve to handle most cases safely
+        const minReserve = 2.0; // TRON requires ~2 TRX reserve when sending to new addresses
+        const feeBuffer = estimatedFee > 0 ? estimatedFee * 0.2 : 0;
+        const safetyBuffer = Math.max(minReserve, estimatedFee + feeBuffer);
+        maxTokenAmount = Math.max(0, evmBalance.formatted - safetyBuffer);
+        
+        // Store the fee used for validation consistency
+        maxFeeUsedRef.current = estimatedFee;
       } else {
-        // For ERC20 tokens, use the token balance directly
+        // EVM chains - For ERC20 tokens, use the token balance directly
         if (isSendingEvmToken && selectedToken) {
           maxTokenAmount = selectedToken.uiBalance;
         } else if (evmBalance) {
@@ -3511,8 +4530,12 @@ const SendForm: React.FC<SendFormProps> = ({
             ? selectedToken.decimals
             : activeChain === 'solana'
               ? 9
-              : 18;
-        formattedAmount = maxTokenAmount.toFixed(Math.min(decimals, 6)).replace(/\.?0+$/, '');
+              : isBitcoinFamily
+                ? 8
+                : isTronFamily
+                  ? 6
+                  : 18;
+        formattedAmount = maxTokenAmount.toFixed(Math.min(decimals, 8)).replace(/\.?0+$/, '');
       }
       
       // Store the max amount for validation consistency
@@ -3535,12 +4558,22 @@ const SendForm: React.FC<SendFormProps> = ({
     }
 
     // Validate address format before proceeding
-    const isValidAddress =
-      activeChain === 'solana' ? isValidSolanaAddress(recipient) : isValidEVMAddress(recipient);
+    let isValidAddress = false;
+    if (activeChain === 'solana') {
+      isValidAddress = isValidSolanaAddress(recipient);
+    } else if (isBitcoinFamily) {
+      // For Bitcoin addresses, we'll validate on the backend
+      // Basic check: must not be empty and have reasonable length
+      isValidAddress = recipient.length >= 26 && recipient.length <= 90;
+    } else if (isTronFamily) {
+      // TRON addresses start with 'T' and are 34 characters
+      isValidAddress = recipient.startsWith('T') && recipient.length === 34;
+    } else {
+      isValidAddress = isValidEVMAddress(recipient);
+    }
 
     if (!isValidAddress) {
-      const chainName = activeChain === 'solana' ? 'Solana' : getChainName();
-      setError(`Invalid ${chainName} address. Please check and try again.`);
+      setError(`Invalid ${getChainName()} address. Please check and try again.`);
       return;
     }
 
@@ -3576,7 +4609,6 @@ const SendForm: React.FC<SendFormProps> = ({
 
     // For native currency, account for fees and rent-exempt minimum (Solana only)
     let effectiveMax: number;
-    let evmFeeForValidation = evmFeeEstimate?.totalFeeEth;
     
     if (isSendingToken) {
       effectiveMax = availableBalance;
@@ -3584,6 +4616,37 @@ const SendForm: React.FC<SendFormProps> = ({
       // Solana: deduct fee + rent-exempt minimum
       const fee = feeEstimate?.feeSol || 0.000015;
       effectiveMax = Math.max(0, availableBalance - fee - SOLANA_RENT_EXEMPT_MIN - 0.000005);
+    } else if (isBitcoinFamily) {
+      // Bitcoin: Use stored MAX fee if amount matches MAX, otherwise use current estimate
+      let fee: number;
+      
+      // If user is sending the exact MAX amount we calculated, use the same fee
+      if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
+        fee = maxFeeUsedRef.current;
+      } else {
+        fee = btcFeeEstimate?.totalFeeBTC || 0.00002; // ~2000 satoshis default
+      }
+      
+      // Use same buffer formula as MAX calculation (20% buffer)
+      const safetyBuffer = Math.max(fee * 0.2, 0.00001);
+      effectiveMax = Math.max(0, availableBalance - fee - safetyBuffer);
+    } else if (isTronFamily) {
+      // TRON: Use stored MAX fee if amount matches MAX, otherwise use current estimate
+      let fee: number;
+      
+      // If user is sending the exact MAX amount we calculated, use the same fee
+      if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
+        fee = maxFeeUsedRef.current;
+      } else {
+        fee = trxFeeEstimate?.feeTRX || 0; // TRON often has free transfers
+      }
+      
+      // TRON requires keeping a reserve for account operations
+      // Use same buffer formula as MAX calculation (1.1 TRX for new address activation)
+      const minReserve = 2.0; // TRON requires ~2 TRX reserve when sending to new addresses
+      const feeBuffer = fee > 0 ? fee * 0.2 : 0;
+      const safetyBuffer = Math.max(minReserve, fee + feeBuffer);
+      effectiveMax = Math.max(0, availableBalance - safetyBuffer);
     } else {
       // EVM: Use stored MAX fee if amount matches MAX, otherwise use current estimate
       // This ensures consistency between MAX click and Send validation
@@ -3593,7 +4656,7 @@ const SendForm: React.FC<SendFormProps> = ({
       if (maxAmountRef.current === amount && maxFeeUsedRef.current !== null) {
         fee = maxFeeUsedRef.current;
       } else {
-        fee = evmFeeForValidation || 0.002;
+        fee = evmFeeEstimate?.totalFeeEth || 0.002;
       }
       
       // Use same buffer formula as MAX calculation (30% or minimum 0.00002)
@@ -3636,9 +4699,20 @@ const SendForm: React.FC<SendFormProps> = ({
 
       if (nativeBalance < requiredFee) {
         const nativeSymbol = activeChain === 'solana' ? 'SOL' : getNativeSymbol();
-        setError(
-          `Insufficient ${nativeSymbol} for network fee. You need ~${requiredFee.toFixed(6)} ${nativeSymbol} but have ${nativeBalance.toFixed(6)} ${nativeSymbol}.`,
-        );
+        const chainName = getChainName();
+        const isL2Chain = activeEVMChain && ['arbitrum', 'optimism', 'base'].includes(activeEVMChain);
+        
+        if (isL2Chain && activeChain === 'evm') {
+          // Show helpful message for L2 chains where users might have tokens but no ETH
+          setError(
+            `Insufficient ${nativeSymbol} for gas on ${chainName}. You need ~${requiredFee.toFixed(6)} ${nativeSymbol} but have ${nativeBalance.toFixed(6)} ${nativeSymbol}. ` +
+            `To get ${nativeSymbol} on ${chainName}, you can: 1) Bridge from Ethereum mainnet, or 2) Withdraw directly to ${chainName} from an exchange.`,
+          );
+        } else {
+          setError(
+            `Insufficient ${nativeSymbol} for network fee. You need ~${requiredFee.toFixed(6)} ${nativeSymbol} but have ${nativeBalance.toFixed(6)} ${nativeSymbol}.`,
+          );
+        }
         return;
       }
     }
@@ -3667,8 +4741,21 @@ const SendForm: React.FC<SendFormProps> = ({
     setSending(true);
     setSendStatus('Preparing transaction...');
 
-    // Status update intervals for user feedback (EVM takes longer)
-    const statusUpdates = activeChain === 'evm'
+    // Status update intervals for user feedback (EVM and Bitcoin take longer)
+    const statusUpdates = isBitcoinFamily
+      ? [
+          { delay: 1500, status: 'Signing transaction...' },
+          { delay: 3000, status: 'Broadcasting to network...' },
+          { delay: 5000, status: 'Waiting for confirmation...' },
+          { delay: 15000, status: 'Transaction broadcast. Confirmations may take 10+ minutes.' },
+        ]
+      : isTronFamily
+      ? [
+          { delay: 1000, status: 'Signing transaction...' },
+          { delay: 2000, status: 'Broadcasting to TRON...' },
+          { delay: 3000, status: 'Waiting for confirmation...' },
+        ]
+      : activeChain === 'evm'
       ? [
           { delay: 1500, status: 'Signing transaction...' },
           { delay: 3000, status: 'Broadcasting to network...' },
@@ -3732,6 +4819,43 @@ const SendForm: React.FC<SendFormProps> = ({
             type: 'WALLET_SEND_SOL',
             payload: { recipient, amountSol: tokenAmountToSend },
           });
+        }
+      } else if (isBitcoinFamily && activeChainId) {
+        // Bitcoin-family chain - send native coin
+        const amountSatoshis = Math.floor(tokenAmountToSend * 100000000); // Convert BTC to satoshis
+        res = await sendToBackground({
+          type: 'WALLET_SEND_BTC',
+          payload: {
+            chainId: activeChainId,
+            recipient,
+            amountSatoshis,
+          },
+        });
+        // Map BTC result to SendTransactionResult format
+        if (res.success && res.data) {
+          const btcResult = res.data as { txid: string; explorerUrl: string; confirmed: boolean; error?: string };
+          res.data = {
+            signature: btcResult.txid,
+            explorerUrl: btcResult.explorerUrl,
+          };
+        }
+      } else if (isTronFamily) {
+        // TRON chain - send native TRX
+        const amountSun = Math.floor(tokenAmountToSend * 1000000); // Convert TRX to SUN (1 TRX = 1,000,000 SUN)
+        res = await sendToBackground({
+          type: 'WALLET_SEND_TRX',
+          payload: {
+            recipient,
+            amountSun,
+          },
+        });
+        // Map TRX result to SendTransactionResult format
+        if (res.success && res.data) {
+          const trxResult = res.data as { txid: string; explorerUrl: string; confirmed: boolean; error?: string };
+          res.data = {
+            signature: trxResult.txid,
+            explorerUrl: trxResult.explorerUrl,
+          };
         }
       } else {
         // EVM chain - check if we're sending an ERC20 token or native ETH
@@ -3869,14 +4993,25 @@ const SendForm: React.FC<SendFormProps> = ({
 
   // Transaction Review Screen
   if (showReview && !success) {
-    const chain = SUPPORTED_CHAINS.find((c) =>
-      activeChain === 'solana'
-        ? c.type === 'solana'
-        : c.type === 'evm' && c.evmChainId === activeEVMChain,
-    );
+    const chain = SUPPORTED_CHAINS.find((c) => {
+      if (activeChain === 'solana') {
+        return c.type === 'solana';
+      }
+      // Check for Bitcoin-family chains first (using activeChainId)
+      if (activeChainId && c.chainId === activeChainId) {
+        return true;
+      }
+      // Fall back to EVM chain matching
+      return c.type === 'evm' && c.evmChainId === activeEVMChain;
+    });
 
-    const fee =
-      activeChain === 'solana' ? feeEstimate?.feeSol || 0 : evmFeeEstimate?.totalFeeEth || 0;
+    const fee = activeChain === 'solana' 
+      ? feeEstimate?.feeSol || 0 
+      : isBitcoinFamily 
+        ? btcFeeEstimate?.totalFeeBTC || 0 
+        : isTronFamily
+          ? trxFeeEstimate?.feeTRX || 0
+          : evmFeeEstimate?.totalFeeEth || 0;
 
     const reviewTokenAmount = getTokenAmountToSend();
     const reviewUsdValue = getTransferUsdValue(reviewTokenAmount);
@@ -3909,7 +5044,7 @@ const SendForm: React.FC<SendFormProps> = ({
           ) : (
             // Show chain icon and name for native currency
             <>
-              <ChainIcon chain={activeChain} evmChainId={activeEVMChain || undefined} size={20} />
+              <ChainIcon chain={activeChain} evmChainId={activeChainId || activeEVMChain || undefined} size={20} />
               <span>{chain?.name || 'Unknown Chain'}</span>
             </>
           )}
@@ -4040,7 +5175,9 @@ const SendForm: React.FC<SendFormProps> = ({
             </div>
             <div className="swap-processing-text">{sendStatus}</div>
             <div className="swap-processing-hint">
-              {activeChain === 'evm'
+              {isBitcoinFamily
+                ? `${currentChainInfo?.name || 'Bitcoin'} transactions may take 10+ minutes to confirm`
+                : activeChain === 'evm'
                 ? 'EVM transactions may take 15-60 seconds to confirm'
                 : 'Solana transactions typically confirm in a few seconds'}
             </div>
@@ -4108,6 +5245,20 @@ const SendForm: React.FC<SendFormProps> = ({
       const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
       return `~${evmFeeEstimate.totalFeeEth.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
     }
+    if (isBitcoinFamily && btcFeeEstimate) {
+      const feeUsd = nativeTokenPrice ? btcFeeEstimate.totalFeeBTC * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      return `~${btcFeeEstimate.totalFeeBTC.toFixed(8)} ${getNativeSymbol()} (${btcFeeEstimate.feeRate} sat/vB)${usdPart}`;
+    }
+    if (isTronFamily && trxFeeEstimate) {
+      const feeUsd = nativeTokenPrice ? trxFeeEstimate.feeTRX * nativeTokenPrice : null;
+      const usdPart = feeUsd !== null ? ` ($${feeUsd < 0.01 ? '<0.01' : feeUsd.toFixed(2)})` : '';
+      // TRON often has free transfers with bandwidth, show 0 or estimated fee
+      if (trxFeeEstimate.feeTRX === 0) {
+        return 'Free (uses bandwidth)';
+      }
+      return `~${trxFeeEstimate.feeTRX.toFixed(6)} TRX${usdPart}`;
+    }
     return null;
   };
 
@@ -4124,6 +5275,10 @@ const SendForm: React.FC<SendFormProps> = ({
       fee = feeEstimate.feeSol;
     } else if (activeChain === 'evm' && evmFeeEstimate) {
       fee = evmFeeEstimate.totalFeeEth;
+    } else if (isBitcoinFamily && btcFeeEstimate) {
+      fee = btcFeeEstimate.totalFeeBTC;
+    } else if (isTronFamily && trxFeeEstimate) {
+      fee = trxFeeEstimate.feeTRX;
     }
     
     if (fee === 0) return null;
@@ -4132,7 +5287,8 @@ const SendForm: React.FC<SendFormProps> = ({
     const totalUsd = nativeTokenPrice ? total * nativeTokenPrice : null;
     const usdPart = totalUsd !== null ? ` ($${totalUsd.toFixed(2)})` : '';
     
-    return `~${total.toFixed(6)} ${getNativeSymbol()}${usdPart}`;
+    const decimals = isBitcoinFamily ? 8 : 6;
+    return `~${total.toFixed(decimals)} ${getNativeSymbol()}${usdPart}`;
   };
 
   const feeDisplay = getFeeDisplay();
@@ -4263,10 +5419,28 @@ const SendForm: React.FC<SendFormProps> = ({
         </div>
       )}
 
+      {!isSendingSupported && (
+        <div
+          style={{
+            background: 'rgba(251, 191, 36, 0.15)',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding: 'var(--space-sm)',
+            marginBottom: 'var(--space-md)',
+            fontSize: '0.75rem',
+            color: 'var(--text-warning)',
+          }}
+        >
+          {isWatchOnlyChain 
+            ? '⚠️ Watch-only mode: Sending is not available for this chain.'
+            : `⚠️ Sending is not yet supported for ${currentChainInfo?.name || 'this chain'}. Coming soon!`}
+        </div>
+      )}
+
       <button
         className="btn btn-primary btn-block"
         onClick={handleSend}
-        disabled={sending || !recipient || !amount}
+        disabled={sending || !recipient || !amount || !isSendingSupported}
       >
         {sending ? (sendStatus || 'Sending...') : 'Send'}
       </button>
@@ -4274,1810 +5448,154 @@ const SendForm: React.FC<SendFormProps> = ({
   );
 };
 
-interface ReceiveViewProps {
-  address: string;
-  activeChain: ChainType;
-  activeEVMChain: EVMChainId | null;
-  onClose: () => void;
+// --- Swap View (extracted to views/wallet/SwapView.tsx) ---
+
+// --- Partners Modal ---
+
+interface Partner {
+  id: string;
+  name: string;
+  description: string;
+  affiliateUrl: string;
+  fallbackGradient: string;
+  logoDomain?: string; // Override domain for favicon (when affiliate URL differs from main site)
+  useFallbackOnly?: boolean; // Skip favicon, always use gradient + initials
 }
 
-const ReceiveView: React.FC<ReceiveViewProps> = ({
-  address,
-  activeChain,
-  activeEVMChain,
-  onClose,
-}) => {
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // Get symbol for current chain
-  const getSymbol = () => {
-    if (activeChain === 'solana') return 'SOL';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
-    return chain?.symbol || 'ETH';
-  };
-
-  // Get chain name for display
-  const getChainName = () => {
-    if (activeChain === 'solana') return 'Solana';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
-    return chain?.name || 'Ethereum';
-  };
-
-  useEffect(() => {
-    // Generate QR code URL for the address (works for any chain)
-    // Using qrserver.com free API for cross-chain QR generation
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(address)}`;
-    setQrCode(qrUrl);
-  }, [address]);
-
-  const copyAddress = () => {
-    navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const symbol = getSymbol();
-  const chainName = getChainName();
-
-  return (
-    <div className="receive-view">
-      <div className="form-header">
-        <h3>Receive {symbol}</h3>
-        <button className="close-btn" onClick={onClose}>
-          <CloseIcon size={14} />
-        </button>
-      </div>
-
-      <p
-        style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}
-      >
-        Scan QR code or copy address to receive {symbol} and tokens on {chainName}
-      </p>
-
-      <div className="qr-container">
-        {qrCode ? (
-          <img src={qrCode} alt="Wallet QR Code" />
-        ) : (
-          <div
-            style={{
-              width: 160,
-              height: 160,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <div className="spinner" />
-          </div>
-        )}
-      </div>
-
-      <div className="full-address" onClick={copyAddress}>
-        {address}
-      </div>
-
-      <button
-        className="btn btn-primary btn-block"
-        onClick={copyAddress}
-        style={{ marginTop: 'var(--space-md)' }}
-      >
-        {copied ? 'Copied!' : 'Copy Address'}
-      </button>
-    </div>
-  );
-};
-
-// --- Swap View ---
-
-// Native token address used by ParaSwap for all EVM chains
-const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-
-// Default tokens for initial state (shown before dynamic list loads)
-const DEFAULT_SOLANA_TOKENS: SwapToken[] = [
-  {
-    address: 'So11111111111111111111111111111111111111112',
-    symbol: 'SOL',
-    name: 'Solana',
-    decimals: 9,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
-  },
-  {
-    address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-    symbol: 'USDC',
-    name: 'USD Coin',
-    decimals: 6,
-    logoUri: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
-  },
-];
-
-const DEFAULT_EVM_TOKENS: SwapToken[] = [
-  {
-    address: NATIVE_TOKEN_ADDRESS,
-    symbol: 'ETH',
-    name: 'Ethereum',
-    decimals: 18,
-    logoUri: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
-  },
-  {
-    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-    symbol: 'USDC',
-    name: 'USD Coin',
-    decimals: 6,
-    logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
-  },
-];
-
-// Solana swap quote result (Jupiter)
-interface SwapQuoteResult {
-  inputMint: string;
-  outputMint: string;
-  inputAmount: string;
-  outputAmount: string;
-  inputAmountFormatted: string;
-  outputAmountFormatted: string;
-  minimumReceivedFormatted: string;
-  priceImpact: string;
-  platformFeeFormatted: string | null;
-  route: string;
-  rawQuote: unknown;
-}
-
-// EVM swap quote result (ParaSwap)
-interface EVMSwapQuoteResult {
-  chainId: EVMChainId;
-  srcToken: string;
-  destToken: string;
-  srcAmount: string;
-  destAmount: string;
-  srcAmountFormatted: string;
-  destAmountFormatted: string;
-  minimumReceivedFormatted: string;
-  exchangeRate: string;
-  gasCostUSD: string;
-  route: string;
-  rawQuote: unknown;
-}
-
-interface SwapViewProps {
-  address: string;
-  network: string;
-  activeChain: ChainType;
-  activeEVMChain: EVMChainId | null;
-  tokens?: SPLTokenBalance[];
-  evmTokens?: EVMTokenBalance[];
-  balance?: WalletBalance | null;
-  evmBalance?: EVMBalance | null;
-  onClose: () => void;
-  onSwapComplete?: () => void;
-}
-
-const SwapView: React.FC<SwapViewProps> = ({
-  address,
-  network,
-  activeChain,
-  activeEVMChain,
-  tokens = [],
-  evmTokens = [],
-  balance,
-  evmBalance,
-  onClose,
-  onSwapComplete,
-}) => {
-  const [copied, setCopied] = useState(false);
-  const [useInAppSwap, setUseInAppSwap] = useState(true);
-
-  // Get default tokens based on chain (for initial state)
-  const getDefaultTokens = useCallback(() => {
-    if (activeChain === 'solana') {
-      return DEFAULT_SOLANA_TOKENS;
-    }
-    return DEFAULT_EVM_TOKENS;
-  }, [activeChain]);
-
-  // In-app swap state - initialize with default tokens
-  const [inputToken, setInputToken] = useState<SwapToken | null>(() => getDefaultTokens()[0]);
-  const [outputToken, setOutputToken] = useState<SwapToken | null>(() => getDefaultTokens()[1]);
-  const [inputAmount, setInputAmount] = useState('');
-  const [slippageBps, setSlippageBps] = useState(activeChain === 'solana' ? 50 : 100); // 0.5% for Solana, 1% for EVM
-  const [quote, setQuote] = useState<SwapQuoteResult | null>(null);
-  const [evmQuote, setEvmQuote] = useState<EVMSwapQuoteResult | null>(null);
-  const [loadingQuote, setLoadingQuote] = useState(false);
-  const [executing, setExecuting] = useState(false);
-  const [swapStatus, setSwapStatus] = useState<string>(''); // Status message during swap
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState<{ signature?: string; hash?: string; explorerUrl: string } | null>(null);
-  const [swapAvailable, setSwapAvailable] = useState(false);
-  const [referralStatus, setReferralStatus] = useState<{ enabled: boolean; feeBps: number } | null>(
-    null,
-  );
-  const [tokensLoading, setTokensLoading] = useState(false);
-
-  // Load popular tokens when chain changes and set default selections
-  useEffect(() => {
-    let cancelled = false;
-    
-    const loadDefaultTokens = async () => {
-      setTokensLoading(true);
-      try {
-        const popularTokens = await getPopularTokens(
-          activeChain,
-          activeEVMChain || undefined,
-          10
-        );
-        
-        if (!cancelled && popularTokens.length >= 2) {
-          setInputToken(popularTokens[0]);
-          setOutputToken(popularTokens[1]);
-        } else if (!cancelled) {
-          // Fallback to hardcoded defaults
-          const defaults = getDefaultTokens();
-          setInputToken(defaults[0]);
-          setOutputToken(defaults[1]);
-        }
-      } catch (error) {
-        console.error('Failed to load popular tokens:', error);
-        if (!cancelled) {
-          const defaults = getDefaultTokens();
-          setInputToken(defaults[0]);
-          setOutputToken(defaults[1]);
-        }
-      } finally {
-        if (!cancelled) {
-          setTokensLoading(false);
-        }
-      }
-    };
-
-    loadDefaultTokens();
-    setInputAmount('');
-    setQuote(null);
-    setEvmQuote(null);
-    setError('');
-    setSuccess(null);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeChain, activeEVMChain, getDefaultTokens]);
-
-  // Debounce input amount for quote fetching
-  const debouncedInputAmount = useDebounce(inputAmount, 500);
-
-  // Check if in-app swap is available
-  useEffect(() => {
-    const checkSwapAvailable = async () => {
-      if (activeChain === 'solana' && network === 'mainnet-beta') {
-        // Solana mainnet - check Jupiter availability
-        try {
-          const response = await sendToBackground({
-            type: 'WALLET_SWAP_AVAILABLE',
-            payload: undefined,
-          });
-          setSwapAvailable(response.success && response.data === true);
-
-          // Get referral status
-          const refResponse = await sendToBackground({
-            type: 'WALLET_SWAP_REFERRAL_STATUS',
-            payload: undefined,
-          });
-          if (refResponse.success && refResponse.data) {
-            setReferralStatus(refResponse.data as { enabled: boolean; feeBps: number });
-          }
-        } catch {
-          setSwapAvailable(false);
-        }
-      } else if (activeChain === 'evm' && activeEVMChain) {
-        // EVM chain - check ParaSwap availability (mainnet only)
-        try {
-          const response = await sendToBackground({
-            type: 'EVM_SWAP_AVAILABLE',
-            payload: { evmChainId: activeEVMChain },
-          });
-          setSwapAvailable(response.success && response.data === true);
-          setReferralStatus(null); // ParaSwap doesn't have referral in our implementation
-        } catch {
-          setSwapAvailable(false);
-        }
-      } else {
-        setSwapAvailable(false);
-      }
-    };
-    checkSwapAvailable();
-  }, [activeChain, activeEVMChain, network]);
-
-  // Fetch quote when input changes
-  useEffect(() => {
-    const fetchQuote = async () => {
-      // Require both tokens to be selected and valid input
-      if (!inputToken || !outputToken || !debouncedInputAmount || parseFloat(debouncedInputAmount) <= 0 || !swapAvailable) {
-        setQuote(null);
-        setEvmQuote(null);
-        return;
-      }
-
-      setLoadingQuote(true);
-      setError('');
-
-      try {
-        if (activeChain === 'solana') {
-          // Solana swap via Jupiter
-          const response = await sendToBackground({
-            type: 'WALLET_SWAP_QUOTE',
-            payload: {
-              inputMint: inputToken.address,
-              outputMint: outputToken.address,
-              inputAmount: debouncedInputAmount,
-              inputDecimals: inputToken.decimals,
-              outputDecimals: outputToken.decimals,
-              slippageBps,
-            },
-          });
-
-          if (response.success && response.data) {
-            setQuote(response.data as SwapQuoteResult);
-            setEvmQuote(null);
-          } else {
-            setError(response.error || 'Failed to get quote');
-            setQuote(null);
-          }
-        } else if (activeChain === 'evm' && activeEVMChain) {
-          // EVM swap via ParaSwap
-          const response = await sendToBackground({
-            type: 'EVM_SWAP_QUOTE',
-            payload: {
-              evmChainId: activeEVMChain,
-              srcToken: inputToken.address,
-              destToken: outputToken.address,
-              srcAmount: debouncedInputAmount,
-              srcDecimals: inputToken.decimals,
-              destDecimals: outputToken.decimals,
-              slippageBps,
-            },
-          });
-
-          if (response.success && response.data) {
-            setEvmQuote(response.data as EVMSwapQuoteResult);
-            setQuote(null);
-          } else {
-            setError(response.error || 'Failed to get quote');
-            setEvmQuote(null);
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to get quote');
-        setQuote(null);
-        setEvmQuote(null);
-      } finally {
-        setLoadingQuote(false);
-      }
-    };
-
-    fetchQuote();
-  }, [debouncedInputAmount, inputToken, outputToken, slippageBps, swapAvailable, activeChain, activeEVMChain]);
-
-  // Execute swap with status updates
-  const handleSwap = async () => {
-    if (!inputToken || !outputToken) return;
-    if (activeChain === 'solana' && !quote) return;
-    if (activeChain === 'evm' && !evmQuote) return;
-    if (executing) return;
-
-    setExecuting(true);
-    setError('');
-    setSuccess(null);
-    setSwapStatus('Building transaction...');
-
-    // Status update intervals for user feedback
-    const statusUpdates = activeChain === 'evm' 
-      ? [
-          { delay: 1500, status: 'Signing transaction...' },
-          { delay: 3000, status: 'Broadcasting to network...' },
-          { delay: 5000, status: 'Waiting for confirmation...' },
-          { delay: 15000, status: 'Still confirming... (this may take a minute)' },
-          { delay: 30000, status: 'Almost there... (network is busy)' },
-        ]
-      : [
-          { delay: 1000, status: 'Signing transaction...' },
-          { delay: 2000, status: 'Broadcasting to Solana...' },
-          { delay: 4000, status: 'Waiting for confirmation...' },
-        ];
-
-    const timeouts: NodeJS.Timeout[] = [];
-    statusUpdates.forEach(({ delay, status }) => {
-      const timeout = setTimeout(() => setSwapStatus(status), delay);
-      timeouts.push(timeout);
-    });
-
-    try {
-      if (activeChain === 'solana') {
-        // Solana swap via Jupiter
-        const response = await sendToBackground({
-          type: 'WALLET_SWAP_EXECUTE',
-          payload: {
-            inputMint: inputToken.address,
-            outputMint: outputToken.address,
-            inputAmount,
-            inputDecimals: inputToken.decimals,
-            slippageBps,
-          },
-        });
-
-        // Clear status timeouts
-        timeouts.forEach(clearTimeout);
-
-        if (response.success && response.data) {
-          const result = response.data as { signature: string; explorerUrl: string };
-          setSuccess({ signature: result.signature, explorerUrl: result.explorerUrl });
-          setInputAmount('');
-          setQuote(null);
-          onSwapComplete?.();
-        } else {
-          setError(response.error || 'Swap failed');
-        }
-      } else if (activeChain === 'evm' && activeEVMChain) {
-        // EVM swap via ParaSwap
-        const response = await sendToBackground({
-          type: 'EVM_SWAP_EXECUTE',
-          payload: {
-            evmChainId: activeEVMChain,
-            srcToken: inputToken.address,
-            destToken: outputToken.address,
-            srcAmount: inputAmount,
-            srcDecimals: inputToken.decimals,
-            slippageBps,
-          },
-        });
-
-        // Clear status timeouts
-        timeouts.forEach(clearTimeout);
-
-        if (response.success && response.data) {
-          const result = response.data as { hash: string; explorerUrl: string; confirmed: boolean; error?: string };
-          if (result.error) {
-            setError(result.error);
-          } else {
-            setSuccess({ hash: result.hash, explorerUrl: result.explorerUrl });
-            setInputAmount('');
-            setEvmQuote(null);
-            onSwapComplete?.();
-          }
-        } else {
-          setError(response.error || 'Swap failed');
-        }
-      }
-    } catch (err) {
-      // Clear status timeouts on error
-      timeouts.forEach(clearTimeout);
-      setError(err instanceof Error ? err.message : 'Swap failed');
-    } finally {
-      setExecuting(false);
-      setSwapStatus('');
-    }
-  };
-
-  // Swap input/output tokens
-  const handleFlipTokens = () => {
-    const temp = inputToken;
-    setInputToken(outputToken);
-    setOutputToken(temp);
-    setInputAmount('');
-    setQuote(null);
-    setEvmQuote(null);
-  };
-
-  // Get chain name for display
-  const getChainName = () => {
-    if (activeChain === 'solana') return 'Solana';
-    const chain = SUPPORTED_CHAINS.find((c) => c.type === 'evm' && c.evmChainId === activeEVMChain);
-    return chain?.name || 'Ethereum';
-  };
-
-  // Get DEX info based on chain (for external swap fallback)
-  const getDexInfo = () => {
-    if (activeChain === 'solana') {
-      return {
-        name: 'Jupiter',
-        description:
-          'Swap tokens using Jupiter, the leading Solana DEX aggregator. Get the best rates across all Solana liquidity sources.',
-        url:
-          network === 'devnet'
-            ? 'https://jup.ag/swap/SOL-USDC?network=devnet'
-            : 'https://jup.ag/swap/SOL-USDC',
-        note: 'Jupiter will open in a new window. Connect Phantom, Solflare, or another wallet there to swap.',
-      };
-    }
-
-    const chainName = getChainName();
-    return {
-      name: 'Uniswap',
-      description: `Swap tokens using Uniswap on ${chainName}. Get the best rates with automatic routing.`,
-      url: `https://app.uniswap.org/swap?chain=${activeEVMChain || 'ethereum'}`,
-      note: `Uniswap will open in a new window. Connect your wallet there to swap tokens on ${chainName}.`,
-    };
-  };
-
-  const dexInfo = getDexInfo();
-  const chainName = getChainName();
-
-  const openDexPopup = () => {
-    const width = 420;
-    const height = 700;
-    const left = (screen.width - width) / 2;
-    const top = (screen.height - height) / 2;
-    window.open(
-      dexInfo.url,
-      'dex-swap',
-      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`,
-    );
-  };
-
-  const openDexTab = () => {
-    window.open(dexInfo.url, '_blank');
-  };
-
-  const copyAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      // Ignore error
-    }
-  };
-
-  // Get user's token balance for input token
-  const getInputTokenBalance = () => {
-    if (!inputToken) return null;
-    if (activeChain === 'solana') {
-      if (inputToken.symbol === 'SOL') {
-        // SOL balance comes from main wallet balance
-        return balance?.lamports ? balance.lamports / 1e9 : 0;
-      }
-      const userToken = tokens.find((t) => t.mint === inputToken.address);
-      return userToken ? userToken.uiBalance : 0;
-    } else {
-      // EVM chain - check for native token or ERC20
-      if (inputToken.address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()) {
-        // Native token (ETH, MATIC, etc.) - use evmBalance
-        return evmBalance?.formatted ?? 0;
-      }
-      // For ERC20 tokens, look up in evmTokens array
-      const userToken = evmTokens.find(
-        (t) => t.address.toLowerCase() === inputToken.address.toLowerCase()
-      );
-      return userToken ? userToken.uiBalance : 0;
-    }
-  };
-
-  const inputBalance = getInputTokenBalance();
-
-  // Handle token selection from SwapTokenSelector
-  const handleInputTokenSelect = useCallback((token: SwapToken) => {
-    setInputToken(token);
-    setQuote(null);
-    setEvmQuote(null);
-  }, []);
-
-  const handleOutputTokenSelect = useCallback((token: SwapToken) => {
-    setOutputToken(token);
-    setQuote(null);
-    setEvmQuote(null);
-  }, []);
-
-  // Get native balance for token selector
-  const nativeBalanceForSelector = useMemo(() => {
-    if (activeChain === 'solana') {
-      return balance?.sol || 0;
-    }
-    return evmBalance?.formatted || 0;
-  }, [activeChain, balance, evmBalance]);
-
-  // In-app swap UI (Solana via Jupiter, EVM via ParaSwap)
-  const hasQuote = activeChain === 'solana' ? quote : evmQuote;
-  const currentQuote = activeChain === 'solana' ? quote : evmQuote;
-  const outputAmountFormatted = activeChain === 'solana'
-    ? quote?.outputAmountFormatted
-    : evmQuote?.destAmountFormatted;
-  const minimumReceivedFormatted = activeChain === 'solana'
-    ? quote?.minimumReceivedFormatted
-    : evmQuote?.minimumReceivedFormatted;
-  const routeDisplay = activeChain === 'solana' ? quote?.route : evmQuote?.route;
-  const priceImpact = activeChain === 'solana' ? quote?.priceImpact : null; // ParaSwap doesn't return price impact
-  const poweredByName = activeChain === 'solana' ? 'Jupiter' : 'ParaSwap';
-  const poweredByLogo = activeChain === 'solana'
-    ? 'https://static.jup.ag/jup/icon.png'
-    : 'https://app.paraswap.io/paraswap.svg';
-  const externalSwapName = activeChain === 'solana' ? 'Jupiter' : 'ParaSwap';
-
-  if (swapAvailable && useInAppSwap) {
-    return (
-      <div className="swap-view">
-        <div className="form-header">
-          <h3>Swap Tokens</h3>
-          <button className="close-btn" onClick={onClose}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        <div className="swap-content">
-          {/* Success State */}
-          {success && (
-            <div className="swap-success">
-              <div className="swap-success-icon">
-                <CheckIcon size={32} />
-              </div>
-              <h4>Swap Successful!</h4>
-              <p>Your swap has been confirmed on the blockchain.</p>
-              <a
-                href={success.explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="swap-explorer-link"
-              >
-                <ExternalLinkIcon size={14} />
-                View on Explorer
-              </a>
-              <button
-                className="btn btn-primary btn-block"
-                onClick={() => setSuccess(null)}
-                style={{ marginTop: '16px' }}
-              >
-                New Swap
-              </button>
-            </div>
-          )}
-
-          {/* Swap Processing Status */}
-          {executing && swapStatus && (
-            <div className="swap-processing-status">
-              <div className="swap-processing-animation">
-                <div className="swap-processing-spinner"></div>
-              </div>
-              <div className="swap-processing-text">{swapStatus}</div>
-              <div className="swap-processing-hint">
-                {activeChain === 'evm' 
-                  ? 'EVM transactions may take 15-60 seconds to confirm'
-                  : 'Solana transactions typically confirm in a few seconds'}
-              </div>
-            </div>
-          )}
-
-          {/* Swap Form */}
-          {!success && !executing && (
-            <>
-              {/* Input Token */}
-              <div className="swap-input-group">
-                <label className="swap-label">You Pay</label>
-                <div className="swap-input-row">
-                  <input
-                    type="number"
-                    className="swap-amount-input"
-                    placeholder="0.00"
-                    value={inputAmount}
-                    onChange={(e) => setInputAmount(e.target.value)}
-                    disabled={executing || tokensLoading}
-                  />
-                  <SwapTokenSelector
-                    selectedToken={inputToken}
-                    onSelect={handleInputTokenSelect}
-                    chainType={activeChain}
-                    evmChainId={activeEVMChain || undefined}
-                    solanaTokens={tokens}
-                    evmTokens={evmTokens}
-                    nativeBalance={nativeBalanceForSelector}
-                    excludeToken={outputToken}
-                    disabled={executing || tokensLoading}
-                  />
-                </div>
-                {inputBalance !== null && inputToken && (
-                  <div className="swap-balance">
-                    Balance: {inputBalance.toFixed(4)} {inputToken.symbol}
-                    <div className="swap-quick-btns">
-                      <button
-                        className="swap-quick-btn"
-                        onClick={() => setInputAmount((inputBalance * 0.5).toString())}
-                        disabled={executing}
-                      >
-                        50%
-                      </button>
-                      <button
-                        className="swap-quick-btn"
-                        onClick={() => {
-                          if (!inputToken) return;
-                          // Reserve native tokens for transaction fees
-                          if (activeChain === 'solana') {
-                            if (inputToken.symbol === 'SOL') {
-                              // Reserve 0.005 SOL for Solana tx fees, or 10% if balance is small
-                              const gasReserve = Math.min(0.005, inputBalance * 0.1);
-                              const maxSwappable = Math.max(0, inputBalance - gasReserve);
-                              setInputAmount(maxSwappable.toString());
-                            } else {
-                              setInputAmount(inputBalance.toString());
-                            }
-                          } else {
-                            // EVM chains - reserve gas for native token swaps
-                            const isNativeToken = inputToken.address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
-                            if (isNativeToken) {
-                              // Reserve gas based on chain (L2s are cheaper)
-                              // Use smaller reserves and cap at 10% of balance for small amounts
-                              let gasReserve = 0.003; // Default for Ethereum mainnet (~$10 at $3k ETH)
-                              if (activeEVMChain === 'arbitrum' || activeEVMChain === 'optimism' || activeEVMChain === 'base') {
-                                gasReserve = 0.0005; // L2s are much cheaper (~$1.50)
-                              } else if (activeEVMChain === 'polygon') {
-                                gasReserve = 0.05; // MATIC is cheap
-                              }
-                              // Don't reserve more than 10% of balance for small amounts
-                              const effectiveReserve = Math.min(gasReserve, inputBalance * 0.1);
-                              const maxSwappable = Math.max(0, inputBalance - effectiveReserve);
-                              setInputAmount(maxSwappable.toString());
-                            } else {
-                              // ERC20 tokens - use full balance
-                              setInputAmount(inputBalance.toString());
-                            }
-                          }
-                        }}
-                        disabled={executing}
-                      >
-                        MAX
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Flip Button */}
-              <div className="swap-flip-container">
-                <button className="swap-flip-btn" onClick={handleFlipTokens}>
-                  <SwapIcon size={18} />
-                </button>
-              </div>
-
-              {/* Output Token */}
-              <div className="swap-input-group">
-                <label className="swap-label">You Receive</label>
-                <div className="swap-input-row">
-                  <input
-                    type="text"
-                    className="swap-amount-input"
-                    placeholder="0.00"
-                    value={loadingQuote ? 'Loading...' : outputAmountFormatted || ''}
-                    readOnly
-                  />
-                  <SwapTokenSelector
-                    selectedToken={outputToken}
-                    onSelect={handleOutputTokenSelect}
-                    chainType={activeChain}
-                    evmChainId={activeEVMChain || undefined}
-                    solanaTokens={tokens}
-                    evmTokens={evmTokens}
-                    nativeBalance={nativeBalanceForSelector}
-                    excludeToken={inputToken}
-                    disabled={executing || tokensLoading}
-                  />
-                </div>
-              </div>
-
-              {/* Quote Details */}
-              {hasQuote && !loadingQuote && inputToken && outputToken && (
-                <div className="swap-quote-details">
-                  <div className="swap-quote-row">
-                    <span>Rate</span>
-                    <span>
-                      1 {inputToken.symbol} ≈{' '}
-                      {outputAmountFormatted && inputAmount
-                        ? (parseFloat(outputAmountFormatted) / parseFloat(inputAmount)).toFixed(6)
-                        : '0'}{' '}
-                      {outputToken.symbol}
-                    </span>
-                  </div>
-                  <div className="swap-quote-row">
-                    <span>Min. Received</span>
-                    <span>
-                      {minimumReceivedFormatted} {outputToken.symbol}
-                    </span>
-                  </div>
-                  {priceImpact && (
-                    <div className="swap-quote-row">
-                      <span>Price Impact</span>
-                      <span className={parseFloat(priceImpact) > 1 ? 'swap-warning' : ''}>
-                        {priceImpact}
-                      </span>
-                    </div>
-                  )}
-                  {evmQuote?.gasCostUSD && (
-                    <div className="swap-quote-row">
-                      <span>Est. Gas Cost</span>
-                      <span>${parseFloat(evmQuote.gasCostUSD).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="swap-quote-row">
-                    <span>Route</span>
-                    <span className="swap-route">{routeDisplay || 'Direct'}</span>
-                  </div>
-                  {quote?.platformFeeFormatted && referralStatus?.enabled && (
-                    <div className="swap-quote-row">
-                      <span>Platform Fee ({referralStatus.feeBps / 100}%)</span>
-                      <span>
-                        {quote.platformFeeFormatted} {outputToken.symbol}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Slippage Setting */}
-              <div className="swap-slippage">
-                <span>Slippage Tolerance</span>
-                <div className="swap-slippage-options">
-                  {[50, 100, 200].map((bps) => (
-                    <button
-                      key={bps}
-                      className={`swap-slippage-btn ${slippageBps === bps ? 'active' : ''}`}
-                      onClick={() => setSlippageBps(bps)}
-                    >
-                      {bps / 100}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Error Message */}
-              {error && <div className="swap-error">{error}</div>}
-
-              {/* Swap Button */}
-              <button
-                className="btn btn-primary btn-block swap-execute-btn"
-                onClick={handleSwap}
-                disabled={
-                  !inputToken ||
-                  !outputToken ||
-                  !hasQuote ||
-                  executing ||
-                  loadingQuote ||
-                  tokensLoading ||
-                  !inputAmount ||
-                  parseFloat(inputAmount) <= 0 ||
-                  (inputBalance !== null && parseFloat(inputAmount) > inputBalance) ||
-                  !swapAvailable
-                }
-              >
-                {tokensLoading ? (
-                  'Loading Tokens...'
-                ) : executing ? (
-                  <>
-                    <span className="spinner small" />
-                    {swapStatus || 'Swapping...'}
-                  </>
-                ) : loadingQuote ? (
-                  'Getting Quote...'
-                ) : !swapAvailable ? (
-                  'Swap Not Available'
-                ) : !inputToken || !outputToken ? (
-                  'Select Tokens'
-                ) : !inputAmount || parseFloat(inputAmount) <= 0 ? (
-                  'Enter Amount'
-                ) : inputBalance !== null && parseFloat(inputAmount) > inputBalance ? (
-                  'Insufficient Balance'
-                ) : !hasQuote ? (
-                  'Unable to Quote'
-                ) : (
-                  <>
-                    <SwapIcon size={16} />
-                    Swap {inputToken.symbol} for {outputToken.symbol}
-                  </>
-                )}
-              </button>
-
-              {/* External Swap Fallback */}
-              <div className="swap-external-option">
-                <button className="swap-external-btn" onClick={() => setUseInAppSwap(false)}>
-                  <ExternalLinkIcon size={14} />
-                  Use {externalSwapName} Website Instead
-                </button>
-              </div>
-
-              {/* Powered by */}
-              <div className="swap-powered-by">
-                <span>Powered by</span>
-                <img
-                  src={poweredByLogo}
-                  alt={poweredByName}
-                  className="swap-jupiter-logo"
-                  onError={(e) => {
-                    // Fallback if ParaSwap logo fails to load
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-                <span>{poweredByName}</span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
+// Extract domain from URL for favicon fetching
+const getDomainFromUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch {
+    return '';
   }
+};
 
-  // External DEX UI (fallback for EVM chains, devnet, or user preference)
+// Dynamic favicon URL using Google's service (reliable, supports high-res)
+const getFaviconUrl = (domain: string, size: number = 64): string => {
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`;
+};
+
+const PARTNERS: Partner[] = [
+  {
+    id: 'proton',
+    name: 'Proton',
+    description: 'Private email, VPN, cloud storage & password manager with end-to-end encryption.',
+    affiliateUrl: 'https://proton.me/l/special-unlimited-offer?url_id=1198',
+    fallbackGradient: 'linear-gradient(135deg, #6d4aff 0%, #8b5cf6 100%)',
+  },
+  {
+    id: 'purism',
+    name: 'Purism',
+    description: 'High-quality laptops and phones that protect your freedom and privacy.',
+    affiliateUrl: 'https://shop.puri.sm/?wpam_id=1074',
+    fallbackGradient: 'linear-gradient(135deg, #2d3748 0%, #4a5568 100%)',
+    logoDomain: 'puri.sm',
+  },
+  {
+    id: 'incogni',
+    name: 'Incogni',
+    description: 'Remove your personal data from data brokers and reduce identity theft risk.',
+    affiliateUrl: 'https://deal.incogni.io/SH5X',
+    fallbackGradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    logoDomain: 'incogni.io',
+  },
+  {
+    id: 'scarce-city',
+    name: 'Scarce City',
+    description: 'Bitcoin marketplace for unique art, collectibles, and physical goods.',
+    affiliateUrl: 'https://scarce.city/',
+    fallbackGradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+  },
+  {
+    id: 'bill-keonne',
+    name: 'Bill & Keonne',
+    description: 'Supporting Bill and Keonne, the Samourai Wallet developers and their loved ones.',
+    affiliateUrl: 'https://billandkeonne.org/',
+    fallbackGradient: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+    useFallbackOnly: true,
+  },
+];
+
+// Dynamic Partner Logo component with fallback
+interface PartnerLogoProps {
+  partner: Partner;
+}
+
+const PartnerLogo: React.FC<PartnerLogoProps> = ({ partner }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  
+  const domain = partner.logoDomain || getDomainFromUrl(partner.affiliateUrl);
+  const faviconUrl = getFaviconUrl(domain, 64);
+  const initials = partner.name.split(' ').map(w => w[0]).join('');
+  
+  const showFallback = partner.useFallbackOnly || !imageLoaded || imageError;
+
   return (
-    <div className="swap-view">
-      <div className="form-header">
-        <h3>Swap Tokens</h3>
-        <button className="close-btn" onClick={onClose}>
-          <CloseIcon size={14} />
-        </button>
-      </div>
-
-      <div className="swap-content">
-        <div className="swap-icon-container">
-          <SwapIcon size={48} />
-        </div>
-        <p className="swap-description">{dexInfo.description}</p>
-
-        <div className="swap-info">
-          <div className="swap-info-item">
-            <span className="swap-info-label">Your Wallet</span>
-            <span className="swap-info-value">{truncateAddress(address, 6)}</span>
-          </div>
-          <div className="swap-info-item">
-            <span className="swap-info-label">Network</span>
-            <span className="swap-info-value">{chainName}</span>
-          </div>
-        </div>
-
-        {/* Copy address for easy pasting in DEX */}
-        <button
-          className="btn btn-secondary btn-block"
-          onClick={copyAddress}
-          style={{ marginBottom: '12px' }}
-        >
-          {copied ? (
-            <>
-              <CheckIcon size={16} />
-              Address Copied!
-            </>
-          ) : (
-            <>
-              <CopyIcon size={16} />
-              Copy Wallet Address
-            </>
-          )}
-        </button>
-
-        <div className="swap-options">
-          <button
-            className="btn btn-primary btn-block"
-            onClick={openDexPopup}
-            style={{ marginBottom: '8px' }}
-          >
-            <SwapIcon size={16} />
-            Open {dexInfo.name} Swap
-          </button>
-          <button className="btn btn-secondary btn-block" onClick={openDexTab}>
-            <ExternalLinkIcon size={16} />
-            Open in New Tab
-          </button>
-        </div>
-
-        <p className="swap-note">
-          {dexInfo.note} Copy your address above if you need to send tokens back to this wallet.
-        </p>
-
-        {/* Option to use in-app swap if available */}
-        {swapAvailable && (
-          <div className="swap-inapp-option">
-            <button className="swap-inapp-btn" onClick={() => setUseInAppSwap(true)}>
-              <SwapIcon size={14} />
-              Use In-App Swap
-            </button>
-          </div>
-        )}
-      </div>
+    <div
+      className="partner-logo"
+      style={{ background: showFallback ? partner.fallbackGradient : 'var(--bg-tertiary)' }}
+    >
+      {!partner.useFallbackOnly && !imageError && (
+        <img
+          src={faviconUrl}
+          alt={`${partner.name} logo`}
+          className={`partner-logo-img ${imageLoaded ? 'loaded' : ''}`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageError(true)}
+        />
+      )}
+      {showFallback && (
+        <span className="partner-logo-text">{initials}</span>
+      )}
     </div>
   );
 };
 
-// --- Manage Wallets View ---
-
-interface ManageWalletsViewProps {
-  activeWalletId: string | null;
+interface PartnersModalProps {
+  isOpen: boolean;
   onClose: () => void;
-  onAddWallet: () => void;
-  onWalletSwitch: () => void;
 }
 
-const ManageWalletsView: React.FC<ManageWalletsViewProps> = ({
-  activeWalletId,
-  onClose,
-  onAddWallet,
-  onWalletSwitch,
-}) => {
-  const [wallets, setWallets] = useState<WalletEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editingWalletId, setEditingWalletId] = useState<string | null>(null);
-  const [editLabel, setEditLabel] = useState('');
-  const [deletingWalletId, setDeletingWalletId] = useState<string | null>(null);
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  // Export states
-  const [exportingWalletId, setExportingWalletId] = useState<string | null>(null);
-  const [exportType, setExportType] = useState<'mnemonic' | 'privateKey' | null>(null);
-  const [exportedData, setExportedData] = useState<string | null>(null);
-  const [exportChain, setExportChain] = useState<'solana' | 'evm'>('solana');
-  const [copied, setCopied] = useState(false);
+const PartnersModal: React.FC<PartnersModalProps> = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
 
-  useEffect(() => {
-    fetchWallets();
-  }, []);
-
-  const fetchWallets = async () => {
-    setLoading(true);
-    const res = await sendToBackground({ type: 'WALLET_LIST', payload: undefined });
-    if (res.success && res.data) {
-      setWallets(res.data as WalletEntry[]);
-    }
-    setLoading(false);
-  };
-
-  const handleRename = async () => {
-    if (!editingWalletId || !editLabel.trim()) return;
-    setProcessing(true);
-    setError('');
-
-    try {
-      const res = await sendToBackground({
-        type: 'WALLET_RENAME',
-        payload: { walletId: editingWalletId, label: editLabel.trim() },
-      });
-
-      if (res.success) {
-        setEditingWalletId(null);
-        setEditLabel('');
-        await fetchWallets();
-      } else {
-        setError(res.error || 'Failed to rename wallet');
-      }
-    } catch {
-      setError('Failed to rename wallet');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deletingWalletId || !password) return;
-    setProcessing(true);
-    setError('');
-
-    try {
-      const res = await sendToBackground({
-        type: 'WALLET_DELETE_ONE',
-        payload: { walletId: deletingWalletId, password },
-      });
-
-      if (res.success) {
-        setDeletingWalletId(null);
-        setPassword('');
-        await fetchWallets();
-        onWalletSwitch(); // Refresh wallet state
-      } else {
-        setError(res.error || 'Failed to delete wallet');
-      }
-    } catch {
-      setError('Failed to delete wallet');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleSwitch = async (walletId: string) => {
-    if (!walletId) return;
-    setProcessing(true);
-    setError('');
-
-    try {
-      const res = await sendToBackground({
-        type: 'WALLET_SWITCH',
-        payload: { walletId },
-      });
-
-      if (res.success) {
-        onWalletSwitch();
-        onClose();
-      } else {
-        setError(res.error || 'Failed to switch wallet');
-      }
-    } catch {
-      setError('Failed to switch wallet');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const startEdit = (wallet: WalletEntry) => {
-    setEditingWalletId(wallet.id);
-    setEditLabel(wallet.label);
-    setDeletingWalletId(null);
-    setError('');
-  };
-
-  const startDelete = (walletId: string) => {
-    setDeletingWalletId(walletId);
-    setEditingWalletId(null);
-    setPassword('');
-    setError('');
-  };
-
-  // Direct wallet switch - no password needed since wallet is already unlocked
-  const startSwitch = (walletId: string) => {
-    handleSwitch(walletId);
-  };
-
-  const cancelAction = () => {
-    setEditingWalletId(null);
-    setDeletingWalletId(null);
-    setExportingWalletId(null);
-    setExportType(null);
-    setExportedData(null);
-    setPassword('');
-    setError('');
-    setCopied(false);
-  };
-
-  const startExportMnemonic = (walletId: string) => {
-    setExportingWalletId(walletId);
-    setExportType('mnemonic');
-    setExportedData(null);
-    setEditingWalletId(null);
-    setDeletingWalletId(null);
-    setPassword('');
-    setError('');
-    setCopied(false);
-  };
-
-  const startExportPrivateKey = (walletId: string) => {
-    setExportingWalletId(walletId);
-    setExportType('privateKey');
-    setExportedData(null);
-    setExportChain('solana');
-    setEditingWalletId(null);
-    setDeletingWalletId(null);
-    setPassword('');
-    setError('');
-    setCopied(false);
-  };
-
-  const handleExport = async () => {
-    if (!exportingWalletId || !password || !exportType) return;
-    setProcessing(true);
-    setError('');
-
-    try {
-      if (exportType === 'mnemonic') {
-        const res = await sendToBackground({
-          type: 'WALLET_EXPORT_ONE',
-          payload: { walletId: exportingWalletId, password },
-        });
-        if (res.success && res.data) {
-          const data = res.data as { mnemonic: string };
-          setExportedData(data.mnemonic);
-        } else {
-          setError(res.error || 'Failed to export recovery phrase');
-        }
-      } else {
-        const res = await sendToBackground({
-          type: 'WALLET_EXPORT_PRIVATE_KEY',
-          payload: { walletId: exportingWalletId, password, chain: exportChain },
-        });
-        if (res.success && res.data) {
-          const data = res.data as { privateKey: string };
-          setExportedData(data.privateKey);
-        } else {
-          setError(res.error || 'Failed to export private key');
-        }
-      }
-    } catch {
-      setError('Failed to export');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleCopyExported = async () => {
-    if (!exportedData) return;
-    try {
-      await navigator.clipboard.writeText(exportedData);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError('Failed to copy to clipboard');
-    }
+  const handlePartnerClick = (url: string) => {
+    chrome.tabs.create({ url });
   };
 
   return (
-    <div className="manage-wallets-view">
-      <div className="form-header">
-        <h3>Manage Wallets</h3>
-        <button className="close-btn" onClick={onClose}>
-          <CloseIcon size={14} />
-        </button>
-      </div>
-
-      <div className="wallet-count-info">
-        <span>{wallets.length} / 100 wallets</span>
-      </div>
-
-      {loading ? (
-        <div className="empty-state">
-          <div className="spinner" />
+    <div className="partners-modal-overlay" onClick={onClose}>
+      <div className="partners-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="partners-modal-header">
+          <h2>Our Partners</h2>
+          <button className="partners-modal-close" onClick={onClose} aria-label="Close">
+            <CloseIcon size={20} />
+          </button>
         </div>
-      ) : (
-        <div className="wallets-list">
-          {wallets.map((wallet) => (
-            <div
-              key={wallet.id}
-              className={`wallet-list-item ${wallet.id === activeWalletId ? 'active' : ''}`}
-            >
-              {editingWalletId === wallet.id ? (
-                <div className="wallet-edit-row">
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    maxLength={32}
-                    autoFocus
-                  />
-                  <div className="wallet-edit-actions">
-                    <button
-                      className="btn btn-sm btn-primary"
-                      onClick={handleRename}
-                      disabled={processing || !editLabel.trim()}
-                    >
-                      Save
-                    </button>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={cancelAction}
-                      disabled={processing}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : deletingWalletId === wallet.id ? (
-                <div className="wallet-confirm-row">
-                  <p className="confirm-text">Delete "{wallet.label}"?</p>
-                  <div className="password-input-wrapper">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      className="form-input"
-                      placeholder="Enter password to confirm"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      className="password-toggle-btn"
-                      onClick={() => setShowPassword(!showPassword)}
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                    </button>
-                  </div>
-                  {error && <div className="form-error">{error}</div>}
-                  <div className="wallet-edit-actions">
-                    <button
-                      className="btn btn-sm btn-danger"
-                      onClick={handleDelete}
-                      disabled={processing || !password}
-                    >
-                      {processing ? 'Deleting...' : 'Delete'}
-                    </button>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={cancelAction}
-                      disabled={processing}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : exportingWalletId === wallet.id ? (
-                <div className="wallet-confirm-row">
-                  {exportedData ? (
-                    <>
-                      <p className="confirm-text" style={{ color: 'var(--warning)' }}>
-                        ⚠️ {exportType === 'mnemonic' ? 'Recovery Phrase' : 'Private Key'} - Keep
-                        this secret!
-                      </p>
-                      <div
-                        className="full-address"
-                        style={{
-                          marginBottom: 'var(--space-sm)',
-                          lineHeight: 1.6,
-                          wordBreak: 'break-all',
-                          fontSize: '0.75rem',
-                          background: 'var(--bg-tertiary)',
-                          padding: 'var(--space-sm)',
-                          borderRadius: 'var(--radius-sm)',
-                          maxHeight: '120px',
-                          overflowY: 'auto',
-                        }}
-                      >
-                        {exportedData}
-                      </div>
-                      <div className="wallet-edit-actions">
-                        <button className="btn btn-sm btn-primary" onClick={handleCopyExported}>
-                          {copied ? (
-                            <>
-                              <CheckIcon size={12} /> Copied!
-                            </>
-                          ) : (
-                            <>
-                              <CopyIcon size={12} /> Copy
-                            </>
-                          )}
-                        </button>
-                        <button className="btn btn-sm btn-secondary" onClick={cancelAction}>
-                          Done
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="confirm-text">
-                        {exportType === 'mnemonic'
-                          ? `Export recovery phrase for "${wallet.label}"?`
-                          : `Export private key for "${wallet.label}"?`}
-                      </p>
-                      {exportType === 'privateKey' && (
-                        <div style={{ marginBottom: 'var(--space-sm)' }}>
-                          <label
-                            style={{
-                              fontSize: '0.7rem',
-                              color: 'var(--text-secondary)',
-                              marginBottom: '4px',
-                              display: 'block',
-                            }}
-                          >
-                            Select chain:
-                          </label>
-                          <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
-                            <button
-                              className={`btn btn-sm ${exportChain === 'solana' ? 'btn-primary' : 'btn-secondary'}`}
-                              onClick={() => setExportChain('solana')}
-                              style={{ flex: 1 }}
-                            >
-                              Solana
-                            </button>
-                            <button
-                              className={`btn btn-sm ${exportChain === 'evm' ? 'btn-primary' : 'btn-secondary'}`}
-                              onClick={() => setExportChain('evm')}
-                              style={{ flex: 1 }}
-                            >
-                              EVM
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <div className="password-input-wrapper">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          className="form-input"
-                          placeholder="Enter password to export"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          className="password-toggle-btn"
-                          onClick={() => setShowPassword(!showPassword)}
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                        </button>
-                      </div>
-                      {error && <div className="form-error">{error}</div>}
-                      <div className="wallet-edit-actions">
-                        <button
-                          className="btn btn-sm btn-warning"
-                          onClick={handleExport}
-                          disabled={processing || !password}
-                        >
-                          {processing ? 'Exporting...' : 'Export'}
-                        </button>
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={cancelAction}
-                          disabled={processing}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div
-                    className="wallet-item-main"
-                    onClick={() => wallet.id !== activeWalletId && startSwitch(wallet.id)}
-                  >
-                    <div className="wallet-item-info">
-                      <span className="wallet-item-label">{wallet.label}</span>
-                      <span className="wallet-item-address">
-                        {truncateAddress(wallet.publicKey, 6)}
-                      </span>
-                    </div>
-                    {wallet.id === activeWalletId && <span className="active-badge">Active</span>}
-                  </div>
-                  <div className="wallet-item-actions">
-                    <button className="icon-btn" onClick={() => startEdit(wallet)} title="Rename">
-                      <EditIcon size={14} />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      onClick={() => startExportMnemonic(wallet.id)}
-                      title="Show Recovery Phrase"
-                    >
-                      <KeyIcon size={14} />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      onClick={() => startExportPrivateKey(wallet.id)}
-                      title="Export Private Key"
-                    >
-                      <LockIcon size={14} />
-                    </button>
-                    {wallets.length > 1 && (
-                      <button
-                        className="icon-btn danger"
-                        onClick={() => startDelete(wallet.id)}
-                        title="Delete"
-                      >
-                        <TrashIcon size={14} />
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
+        <p className="partners-modal-subtitle">
+          Trusted services we recommend. Clicking will open in a new tab.
+        </p>
+        <div className="partners-grid">
+          {PARTNERS.map((partner) => (
+            <div key={partner.id} className="partner-card">
+              <PartnerLogo partner={partner} />
+              <div className="partner-info">
+                <h3 className="partner-name">{partner.name}</h3>
+                <p className="partner-description">{partner.description}</p>
+              </div>
+              <button
+                className="partner-visit-btn"
+                onClick={() => handlePartnerClick(partner.affiliateUrl)}
+              >
+                <span>Visit</span>
+                <ExternalLinkIcon size={14} />
+              </button>
             </div>
           ))}
         </div>
-      )}
-
-      <button
-        className="btn btn-secondary btn-block"
-        onClick={onAddWallet}
-        disabled={wallets.length >= 100}
-        style={{ marginTop: 'var(--space-md)' }}
-      >
-        <PlusIcon size={16} />
-        <span>Add Wallet</span>
-      </button>
-    </div>
-  );
-};
-
-// --- Add Wallet View ---
-
-interface AddWalletViewProps {
-  onClose: () => void;
-  onComplete: () => void;
-}
-
-const AddWalletView: React.FC<AddWalletViewProps> = ({ onClose, onComplete }) => {
-  const [mode, setMode] = useState<'select' | 'create' | 'import' | 'importPrivateKey'>('select');
-  const [mnemonic, setMnemonic] = useState('');
-  const [privateKey, setPrivateKey] = useState('');
-  const [label, setLabel] = useState('');
-  const [generatedMnemonic, setGeneratedMnemonic] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1);
-  const [showPrivateKey, setShowPrivateKey] = useState(false);
-  const [showMnemonic, setShowMnemonic] = useState(false);
-
-  // No password needed - wallet is already unlocked when this view is accessible
-  const handleCreate = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await sendToBackground({
-        type: 'WALLET_ADD',
-        payload: { label: label || undefined },
-      });
-
-      if (response.success && response.data) {
-        const data = response.data as { mnemonic: string; publicAddress: string; walletId: string };
-        setGeneratedMnemonic(data.mnemonic);
-        setStep(2);
-      } else {
-        setError(response.error || 'Failed to create wallet');
-      }
-    } catch {
-      setError('Failed to create wallet');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleImport = async () => {
-    if (!mnemonic.trim()) {
-      setError('Recovery phrase is required');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await sendToBackground({
-        type: 'WALLET_IMPORT_ADD',
-        payload: {
-          mnemonic: mnemonic.trim(),
-          label: label || undefined,
-        },
-      });
-
-      if (response.success) {
-        onComplete();
-      } else {
-        setError(response.error || 'Failed to import wallet');
-      }
-    } catch {
-      setError('Failed to import wallet');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleImportPrivateKey = async () => {
-    if (!privateKey.trim()) {
-      setError('Private key is required');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await sendToBackground({
-        type: 'WALLET_IMPORT_PRIVATE_KEY',
-        payload: {
-          privateKey: privateKey.trim(),
-          label: label || undefined,
-        },
-      });
-
-      if (response.success) {
-        onComplete();
-      } else {
-        setError(response.error || 'Failed to import wallet from private key');
-      }
-    } catch {
-      setError('Failed to import wallet from private key');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (mode === 'select') {
-    return (
-      <div className="add-wallet-view">
-        <div className="form-header">
-          <h3>Add Wallet</h3>
-          <button className="close-btn" onClick={onClose}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-        <div className="wallet-setup-actions">
-          <button className="btn btn-primary btn-block" onClick={() => setMode('create')}>
-            Create New Wallet
-          </button>
-          <button className="btn btn-secondary btn-block" onClick={() => setMode('import')}>
-            Import with Recovery Phrase
-          </button>
-          <button
-            className="btn btn-secondary btn-block"
-            onClick={() => setMode('importPrivateKey')}
-          >
-            Import with Private Key
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === 'create') {
-    if (step === 1) {
-      return (
-        <div className="add-wallet-view">
-          <div className="form-header">
-            <h3>Create New Wallet</h3>
-            <button className="close-btn" onClick={onClose}>
-              <CloseIcon size={14} />
-            </button>
-          </div>
-          <div className="unlock-form">
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Wallet label (optional)"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              maxLength={32}
-            />
-            {error && <div className="form-error">{error}</div>}
-            <button className="btn btn-primary btn-block" onClick={handleCreate} disabled={loading}>
-              {loading ? 'Creating...' : 'Create Wallet'}
-            </button>
-            <button
-              className="btn btn-secondary btn-block"
-              onClick={() => {
-                setMode('select');
-                setError('');
-              }}
-            >
-              Back
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="add-wallet-view">
-        <div className="form-header">
-          <h3>Save Recovery Phrase</h3>
-          <button className="close-btn" onClick={onComplete}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-        <p
-          style={{ color: 'var(--warning)', marginBottom: 'var(--space-md)', fontSize: '0.75rem' }}
-        >
-          Write these words down and store them safely. Anyone with this phrase can access this
-          wallet.
-        </p>
-        <div className="full-address" style={{ marginBottom: 'var(--space-lg)', lineHeight: 1.6 }}>
-          {generatedMnemonic}
-        </div>
-        <button className="btn btn-primary btn-block" onClick={onComplete}>
-          I've Saved My Phrase
-        </button>
-      </div>
-    );
-  }
-
-  if (mode === 'importPrivateKey') {
-    return (
-      <div className="add-wallet-view">
-        <div className="form-header">
-          <h3>Import Private Key</h3>
-          <button className="close-btn" onClick={onClose}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-        <div className="unlock-form">
-          <input
-            type="text"
-            className="form-input"
-            placeholder="Wallet label (optional)"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            maxLength={32}
-          />
-          <div className="password-input-wrapper">
-            <input
-              type={showPrivateKey ? 'text' : 'password'}
-              className="form-input"
-              placeholder="Enter private key (Base58 or Hex)"
-              value={privateKey}
-              onChange={(e) => setPrivateKey(e.target.value)}
-              style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-            />
-            <button
-              type="button"
-              className="password-toggle-btn"
-              onClick={() => setShowPrivateKey(!showPrivateKey)}
-              tabIndex={-1}
-            >
-              {showPrivateKey ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-            </button>
-          </div>
-          <p
-            style={{
-              fontSize: '0.65rem',
-              color: 'var(--text-secondary)',
-              marginTop: '-8px',
-              marginBottom: 'var(--space-sm)',
-            }}
-          >
-            Accepts Solana (Base58/Hex) or EVM (0x hex) private keys
-          </p>
-          {error && <div className="form-error">{error}</div>}
-          <button
-            className="btn btn-primary btn-block"
-            onClick={handleImportPrivateKey}
-            disabled={loading || !privateKey}
-          >
-            {loading ? 'Importing...' : 'Import Wallet'}
-          </button>
-          <button
-            className="btn btn-secondary btn-block"
-            onClick={() => {
-              setMode('select');
-              setError('');
-              setPrivateKey('');
-            }}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="add-wallet-view">
-      <div className="form-header">
-        <h3>Import Wallet</h3>
-        <button className="close-btn" onClick={onClose}>
-          <CloseIcon size={14} />
-        </button>
-      </div>
-      <div className="unlock-form">
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Wallet label (optional)"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          maxLength={32}
-        />
-        <div className="password-input-wrapper">
-          <textarea
-            className={`form-input form-textarea modern-scroll ${showMnemonic ? '' : 'mask-text'}`}
-            placeholder="Enter 12 or 24 word recovery phrase..."
-            value={mnemonic}
-            onChange={(e) => setMnemonic(e.target.value)}
-            rows={3}
-            style={{ fontFamily: 'monospace' }}
-          />
-          <button
-            type="button"
-            className="password-toggle-btn"
-            onClick={() => setShowMnemonic(!showMnemonic)}
-            tabIndex={-1}
-            style={{ top: '10px' }}
-          >
-            {showMnemonic ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-          </button>
-        </div>
-        {error && <div className="form-error">{error}</div>}
-        <button
-          className="btn btn-primary btn-block"
-          onClick={handleImport}
-          disabled={loading || !mnemonic}
-        >
-          {loading ? 'Importing...' : 'Import Wallet'}
-        </button>
-        <button
-          className="btn btn-secondary btn-block"
-          onClick={() => {
-            setMode('select');
-            setError('');
-          }}
-        >
-          Back
-        </button>
       </div>
     </div>
   );
@@ -6118,6 +5636,15 @@ const App: React.FC = () => {
 
   // Hide balances privacy mode (stored in session, clears on browser restart)
   const [hideBalances, toggleHideBalances] = useHideBalances();
+
+  // Partners modal state
+  const [showPartnersModal, setShowPartnersModal] = useState(false);
+
+  // Monero setup modal state
+  const [showMoneroSetup, setShowMoneroSetup] = useState(false);
+
+  // Trigger swap from store (for buying AINTI)
+  const [triggerSwapFromStore, setTriggerSwapFromStore] = useState(false);
 
   // State for passing to swap view
   const [swapTokens, setSwapTokens] = useState<SPLTokenBalance[]>([]);
@@ -6185,6 +5712,28 @@ const App: React.FC = () => {
     } catch (error) {}
   }, []);
 
+  // Periodically check wallet state to detect auto-lock from inactivity
+  // This ensures the UI shows the locked screen when the wallet was locked while popup was closed
+  useEffect(() => {
+    if (!walletState || walletState.lockState === 'uninitialized') return;
+    
+    // Check wallet state every 5 seconds to detect auto-lock
+    const checkInterval = setInterval(async () => {
+      try {
+        const response = await sendToBackground({ type: 'WALLET_GET_STATE', payload: undefined });
+        if (response.success && response.data) {
+          const state = response.data as WalletState;
+          // If the wallet got locked (e.g., from inactivity timer), update UI
+          if (state.lockState === 'locked' && walletState?.lockState === 'unlocked') {
+            setWalletState(state);
+          }
+        }
+      } catch (error) {}
+    }, 5000);
+
+    return () => clearInterval(checkInterval);
+  }, [walletState]);
+
   // Keep currentTabIdRef in sync with currentTabId state
   useEffect(() => {
     currentTabIdRef.current = currentTabId;
@@ -6211,6 +5760,12 @@ const App: React.FC = () => {
     });
 
     fetchWalletState();
+    
+    // Defensive re-fetch after a short delay to handle service worker cold start timing issues
+    // This ensures wallet state is properly populated even if the first fetch returned incomplete data
+    const refreshTimeout = setTimeout(() => {
+      fetchWalletState();
+    }, 500);
 
     const unsubscribe = onFeatureFlagsChange((newFlags) => {
       setFlags(newFlags);
@@ -6219,6 +5774,7 @@ const App: React.FC = () => {
     return () => {
       chrome.tabs.onActivated.removeListener(handleTabActivated);
       unsubscribe();
+      clearTimeout(refreshTimeout);
     };
   }, [fetchWalletState]);
 
@@ -6327,6 +5883,24 @@ const App: React.FC = () => {
           <WalletIcon size={16} />
           <span>Wallet</span>
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'store' ? 'active' : ''}`}
+          onClick={() => setActiveTab('store')}
+          role="tab"
+          aria-selected={activeTab === 'store'}
+        >
+          <StoreIcon size={16} />
+          <span>Store</span>
+        </button>
+
+        <button
+          className="icon-btn partners-btn"
+          onClick={() => setShowPartnersModal(true)}
+          title="Partners"
+          aria-label="View partners"
+        >
+          <PartnersIcon size={18} />
+        </button>
 
         <button
           className="icon-btn settings-btn"
@@ -6355,6 +5929,21 @@ const App: React.FC = () => {
           hideBalances={hideBalances}
           onToggleHideBalances={toggleHideBalances}
           privacyEnabled={flags.wallet}
+          onShowMoneroSetup={() => setShowMoneroSetup(true)}
+          triggerSwap={triggerSwapFromStore}
+          onSwapTriggered={() => setTriggerSwapFromStore(false)}
+        />
+      )}
+
+      {activeTab === 'store' && (
+        <StoreTab 
+          walletState={walletState} 
+          onWalletStateChange={fetchWalletState}
+          onBuyAinti={() => {
+            // Navigate to wallet tab and trigger swap view
+            setTriggerSwapFromStore(true);
+            setActiveTab('wallet');
+          }}
         />
       )}
 
@@ -6370,6 +5959,12 @@ const App: React.FC = () => {
             <div className={`status-badge ${flags.wallet ? '' : 'inactive'}`}>
               <span className={`status-dot ${flags.wallet ? '' : 'inactive'}`} />
               <span>{flags.wallet ? 'Wallet Security Active' : 'Wallet Security Off'}</span>
+            </div>
+          )}
+          {activeTab === 'store' && (
+            <div className="status-badge">
+              <span className="status-dot" />
+              <span>Aintivirus Store</span>
             </div>
           )}
           {walletState && walletState.lockState === 'unlocked' && walletState.network && (
@@ -6389,8 +5984,22 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-        <span className="version-text">v0.2.0</span>
+        <span className="version-text">v2.0.0</span>
       </footer>
+
+      <PartnersModal isOpen={showPartnersModal} onClose={() => setShowPartnersModal(false)} />
+
+      {showMoneroSetup && (
+        <MoneroSetupModal
+          onClose={() => setShowMoneroSetup(false)}
+          onSuccess={() => {
+            setShowMoneroSetup(false);
+            // Refresh the wallet state to pick up the new Monero config
+            fetchWalletState();
+          }}
+          testnet={walletState?.networkEnvironment === 'testnet'}
+        />
+      )}
     </div>
   );
 };

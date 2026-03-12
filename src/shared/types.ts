@@ -150,6 +150,7 @@ export type MessageType =
   | WalletMessageType
   | 'GET_SOL_PRICE'
   | 'GET_ETH_PRICE'
+  | 'GET_EVM_NATIVE_PRICE'
   | 'GET_TOKEN_PRICES'
   | SecurityMessageType
   | 'DAPP_REQUEST'
@@ -302,6 +303,10 @@ export type WalletSendSPLTokenMessage = BaseMessage<
   'WALLET_SEND_SPL_TOKEN',
   WalletMessagePayloads['WALLET_SEND_SPL_TOKEN']
 >;
+export type WalletProcessStorePaymentMessage = BaseMessage<
+  'WALLET_PROCESS_STORE_PAYMENT',
+  WalletMessagePayloads['WALLET_PROCESS_STORE_PAYMENT']
+>;
 export type WalletEstimateFeeMessage = BaseMessage<
   'WALLET_ESTIMATE_FEE',
   WalletMessagePayloads['WALLET_ESTIMATE_FEE']
@@ -396,6 +401,24 @@ export type WalletSendERC20Message = BaseMessage<
   'WALLET_SEND_ERC20',
   WalletMessagePayloads['WALLET_SEND_ERC20']
 >;
+// Bitcoin-family chain messages
+export type WalletSendBTCMessage = BaseMessage<
+  'WALLET_SEND_BTC',
+  WalletMessagePayloads['WALLET_SEND_BTC']
+>;
+export type WalletEstimateBTCFeeMessage = BaseMessage<
+  'WALLET_ESTIMATE_BTC_FEE',
+  WalletMessagePayloads['WALLET_ESTIMATE_BTC_FEE']
+>;
+// TRON chain messages
+export type WalletSendTRXMessage = BaseMessage<
+  'WALLET_SEND_TRX',
+  WalletMessagePayloads['WALLET_SEND_TRX']
+>;
+export type WalletEstimateTRXFeeMessage = BaseMessage<
+  'WALLET_ESTIMATE_TRX_FEE',
+  WalletMessagePayloads['WALLET_ESTIMATE_TRX_FEE']
+>;
 export type WalletGetEVMTokensMessage = BaseMessage<
   'WALLET_GET_EVM_TOKENS',
   WalletMessagePayloads['WALLET_GET_EVM_TOKENS']
@@ -409,6 +432,10 @@ export type WalletEstimateEVMFeeMessage = BaseMessage<
   WalletMessagePayloads['WALLET_ESTIMATE_EVM_FEE']
 >;
 export type WalletGetEVMAddressMessage = BaseMessage<'WALLET_GET_EVM_ADDRESS'>;
+export type WalletGetChainAddressMessage = BaseMessage<
+  'WALLET_GET_CHAIN_ADDRESS',
+  WalletMessagePayloads['WALLET_GET_CHAIN_ADDRESS']
+>;
 
 export type EVMGetPendingTxsMessage = BaseMessage<
   'EVM_GET_PENDING_TXS',
@@ -455,6 +482,20 @@ export type WalletSwapExecuteMessage = BaseMessage<
 >;
 export type WalletSwapAvailableMessage = BaseMessage<'WALLET_SWAP_AVAILABLE'>;
 export type WalletSwapReferralStatusMessage = BaseMessage<'WALLET_SWAP_REFERRAL_STATUS'>;
+
+// Swap Token Discovery messages (routes through background for CORS)
+export type SwapGetPopularTokensMessage = BaseMessage<
+  'SWAP_GET_POPULAR_TOKENS',
+  WalletMessagePayloads['SWAP_GET_POPULAR_TOKENS']
+>;
+export type SwapSearchTokensMessage = BaseMessage<
+  'SWAP_SEARCH_TOKENS',
+  WalletMessagePayloads['SWAP_SEARCH_TOKENS']
+>;
+export type SwapGetTokenByAddressMessage = BaseMessage<
+  'SWAP_GET_TOKEN_BY_ADDRESS',
+  WalletMessagePayloads['SWAP_GET_TOKEN_BY_ADDRESS']
+>;
 
 // EVM Swap messages (ParaSwap)
 export type EVMSwapQuoteMessage = BaseMessage<
@@ -542,7 +583,8 @@ export type SecuritySetProgramTrustMessage = BaseMessage<
 
 export type GetSolPriceMessage = BaseMessage<'GET_SOL_PRICE'>;
 export type GetEthPriceMessage = BaseMessage<'GET_ETH_PRICE'>;
-export type GetTokenPricesMessage = BaseMessage<'GET_TOKEN_PRICES', { mints: string[] }>;
+export type GetEvmNativePriceMessage = BaseMessage<'GET_EVM_NATIVE_PRICE', { evmChainId: string }>;
+export type GetTokenPricesMessage = BaseMessage<'GET_TOKEN_PRICES', { mints: string[]; chainId?: string }>;
 
 export type DappRequestMessage = BaseMessage<
   'DAPP_REQUEST',
@@ -675,6 +717,7 @@ export type ExtensionMessage =
   | WalletSetSettingsMessage
   | WalletSendSolMessage
   | WalletSendSPLTokenMessage
+  | WalletProcessStorePaymentMessage
   | WalletEstimateFeeMessage
   | WalletGetHistoryMessage
   | WalletGetTokensMessage
@@ -701,10 +744,17 @@ export type ExtensionMessage =
   | WalletGetEVMBalanceMessage
   | WalletSendETHMessage
   | WalletSendERC20Message
+  // Bitcoin-family chains
+  | WalletSendBTCMessage
+  | WalletEstimateBTCFeeMessage
+  // TRON
+  | WalletSendTRXMessage
+  | WalletEstimateTRXFeeMessage
   | WalletGetEVMTokensMessage
   | WalletGetEVMHistoryMessage
   | WalletEstimateEVMFeeMessage
   | WalletGetEVMAddressMessage
+  | WalletGetChainAddressMessage
   | EVMGetPendingTxsMessage
   | EVMSpeedUpTxMessage
   | EVMCancelTxMessage
@@ -720,12 +770,18 @@ export type ExtensionMessage =
   | WalletSwapAvailableMessage
   | WalletSwapReferralStatusMessage
 
+  // Swap Token Discovery (routes through background for CORS)
+  | SwapGetPopularTokensMessage
+  | SwapSearchTokensMessage
+  | SwapGetTokenByAddressMessage
+
   // EVM Swap (ParaSwap)
   | EVMSwapQuoteMessage
   | EVMSwapExecuteMessage
   | EVMSwapAvailableMessage
 
   | EVMRpcRequestMessage
+
   | SecurityConnectionRequestMessage
   | SecurityConnectionApproveMessage
   | SecurityConnectionDenyMessage
@@ -746,6 +802,7 @@ export type ExtensionMessage =
   | SecuritySetProgramTrustMessage
   | GetSolPriceMessage
   | GetEthPriceMessage
+  | GetEvmNativePriceMessage
   | GetTokenPricesMessage
   | DappRequestMessage
   | DappApproveMessage
@@ -793,7 +850,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
 export const DEFAULT_STORAGE: StorageSchema = {
   featureFlags: DEFAULT_FEATURE_FLAGS,
   initialized: false,
-  version: '0.2.0',
+  version: '2.0.0',
 
   privacySettings: DEFAULT_PRIVACY_SETTINGS,
   privacySiteSettings: {},

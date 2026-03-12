@@ -18,22 +18,32 @@ import type { ChainType, EVMChainId } from '@wallet/types';
 // ============================================================================
 
 /**
- * Logo URL sources for chains (TrustWallet assets are reliable)
+ * Logo URL sources for chains (using jsDelivr CDN for reliability)
  */
 const CHAIN_LOGO_URLS: Record<string, string> = {
-  solana:
-    'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+  // ===== Original chains =====
+  solana: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png',
   ethereum:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/info/logo.png',
   polygon:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/polygon/info/logo.png',
   arbitrum:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/info/logo.png',
   optimism:
-    'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
-  base: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
-  // Add more chain logos here as you add chains to the registry
-  // The pattern is: chainId: 'logo-url'
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/info/logo.png',
+  base: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/base/info/logo.png',
+
+  // ===== New chains =====
+  bnb: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/smartchain/info/logo.png',
+  bitcoin:
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/bitcoin/info/logo.png',
+  bitcoincash:
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/bitcoincash/info/logo.png',
+  litecoin:
+    'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/litecoin/info/logo.png',
+  zcash: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/zcash/info/logo.png',
+  tron: 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/tron/info/logo.png',
+  monero: 'https://assets.coingecko.com/coins/images/69/small/monero_logo.png',
 };
 
 /**
@@ -42,8 +52,8 @@ const CHAIN_LOGO_URLS: Record<string, string> = {
 export function getChainLogoUrl(chainId: string): string {
   return (
     CHAIN_LOGO_URLS[chainId] ??
-    // Fallback to TrustWallet's generic pattern
-    `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainId}/info/logo.png`
+    // Fallback to jsDelivr CDN with TrustWallet's generic pattern
+    `https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/${chainId}/info/logo.png`
   );
 }
 
@@ -159,20 +169,37 @@ export interface ChainSelectorItem {
 }
 
 /**
+ * Chain family priority for sorting in selector
+ */
+const CHAIN_FAMILY_PRIORITY: Record<ChainFamily, number> = {
+  solana: 1,
+  evm: 2,
+  bitcoin: 3,
+  tron: 4,
+  monero: 5,
+  cosmos: 6,
+  sui: 7,
+  aptos: 8,
+};
+
+/**
  * Get all chains formatted for selector UI
  * This list is automatically updated when you add chains to CHAIN_REGISTRY
  */
 export function getChainsForSelectorUI(): ChainSelectorItem[] {
   const chains: ChainSelectorItem[] = [];
 
-  // Sort chains: Solana first, then EVM chains alphabetically
+  // Sort chains: by family priority, then alphabetically within family
   const sortedChains = Object.values(CHAIN_REGISTRY).sort((a, b) => {
-    if (a.family === 'solana' && b.family !== 'solana') return -1;
-    if (b.family === 'solana' && a.family !== 'solana') return 1;
+    const priorityA = CHAIN_FAMILY_PRIORITY[a.family] ?? 99;
+    const priorityB = CHAIN_FAMILY_PRIORITY[b.family] ?? 99;
+    if (priorityA !== priorityB) return priorityA - priorityB;
     return a.name.localeCompare(b.name);
   });
 
   for (const chain of sortedChains) {
+    // Map family to legacy ChainType (for backwards compatibility)
+    // Currently only 'solana' and 'evm' are fully supported in UI
     const type: ChainType = chain.family === 'solana' ? 'solana' : 'evm';
     chains.push({
       id: chain.id,
@@ -258,4 +285,5 @@ export function getDefaultSlippage(chainId: string): number {
 export function getDefaultSlippageLegacy(chainType: ChainType): number {
   return chainType === 'solana' ? 50 : 100;
 }
+
 

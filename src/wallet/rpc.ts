@@ -15,7 +15,6 @@ import {
 } from './types';
 import { getWalletSettings, saveWalletSettings } from './storage';
 
-// RPC helpers manage cached Solana connections, fallback URLs, and network status.
 const MAX_CACHE_SIZE = 10;
 
 interface CachedConnection {

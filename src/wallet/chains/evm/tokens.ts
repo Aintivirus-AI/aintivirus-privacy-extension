@@ -4,7 +4,6 @@ import { ChainError, ChainErrorCode } from '../types';
 import { call, withFailover, getBestProvider } from './client';
 import { isValidEVMAddress } from '../../keychain';
 
-// Token helpers for EVM (ERC-20) metadata lookups, balances, and popular token lists.
 export interface TokenMetadata {
   address: string;
   name: string;
@@ -36,7 +35,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'USDC',
       decimals: 6,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
     },
     {
       address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
@@ -44,7 +43,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'USDT',
       decimals: 6,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
     },
     {
       address: '0x6B175474E89094C44Da98b954EescdeCF54d54d2B',
@@ -52,7 +51,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'DAI',
       decimals: 18,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EeRe95cdeCF54d54d2B/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EescdeCF54d54d2B/logo.png',
     },
     {
       address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
@@ -60,7 +59,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'WBTC',
       decimals: 8,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png',
     },
     {
       address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -68,7 +67,7 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       symbol: 'WETH',
       decimals: 18,
       logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png',
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png',
     },
   ],
   polygon: [
@@ -77,20 +76,21 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
-      logoUri:
-        'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/assets/0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359/logo.png',
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
       name: 'Tether USD',
       symbol: 'USDT',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
     },
     {
       address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
   ],
   arbitrum: [
@@ -99,24 +99,29 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
       name: 'Tether USD',
       symbol: 'USDT',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
     },
     {
       address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
     {
       address: '0x912CE59144191C1204E64559FE8253a0e49E6548',
       name: 'Arbitrum',
       symbol: 'ARB',
       decimals: 18,
+      logoUri:
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/arbitrum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png',
     },
   ],
   optimism: [
@@ -125,24 +130,29 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
       name: 'Tether USD',
       symbol: 'USDT',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
     },
     {
       address: '0x4200000000000000000000000000000000000006',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
     },
     {
       address: '0x4200000000000000000000000000000000000042',
       name: 'Optimism',
       symbol: 'OP',
       decimals: 18,
+      logoUri:
+        'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/optimism/assets/0x4200000000000000000000000000000000000042/logo.png',
     },
   ],
   base: [
@@ -151,12 +161,52 @@ export const POPULAR_TOKENS: Record<EVMChainId, TokenMetadata[]> = {
       name: 'USD Coin',
       symbol: 'USDC',
       decimals: 6,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
     },
     {
       address: '0x4200000000000000000000000000000000000006',
       name: 'Wrapped Ether',
       symbol: 'WETH',
       decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+    },
+  ],
+
+  bnb: [
+    {
+      address: '0x55d398326f99059fF775485246999027B3197955',
+      name: 'Tether USD',
+      symbol: 'USDT',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+    },
+    {
+      address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      name: 'USD Coin',
+      symbol: 'USDC',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+    },
+    {
+      address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+      name: 'Binance USD',
+      symbol: 'BUSD',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png',
+    },
+    {
+      address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+      name: 'Wrapped BNB',
+      symbol: 'WBNB',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+    },
+    {
+      address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+      name: 'PancakeSwap',
+      symbol: 'CAKE',
+      decimals: 18,
+      logoUri: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
     },
   ],
 };
@@ -319,7 +369,6 @@ export async function getPopularTokenBalances(
   return results.filter((b): b is ERC20Balance => b !== null);
 }
 
-// Pre-known metadata for custom tokens to skip RPC calls (like Solana does)
 export interface PreKnownTokenMeta {
   symbol?: string;
   name?: string;
@@ -342,17 +391,13 @@ export async function getMultipleTokenBalances(
   const queryFunctions = tokenAddresses.map((address) => async (): Promise<ERC20Balance> => {
     const normalizedAddress = address.toLowerCase();
     const preKnown = knownMetadata?.get(normalizedAddress);
-    
+
     try {
-      // For custom tokens, ALWAYS skip slow RPC metadata fetch (like Solana does)
-      // Just get the balance and use whatever metadata we have (or placeholders)
-      // This prevents the plugin from hanging on slow/unresponsive RPCs
       if (preKnown) {
         const balance = await getTokenBalance(chainId, testnet, address, ownerAddress);
         const decimals = preKnown.decimals ?? 18;
         const uiBalance = parseFloat(formatUnits(balance, decimals));
-        
-        // Generate a short address label if no symbol provided
+
         const shortAddr = `${address.slice(0, 6)}...`;
         
         return {
@@ -365,9 +410,7 @@ export async function getMultipleTokenBalances(
           logoUri: preKnown.logoUri || getTokenLogoUri(chainId, address),
         };
       }
-      
-      // No pre-known metadata at all - this shouldn't happen for custom tokens
-      // but handle it gracefully by just getting balance with placeholder metadata
+
       const balance = await getTokenBalance(chainId, testnet, address, ownerAddress);
       return {
         address: address,
@@ -422,26 +465,6 @@ export function getTokenLogoUri(chainId: EVMChainId, tokenAddress: string): stri
 
   if (known?.logoUri) {
     return known.logoUri;
-  }
-
-  const chainNames: Record<EVMChainId, string> = {
-    ethereum: 'ethereum',
-    polygon: 'polygon',
-    arbitrum: 'arbitrum',
-    optimism: 'optimism',
-    base: 'base',
-  };
-
-  const chainName = chainNames[chainId];
-  if (chainName) {
-    // TrustWallet requires checksummed addresses
-    let checksumAddress: string;
-    try {
-      checksumAddress = getAddress(tokenAddress);
-    } catch {
-      checksumAddress = tokenAddress;
-    }
-    return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chainName}/assets/${checksumAddress}/logo.png`;
   }
 
   return undefined;

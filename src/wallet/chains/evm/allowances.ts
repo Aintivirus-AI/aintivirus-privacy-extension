@@ -7,7 +7,6 @@ import { POPULAR_TOKENS } from './tokens';
 import { getKnownSpenders, getSpenderLabel } from './knownSpenders';
 import { isValidEVMAddress } from '../../keychain';
 
-// ERC-20 allowance discovery and cache helpers for the EVM wallet flows.
 export interface TokenAllowance {
   tokenAddress: string;
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aintivirus Privacy and Wallet",
-  "version": "0.2.0",
+  "version": "2.0.0",
   "description": "Aintivirus security extension",
 
   "__host_permissions_justification__": [
@@ -136,6 +136,11 @@
         "id": "aintivirus-custom",
         "enabled": true,
         "path": "rules/static_ruleset_custom.json"
+      },
+      {
+        "id": "wallet-api-allowlist",
+        "enabled": true,
+        "path": "rules/wallet_api_allowlist.json"
       }
     ]
   },

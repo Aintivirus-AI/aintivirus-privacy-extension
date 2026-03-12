@@ -1,8 +1,5 @@
 import { PBKDF2_ITERATIONS, SALT_LENGTH, IV_LENGTH, WalletError, WalletErrorCode } from './types';
 
-// Crypto support for deriving encryption keys, AES-GCM, and zeroing secrets for
-// the wallet vault.
-
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -132,6 +129,7 @@ export async function decrypt(
 }
 
 export function clearSensitiveString(sensitiveData: string): string {
+  void sensitiveData;
   return '';
 }
 

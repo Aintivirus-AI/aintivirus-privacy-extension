@@ -1,6 +1,5 @@
 import QRCode from 'qrcode';
 
-// QR helpers produce SVG/data URLs for wallet addresses and Solana Pay links.
 export async function generateAddressQR(
   address: string,
   options?: {

@@ -1,7 +1,5 @@
 import type { EVMChainConfig, EVMChainId, SolanaChainConfig } from './types';
 
-// Chain configuration data (RPC urls, explorers, derivation paths) for Solana/EVM networks.
-
 export const EVM_CHAINS: Record<EVMChainId, EVMChainConfig> = {
   ethereum: {
     chainId: 1,
@@ -31,7 +29,7 @@ export const EVM_CHAINS: Record<EVMChainId, EVMChainConfig> = {
   polygon: {
     chainId: 137,
     name: 'Polygon',
-    symbol: 'MATIC',
+    symbol: 'POL',
     decimals: 18,
     rpcUrls: [
       'https://polygon.llamarpc.com',
@@ -112,6 +110,26 @@ export const EVM_CHAINS: Record<EVMChainId, EVMChainConfig> = {
     explorer: 'https://basescan.org',
     isL2: true,
     l2Type: 'optimism',
+  },
+
+  bnb: {
+    chainId: 56,
+    name: 'BNB Smart Chain',
+    symbol: 'BNB',
+    decimals: 18,
+    rpcUrls: [
+      'https://bsc-dataseed.binance.org',
+      'https://bsc.publicnode.com',
+      'https://bsc-dataseed1.defibit.io',
+      'https://bsc-dataseed1.ninicoin.io',
+      'https://bsc.drpc.org',
+    ],
+    testnet: {
+      chainId: 97,
+      rpcUrls: ['https://bsc-testnet.publicnode.com', 'https://data-seed-prebsc-1-s1.binance.org:8545'],
+    },
+    explorer: 'https://bscscan.com',
+    isL2: false,
   },
 };
 
@@ -205,6 +223,8 @@ export function getEVMExplorerUrl(chainId: EVMChainId, testnet: boolean = false)
         return 'https://sepolia-optimism.etherscan.io';
       case 'base':
         return 'https://sepolia.basescan.org';
+      case 'bnb':
+        return 'https://testnet.bscscan.com';
     }
   }
 

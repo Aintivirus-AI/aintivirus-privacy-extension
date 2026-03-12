@@ -16,6 +16,11 @@ import {
   fromHexChainId,
 } from '../types';
 import { approveConnection } from '../../security/connectionMonitor';
+import { getWalletState as getWalletStateFromStorage } from '../../wallet/storage';
+import { handleWalletMessage } from '../../wallet';
+import { getNumericChainId, DEFAULT_EVM_CHAIN } from '../../wallet/chains/config';
+import type { EVMChainId } from '../../wallet/chains/types';
+import type { WalletMessageType } from '../../wallet/types';
 import {
   getPermission,
   setPermission,
@@ -31,6 +36,7 @@ import {
   enqueue,
   getRequest,
   getAllPendingRequests,
+  getPendingRequestsByOrigin,
   approveRequest,
   rejectRequest,
   cancelRequest,
@@ -57,11 +63,13 @@ interface DAppRequestPayload {
   tabId: number;
   favicon?: string;
   title?: string;
+  userInitiated?: boolean;
 }
 
 const CONNECTED_TABS_KEY = 'dappConnectedTabs';
 
 let approvalWindowId: number | null = null;
+let approvalWindowOrigin: string | null = null;
 
 let connectedTabsCache = new Map<number, { origin: string; chainType: DAppChainType }>();
 
@@ -205,48 +213,55 @@ async function handleDAppRequest(
   payload: DAppRequestPayload,
   sender: chrome.runtime.MessageSender,
 ): Promise<MessageResponse> {
-  const { chainType, method, params, origin, tabId, favicon, title } = payload;
-  console.log('[DApp Handler] handleDAppRequest:', { chainType, method, origin, tabId });
+  const { chainType, method, params, origin, tabId, favicon, title, userInitiated } = payload;
 
   if (tabId) {
     await addConnectedTab(tabId, origin, chainType);
   }
 
   if (!requiresApproval(method, chainType)) {
-    console.log('[DApp Handler] Handling as read-only method');
     return await handleReadOnlyMethod(chainType, method, params, origin);
   }
-  console.log('[DApp Handler] Method requires approval');
 
+  const approvalType = getApprovalType(method, chainType);
+  const isConnectRequest = approvalType === 'connect';
   const hasExistingPermission = await hasPermission(origin, chainType);
-  const autoApprove = await shouldAutoApprove(origin, chainType);
 
-  if (method === 'eth_requestAccounts' || method === 'connect') {
-    if (hasExistingPermission && autoApprove) {
-      await updateLastAccessed(origin, chainType);
-      const permission = await getPermission(origin, chainType);
+  // For connect requests: auto-approve if any existing permission exists for this origin+chain.
+  // Users shouldn't have to re-approve a site they already connected to.
+  if (isConnectRequest && hasExistingPermission) {
+    await updateLastAccessed(origin, chainType);
+    const permission = await getPermission(origin, chainType);
 
-      // Record in security module for auto-approved connections too
-      if (permission?.accounts[0]) {
-        try {
-          console.log('[DApp Handler] Recording auto-approved connection:', origin, permission.accounts[0]);
-          await approveConnection(origin, origin, permission.accounts[0], 'low', [], tabId);
-        } catch (err) {
-          console.error('[DApp Handler] Failed to record auto-approved connection:', err);
-        }
+    // Record in security module for auto-approved connections too
+    if (permission?.accounts[0]) {
+      try {
+        await approveConnection(origin, origin, permission.accounts[0], 'low', [], tabId);
+      } catch (err) {
+        console.error('[DApp Handler] Failed to record auto-approved connection:', err);
       }
+    }
 
-      if (chainType === 'evm') {
-        return { success: true, data: permission?.accounts || [] };
-      } else {
-        return { success: true, data: { publicKey: permission?.accounts[0] } };
-      }
+    if (chainType === 'evm') {
+      return { success: true, data: permission?.accounts || [] };
+    } else {
+      return { success: true, data: { publicKey: permission?.accounts[0] } };
     }
   }
 
+  // For connect requests without user gesture and no existing permission:
+  // silently reject. This prevents dApps from auto-popping the approval on page load.
+  // The popup should only appear when the user clicks a "Connect Wallet" button.
+  if (isConnectRequest && !userInitiated && !hasExistingPermission) {
+    return {
+      success: false,
+      error: 'Connect request requires user interaction',
+    };
+  }
+
   if (hasExistingPermission) {
-    const walletState = await getWalletState();
-    if (!walletState.isUnlocked) {
+    const walletLockState = await getWalletLockState();
+    if (!walletLockState.isUnlocked) {
       return {
         success: false,
         error: 'Wallet is locked. Please unlock to continue.',
@@ -264,7 +279,17 @@ async function handleDAppRequest(
     title,
   });
 
-  await openApprovalWindow(id);
+  // For connect requests, check if there's already an approval window open for the same origin.
+  // If so, don't open a second window - the first will handle both chains.
+  const hasExistingApprovalForOrigin =
+    isConnectRequest && approvalWindowId !== null && approvalWindowOrigin === origin;
+
+  if (!hasExistingApprovalForOrigin) {
+    await openApprovalWindow(id);
+    if (isConnectRequest) {
+      approvalWindowOrigin = origin;
+    }
+  }
 
   try {
     const result = await promise;
@@ -301,31 +326,24 @@ async function handleEVMReadOnlyMethod(
       return await handleGetProviderState({ chainType: 'evm', origin });
     }
 
-    // Get current chain configuration from wallet
-    const walletResponse = await chrome.runtime.sendMessage({
-      type: 'WALLET_GET_STATE',
-      payload: undefined,
-    });
-
-    if (!walletResponse.success) {
+    // Get current chain configuration from wallet directly
+    const walletState = await getWalletStateFromStorage();
+    if (!walletState) {
       return { success: false, error: 'Failed to get wallet state' };
     }
 
-    const walletState = walletResponse.data;
     const chainId = walletState.activeEVMChain || 'ethereum';
     const testnet = walletState.networkEnvironment === 'testnet';
 
-    // Forward RPC request to background for processing
-    const rpcResponse = await chrome.runtime.sendMessage({
-      type: 'EVM_RPC_REQUEST',
-      payload: { method, params, chainId, testnet },
+    // Forward RPC request directly to wallet handler
+    const rpcResult = await handleWalletMessage('EVM_RPC_REQUEST' as WalletMessageType, {
+      method,
+      params,
+      chainId,
+      testnet,
     });
 
-    if (!rpcResponse.success) {
-      return { success: false, error: rpcResponse.error || 'RPC request failed' };
-    }
-
-    return { success: true, data: rpcResponse.data };
+    return { success: true, data: rpcResult };
   } catch (error) {
     return {
       success: false,
@@ -370,6 +388,9 @@ async function handleDAppApprove(
     switch (request.approvalType) {
       case 'connect':
         result = await processConnectApproval(request, selectedAccounts || [], remember || false);
+        // Auto-approve sibling connect requests from the same origin (e.g., if dApp
+        // requested both EVM and Solana connections, approve the other chain too)
+        await autoApproveSiblingConnects(requestId, request.origin, remember || false);
         break;
 
       case 'signMessage':
@@ -415,7 +436,14 @@ async function handleDAppReject(
 ): Promise<MessageResponse> {
   const { requestId, reason } = payload;
 
+  const request = await getRequest(requestId);
   await rejectRequest(requestId, reason);
+
+  // Also reject sibling connect requests from the same origin
+  if (request && request.approvalType === 'connect') {
+    await rejectSiblingConnects(requestId, request.origin, reason || 'User rejected');
+  }
+
   await closeApprovalWindow();
 
   return { success: true };
@@ -446,7 +474,6 @@ async function processConnectApproval(
 
   // Also record in security module so connections show in the Security tab
   try {
-    console.log('[DApp Handler] Recording new connection approval:', origin, selectedAccounts[0]);
     await approveConnection(
       origin,
       origin, // Use origin as URL since we may not have full URL
@@ -467,18 +494,99 @@ async function processConnectApproval(
   }
 }
 
+/**
+ * After a user approves a connect request for one chain, auto-approve any other
+ * pending connect requests from the same origin (e.g., if a dApp requested both
+ * EVM and Solana connections, approving one should approve the other too).
+ */
+async function autoApproveSiblingConnects(
+  primaryRequestId: string,
+  origin: string,
+  remember: boolean,
+): Promise<void> {
+  try {
+    const pendingRequests = await getPendingRequestsByOrigin(origin);
+    const siblingConnects = pendingRequests.filter(
+      (r) =>
+        r.id !== primaryRequestId && r.approvalType === 'connect' && r.status === 'pending',
+    );
+
+    if (siblingConnects.length === 0) return;
+
+    // Fetch wallet state to get the correct account for each chain type
+    const walletState = await getWalletStateFromStorage();
+    if (!walletState) return;
+
+    for (const sibling of siblingConnects) {
+      try {
+        let accounts: string[] = [];
+
+        if (sibling.chainType === 'evm' && walletState.evmAddress) {
+          accounts = [walletState.evmAddress];
+        } else if (sibling.chainType === 'solana' && walletState.publicAddress) {
+          accounts = [walletState.publicAddress];
+        }
+
+        if (accounts.length > 0) {
+          const siblingResult = await processConnectApproval(sibling, accounts, remember);
+          await approveRequest(sibling.id, siblingResult);
+        }
+      } catch (err) {
+        // Don't fail the primary request if sibling approval fails
+        console.error('[DApp Handler] Failed to auto-approve sibling connect:', err);
+      }
+    }
+  } catch (err) {
+    console.error('[DApp Handler] Error in autoApproveSiblingConnects:', err);
+  }
+}
+
+/**
+ * After a user rejects a connect request, also reject any other pending
+ * connect requests from the same origin.
+ */
+async function rejectSiblingConnects(
+  primaryRequestId: string,
+  origin: string,
+  reason: string,
+): Promise<void> {
+  try {
+    const pendingRequests = await getPendingRequestsByOrigin(origin);
+    const siblingConnects = pendingRequests.filter(
+      (r) =>
+        r.id !== primaryRequestId && r.approvalType === 'connect' && r.status === 'pending',
+    );
+
+    for (const sibling of siblingConnects) {
+      await rejectRequest(sibling.id, reason);
+    }
+  } catch (err) {
+    console.error('[DApp Handler] Error in rejectSiblingConnects:', err);
+  }
+}
+
 async function processSignMessageApproval(request: QueuedRequest): Promise<unknown> {
-  const { chainType, params } = request;
+  const { chainType, method, params } = request;
 
   if (chainType === 'evm') {
-    const [message, address] = params as [string, string];
+    const isTypedData =
+      method === 'eth_signTypedData' ||
+      method === 'eth_signTypedData_v3' ||
+      method === 'eth_signTypedData_v4';
 
-    const result = await signEVMMessage(message, address);
-    return result;
+    if (isTypedData) {
+      // eth_signTypedData params: [address, typedDataJSON]
+      // Note: param order is REVERSED compared to personal_sign
+      const [address, typedDataJSON] = params as [string, string];
+      return signEVMTypedData(typedDataJSON, address);
+    } else {
+      // personal_sign / eth_sign params: [message, address]
+      const [message, address] = params as [string, string];
+      return signEVMMessage(message, address);
+    }
   } else {
     const { message } = params as { message: string };
-    const result = await signSolanaMessage(message);
-    return result;
+    return signSolanaMessage(message);
   }
 }
 
@@ -507,7 +615,6 @@ async function processSignApproval(request: QueuedRequest): Promise<unknown> {
 
 async function processTransactionApproval(request: QueuedRequest): Promise<unknown> {
   const { chainType, params } = request;
-  console.log('[DApp Handler] processTransactionApproval:', { chainType, params });
 
   if (chainType === 'evm') {
     const txParams = (params as unknown[])[0] as {
@@ -520,10 +627,8 @@ async function processTransactionApproval(request: QueuedRequest): Promise<unkno
       maxFeePerGas?: string;
       maxPriorityFeePerGas?: string;
     };
-    console.log('[DApp Handler] Sending EVM transaction:', txParams);
 
     const result = await sendEVMTransaction(txParams);
-    console.log('[DApp Handler] EVM transaction result:', result);
     return result;
   } else {
     const { transaction, options } = params as {
@@ -557,47 +662,45 @@ async function processAddChainApproval(request: QueuedRequest): Promise<null> {
 }
 
 async function signEVMMessage(message: string, address: string): Promise<string> {
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SIGN_MESSAGE',
-    payload: { message, address, chainType: 'evm' },
-  });
+  const result = (await handleWalletMessage('WALLET_SIGN_MESSAGE' as WalletMessageType, {
+    message,
+    address,
+    chainType: 'evm',
+  })) as { signature: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to sign message');
-  }
+  return result.signature;
+}
 
-  return response.data.signature;
+async function signEVMTypedData(typedDataJSON: string, address: string): Promise<string> {
+  const result = (await handleWalletMessage('WALLET_SIGN_MESSAGE' as WalletMessageType, {
+    message: '', // Not used for typed data; routing is based on typedData presence
+    address, // Verified against unlocked wallet in handleSignMessageEVM
+    chainType: 'evm',
+    typedData: typedDataJSON,
+  })) as { signature: string };
+
+  return result.signature;
 }
 
 async function signSolanaMessage(messageBase64: string): Promise<{ signature: string }> {
   const message = atob(messageBase64);
 
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SIGN_MESSAGE',
-    payload: { message },
-  });
+  const result = (await handleWalletMessage('WALLET_SIGN_MESSAGE' as WalletMessageType, {
+    message,
+  })) as { signature: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to sign message');
-  }
-
-  return { signature: response.data.signature };
+  return { signature: result.signature };
 }
 
 async function signSolanaTransaction(transaction: {
   data: string;
   isVersioned: boolean;
 }): Promise<string> {
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SIGN_TRANSACTION',
-    payload: { serializedTransaction: transaction.data },
-  });
+  const result = (await handleWalletMessage('WALLET_SIGN_TRANSACTION' as WalletMessageType, {
+    serializedTransaction: transaction.data,
+  })) as { signedTransaction: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to sign transaction');
-  }
-
-  return response.data.signedTransaction;
+  return result.signedTransaction;
 }
 
 async function signSolanaTransactions(
@@ -627,26 +730,19 @@ async function sendEVMTransaction(txParams: {
   // For simple transfers, convert to decimal string
   const hasData = txParams.data && txParams.data !== '0x';
   
-  const response = await chrome.runtime.sendMessage({
-    type: 'WALLET_SEND_ETH',
-    payload: {
-      recipient: txParams.to || '',
-      amount: txParams.value ? (parseInt(txParams.value, 16) / 1e18).toString() : '0',
-      // Pass raw hex value for contract calls to avoid precision loss
-      valueHex: hasData ? txParams.value : undefined,
-      data: txParams.data,
-      gas: txParams.gas,
-      gasPrice: txParams.gasPrice,
-      maxFeePerGas: txParams.maxFeePerGas,
-      maxPriorityFeePerGas: txParams.maxPriorityFeePerGas,
-    },
-  });
+  const result = (await handleWalletMessage('WALLET_SEND_ETH' as WalletMessageType, {
+    recipient: txParams.to || '',
+    amount: txParams.value ? (parseInt(txParams.value, 16) / 1e18).toString() : '0',
+    // Pass raw hex value for contract calls to avoid precision loss
+    valueHex: hasData ? txParams.value : undefined,
+    data: txParams.data,
+    gas: txParams.gas,
+    gasPrice: txParams.gasPrice,
+    maxFeePerGas: txParams.maxFeePerGas,
+    maxPriorityFeePerGas: txParams.maxPriorityFeePerGas,
+  })) as { hash: string };
 
-  if (!response.success) {
-    throw new Error(response.error || 'Failed to send transaction');
-  }
-
-  return response.data.hash;
+  return result.hash;
 }
 
 async function signAndSendSolanaTransaction(
@@ -692,25 +788,29 @@ async function handleGetProviderState(
 ): Promise<MessageResponse> {
   const { chainType, origin } = payload;
 
-  const walletResponse = await chrome.runtime.sendMessage({
-    type: 'WALLET_GET_STATE',
-    payload: undefined,
-  });
-
-  if (!walletResponse.success) {
+  // Get wallet state directly instead of self-messaging
+  const walletState = await getWalletStateFromStorage();
+  if (!walletState) {
     return { success: false, error: 'Failed to get wallet state' };
   }
-
-  const walletState = walletResponse.data;
 
   const permission = origin ? await getPermission(origin, chainType) : null;
 
   if (chainType === 'evm') {
+    const activeChain = (walletState.activeEVMChain || DEFAULT_EVM_CHAIN) as EVMChainId;
+    const testnet = walletState.networkEnvironment === 'testnet';
+    let numericChainId: number;
+    try {
+      numericChainId = getNumericChainId(activeChain, testnet);
+    } catch {
+      // Fallback to Ethereum mainnet if chain config is missing
+      numericChainId = 1;
+    }
     const state: EVMProviderState = {
       isConnected: !!permission,
-      chainId: toHexChainId(walletState.activeEVMChain === 'ethereum' ? 1 : 137),
+      chainId: toHexChainId(numericChainId),
       accounts: permission?.accounts || [],
-      networkVersion: '1',
+      networkVersion: numericChainId.toString(),
     };
     return { success: true, data: state };
   } else {
@@ -739,12 +839,19 @@ async function openApprovalWindow(requestId: string): Promise<void> {
 
     chrome.windows.onRemoved.addListener(function listener(windowId) {
       if (windowId === approvalWindowId) {
+        const closedOrigin = approvalWindowOrigin;
         approvalWindowId = null;
+        approvalWindowOrigin = null;
         chrome.windows.onRemoved.removeListener(listener);
 
-        getRequest(requestId).then((request) => {
+        getRequest(requestId).then(async (request) => {
           if (request && request.status === 'pending') {
-            rejectRequest(requestId, 'User closed approval window');
+            await rejectRequest(requestId, 'User closed approval window');
+          }
+
+          // Also reject sibling connect requests from the same origin
+          if (closedOrigin && request?.approvalType === 'connect') {
+            await rejectSiblingConnects(requestId, closedOrigin, 'User closed approval window');
           }
         });
       }
@@ -758,6 +865,7 @@ async function closeApprovalWindow(): Promise<void> {
       await chrome.windows.remove(approvalWindowId);
     } catch {}
     approvalWindowId = null;
+    approvalWindowOrigin = null;
   }
 }
 
@@ -852,21 +960,17 @@ export async function broadcastDisconnect(): Promise<void> {
   await clearConnectedTabs();
 }
 
-async function getWalletState(): Promise<{ isUnlocked: boolean }> {
+async function getWalletLockState(): Promise<{ isUnlocked: boolean }> {
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: 'WALLET_GET_STATE',
-      payload: undefined,
-    });
-
-    if (response.success && response.data) {
-      return {
-        isUnlocked: response.data.lockState === 'unlocked',
-      };
-    }
-  } catch {}
-
-  return { isUnlocked: false };
+    // Call the wallet storage function directly instead of using messaging
+    // This is more reliable since we're already in the background script
+    const walletState = await getWalletStateFromStorage();
+    return {
+      isUnlocked: walletState.lockState === 'unlocked',
+    };
+  } catch {
+    return { isUnlocked: false };
+  }
 }
 
 export {

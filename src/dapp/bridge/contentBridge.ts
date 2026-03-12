@@ -23,6 +23,10 @@ const MAX_PENDING_REQUESTS = 100;
 
 const REQUEST_EXPIRY_MS = 5 * 60 * 1000;
 
+// User gesture tracking: only allow connect popups when user recently interacted
+const USER_GESTURE_WINDOW_MS = 5000; // 5 seconds
+let lastUserInteractionTime = 0;
+
 let isInitialized = false;
 
 let currentTabId: number | null = null;
@@ -42,8 +46,21 @@ function generateNonce(): string {
   return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Track if script has been injected to prevent duplicates
+let dappScriptInjected = false;
+
 export function injectDAppScript(): void {
+  // Prevent duplicate injection
+  if (dappScriptInjected) return;
+  
+  // Also check if script tag already exists (for when content script injects earlier)
+  if (document.getElementById('aintivirus-dapp-provider')) {
+    dappScriptInjected = true;
+    return;
+  }
+  
   try {
+    dappScriptInjected = true;
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('dappInpage.js');
     script.id = 'aintivirus-dapp-provider';
@@ -57,6 +74,7 @@ export function injectDAppScript(): void {
     }
   } catch {
     // Injection is best-effort; failing here should not break page scripts.
+    dappScriptInjected = false; // Allow retry on failure
   }
 }
 
@@ -111,8 +129,21 @@ function handleInpageMessage(event: MessageEvent): void {
 async function ensureServiceWorkerAwake(): Promise<boolean> {
   try {
     // Send a simple ping to wake up the service worker
-    const response = await chrome.runtime.sendMessage({ type: 'PING' });
-    return response?.success === true;
+    const response = await Promise.race([
+      chrome.runtime.sendMessage({ type: 'PING' }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000)),
+    ]);
+    return (response as { success?: boolean })?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+// Check if the extension context is still valid
+function isExtensionContextValid(): boolean {
+  try {
+    // Accessing chrome.runtime.id will throw if the extension was reloaded
+    return !!chrome.runtime?.id;
   } catch {
     return false;
   }
@@ -121,6 +152,17 @@ async function ensureServiceWorkerAwake(): Promise<boolean> {
 async function forwardToBackground(message: DAppMessage): Promise<void> {
   cleanupAndEnforceLimits();
 
+  // Check if extension context is still valid before attempting communication
+  if (!isExtensionContextValid()) {
+    sendResponseToInpage(
+      message.id,
+      false,
+      undefined,
+      'Extension was reloaded. Please refresh this page to reconnect.',
+    );
+    return;
+  }
+
   const nonce = generateNonce();
 
   pendingRequests.set(message.id, {
@@ -128,6 +170,8 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
     timestamp: Date.now(),
     nonce,
   });
+
+  const isUserInitiated = (Date.now() - lastUserInteractionTime) < USER_GESTURE_WINDOW_MS;
 
   const backgroundMessage: BackgroundMessage = {
     type: 'DAPP_REQUEST',
@@ -142,63 +186,97 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
       tabId: currentTabId,
       favicon: getFavicon(),
       title: document.title,
+      userInitiated: isUserInitiated,
     },
   };
 
   // Retry logic to handle service worker termination
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY_MS = 200;
+  const MAX_RETRIES = 5;
+  const BASE_RETRY_DELAY_MS = 150;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // Check extension context before each attempt
+    if (!isExtensionContextValid()) {
+      pendingRequests.delete(message.id);
+      sendResponseToInpage(
+        message.id,
+        false,
+        undefined,
+        'Extension was reloaded. Please refresh this page to reconnect.',
+      );
+      return;
+    }
+
     try {
-      // On first attempt or after a failure, try to wake up the service worker
+      // On subsequent attempts, wake up the service worker first
       if (attempt > 0) {
-        console.log(`[DApp Bridge] Attempt ${attempt + 1}: Waking up service worker...`);
-        await ensureServiceWorkerAwake();
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        const awake = await ensureServiceWorkerAwake();
+        if (!awake) {
+          // Wait a bit longer if wake-up failed
+          await new Promise((resolve) => setTimeout(resolve, BASE_RETRY_DELAY_MS * 2));
+        }
       }
 
-      const response = (await chrome.runtime.sendMessage(backgroundMessage)) as BackgroundResponse;
+      const response = await Promise.race([
+        chrome.runtime.sendMessage(backgroundMessage),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000)),
+      ]) as BackgroundResponse | null;
 
       if (response) {
         pendingRequests.delete(message.id);
         sendResponseToInpage(message.id, response.success, response.data, response.error);
         return;
       } else {
-        // No response usually means the background didn't handle the message
-        console.warn('[DApp Bridge] No response from background');
+        // No response - timeout or background didn't handle the message
         if (attempt < MAX_RETRIES - 1) {
+          // Exponential backoff
+          await new Promise((resolve) => 
+            setTimeout(resolve, BASE_RETRY_DELAY_MS * Math.pow(2, attempt))
+          );
           continue;
         }
         pendingRequests.delete(message.id);
-        sendResponseToInpage(message.id, false, undefined, 'No response from extension background');
+        sendResponseToInpage(
+          message.id,
+          false,
+          undefined,
+          'Extension is not responding. Please try again or refresh the page.',
+        );
         return;
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[DApp Bridge] Error (attempt ${attempt + 1}/${MAX_RETRIES}):`, errorMessage);
 
       const isConnectionError =
         errorMessage.includes('Could not establish connection') ||
         errorMessage.includes('Receiving end does not exist') ||
-        errorMessage.includes('Extension context invalidated');
+        errorMessage.includes('Extension context invalidated') ||
+        errorMessage.includes('message port closed');
 
       // If it's a connection error and we have retries left, wait and try again
       if (isConnectionError && attempt < MAX_RETRIES - 1) {
-        console.warn(`[DApp Bridge] Connection error, will retry after delay...`);
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)));
+        // Exponential backoff with jitter
+        const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt) + Math.random() * 100;
+        await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
 
       pendingRequests.delete(message.id);
 
-      // If the extension context is invalidated, the page needs to be refreshed
+      // Provide user-friendly error messages
       if (errorMessage.includes('Extension context invalidated')) {
         sendResponseToInpage(
           message.id,
           false,
           undefined,
           'Extension was reloaded. Please refresh this page to reconnect.',
+        );
+      } else if (isConnectionError) {
+        sendResponseToInpage(
+          message.id,
+          false,
+          undefined,
+          'Failed to connect to wallet. Please ensure the extension is enabled and try again.',
         );
       } else {
         sendResponseToInpage(message.id, false, undefined, errorMessage);
@@ -208,7 +286,12 @@ async function forwardToBackground(message: DAppMessage): Promise<void> {
   }
 
   pendingRequests.delete(message.id);
-  sendResponseToInpage(message.id, false, undefined, 'Failed to connect to extension after multiple attempts');
+  sendResponseToInpage(
+    message.id,
+    false,
+    undefined,
+    'Failed to connect to wallet after multiple attempts. Please refresh the page.',
+  );
 }
 
 function sendResponseToInpage(
@@ -230,7 +313,7 @@ function sendResponseToInpage(
       type: success ? 'DAPP_RESPONSE' : 'DAPP_ERROR',
       payload: response,
     },
-    '*',
+    window.location.origin,
   );
 }
 
@@ -280,7 +363,7 @@ function broadcastEventToInpage(event: {
       type: event.type,
       payload: event.data,
     },
-    '*',
+    window.location.origin,
   );
 }
 
@@ -321,6 +404,19 @@ function cleanupAndEnforceLimits(): void {
   }
 }
 
+function setupUserGestureTracking(): void {
+  const gestureEvents = ['click', 'keydown', 'mousedown', 'touchstart', 'pointerdown'];
+  for (const eventType of gestureEvents) {
+    document.addEventListener(
+      eventType,
+      () => {
+        lastUserInteractionTime = Date.now();
+      },
+      true, // capture phase to catch all events
+    );
+  }
+}
+
 export function initializeDAppBridge(): void {
   if (isInitialized) return;
   isInitialized = true;
@@ -331,6 +427,9 @@ export function initializeDAppBridge(): void {
   ) {
     return;
   }
+
+  // Start tracking user gestures to distinguish user-initiated vs auto-connect
+  setupUserGestureTracking();
 
   chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, (response) => {
     if (response && typeof response.tabId === 'number') {

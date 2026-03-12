@@ -1,7 +1,6 @@
 import { Connection } from '@solana/web3.js';
 import { SolanaNetwork, NETWORK_CONFIGS, RpcEndpointHealth, DEFAULT_RPC_HEALTH } from './types';
 
-// Tracks RPC endpoint health, persistence, and scoring used by network diagnostics.
 const STORAGE_KEY_RPC_HEALTH = 'rpcHealth';
 const STORAGE_KEY_CUSTOM_RPCS = 'customRpcUrls';
 
