@@ -12,6 +12,7 @@ let panelState: PanelState = {
 };
 
 let panelElement: HTMLElement | null = null;
+let dragCleanup: (() => void) | null = null;
 
 function createFloatingPanel(): HTMLElement {
   const existing = document.getElementById(PANEL_CONTAINER_ID);
@@ -250,7 +251,7 @@ function createFloatingPanel(): HTMLElement {
   panelWrapper.appendChild(content);
   shadow.appendChild(panelWrapper);
 
-  setupDragging(panelWrapper, header);
+  dragCleanup = setupDragging(panelWrapper, header);
 
   document.body.appendChild(container);
 
@@ -259,7 +260,21 @@ function createFloatingPanel(): HTMLElement {
   return panelWrapper;
 }
 
-function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
+export function destroyFloatingPanel(): void {
+  if (dragCleanup) {
+    dragCleanup();
+    dragCleanup = null;
+  }
+  const container = document.getElementById(PANEL_CONTAINER_ID);
+  if (container) {
+    container.remove();
+  }
+  panelElement = null;
+  panelState.isVisible = false;
+  panelState.isMinimized = true;
+}
+
+function setupDragging(panel: HTMLElement, handle: HTMLElement): () => void {
   let isDragging = false;
   let startX = 0;
   let startY = 0;
@@ -281,7 +296,7 @@ function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
     e.preventDefault();
   });
 
-  document.addEventListener('mousemove', (e: MouseEvent) => {
+  const onMouseMove = (e: MouseEvent): void => {
     if (!isDragging) return;
 
     const deltaX = e.clientX - startX;
@@ -292,14 +307,22 @@ function setupDragging(panel: HTMLElement, handle: HTMLElement): void {
 
     panel.style.right = `${newRight}px`;
     panel.style.top = `${newTop}px`;
-  });
+  };
 
-  document.addEventListener('mouseup', () => {
+  const onMouseUp = (): void => {
     if (isDragging) {
       isDragging = false;
       panel.classList.remove('dragging');
     }
-  });
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+
+  return (): void => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
 }
 
 function showPanel(): void {

@@ -449,7 +449,7 @@ export function initializeDAppBridge(): void {
         type: 'DAPP_PAGE_UNLOAD',
         payload: { tabId: currentTabId },
       })
-      .catch(() => {});
+      .catch((error) => console.warn('[aintivirus] page unload message failed:', error));
   });
 }
 
@@ -472,7 +472,9 @@ export function establishBackgroundConnection(): void {
 
       setTimeout(establishBackgroundConnection, 1000);
     });
-  } catch (error) {}
+  } catch (error) {
+    console.warn('[aintivirus] background connection failed:', error);
+  }
 }
 
 export {

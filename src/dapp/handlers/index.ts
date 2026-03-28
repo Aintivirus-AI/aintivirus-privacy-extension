@@ -139,13 +139,13 @@ export async function initializeDAppHandlers(): Promise<void> {
   preloadCommonSelectors();
 
   chrome.tabs.onRemoved.addListener(async (tabId) => {
-    handleTabClosed(tabId).catch(() => {});
+    handleTabClosed(tabId).catch((error) => console.warn('[aintivirus] handleTabClosed failed:', error));
     await removeConnectedTab(tabId);
   });
 
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'walletAutoLock') {
-      handleWalletLocked().catch(() => {});
+      handleWalletLocked().catch((error) => console.warn('[aintivirus] handleWalletLocked failed:', error));
     }
   });
 }
